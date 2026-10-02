@@ -1,0 +1,110 @@
+[
+    {
+        "name": "php-ddd-example",
+        "repository": "https://github.com/CodelyTV/php-ddd-example",
+        "commit": "9271c467943f835ab3b6e5ba30bdbd710aca9d73",
+        "stack": [
+            "symfony",
+            "messenger",
+            "ddd",
+            "cqrs"
+        ],
+        "why": "Reference DDD and CQRS layout, bus built on Symfony Messenger"
+    },
+    {
+        "name": "sylius",
+        "repository": "https://github.com/Sylius/Sylius",
+        "commit": "2689b337cf342cfc723f26adcc28f2c88447c8f0",
+        "stack": [
+            "symfony",
+            "messenger"
+        ],
+        "why": "Large real-world Symfony application"
+    },
+    {
+        "name": "akeneo-pim",
+        "repository": "https://github.com/akeneo/pim-community-dev",
+        "commit": "77d98c30f8af96a34c9d4056c8d78146ac03a43b",
+        "stack": [
+            "symfony",
+            "hexagonal",
+            "bounded-contexts"
+        ],
+        "why": "Hexagonal architecture with bounded contexts at scale"
+    },
+    {
+        "name": "prestashop",
+        "repository": "https://github.com/PrestaShop/PrestaShop",
+        "commit": "dec15c65a3f3a0c27cfd1dc221a7b89bff036fa2",
+        "stack": [
+            "symfony",
+            "legacy",
+            "cqrs",
+            "custom-bus"
+        ],
+        "why": "CQRS with its own command bus next to legacy code"
+    },
+    {
+        "name": "ecotone-quickstart",
+        "repository": "https://github.com/ecotoneframework/quickstart-examples",
+        "commit": "17a7c9bff0f03cf344dc6e5971f99223bc91d9bd",
+        "stack": [
+            "ecotone",
+            "ddd",
+            "attributes"
+        ],
+        "why": "Handlers declared with attributes, many small DDD examples",
+        "composer": [
+            "*"
+        ]
+    },
+    {
+        "name": "bookstack",
+        "repository": "https://github.com/BookStackApp/BookStack",
+        "commit": "f585a7d9100a99cba8479c1ef5fd56e05562daea",
+        "stack": [
+            "laravel",
+            "jobs",
+            "events"
+        ],
+        "why": "Real Laravel application"
+    },
+    {
+        "name": "wordpress",
+        "repository": "https://github.com/WordPress/WordPress",
+        "commit": "9a4e59f112b1121b052f1f94bcf15b5e3a848fca",
+        "stack": [
+            "legacy",
+            "procedural"
+        ],
+        "why": "Legacy PHP without framework, guards general PHP support"
+    },
+    {
+        "name": "laravel-rabbitmq-microservices",
+        "repository": "https://github.com/mostafaaminflakes/Using-RabbitMQ-in-Microservices",
+        "commit": "9617625630a356668a583e212007d65fea9a4d43",
+        "stack": [
+            "laravel",
+            "rabbitmq",
+            "microservices"
+        ],
+        "why": "Two services, admin and main, sharing queued job classes through RabbitMQ: contracts between services",
+        "composer": [
+            "*"
+        ]
+    },
+    {
+        "name": "art-gallery",
+        "repository": "https://github.com/omarihab99/Art-Gallery",
+        "commit": "f2605cce17136ee2bd3cffd11dde54b8bfaf788b",
+        "stack": [
+            "laravel",
+            "microservices",
+            "http"
+        ],
+        "why": "Four Laravel services (admin, orders, products, users); orders calls products over HTTP: a contract between services by route",
+        "composer": [
+            "Backend/*"
+        ]
+    }
+]

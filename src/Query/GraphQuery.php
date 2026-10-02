@@ -1,0 +1,529 @@
+<?php
+
+declare(strict_types=1);
+
+namespace PhpGraph\Query;
+
+use PhpGraph\Builder\TestFiles;
+use PhpGraph\Graph\Graph;
+use PhpGraph\Graph\Node;
+use PhpGraph\Graph\NodeKind;
+use PhpGraph\Graph\Relation;
+use PhpGraph\Project\ProjectSummary;
+use PhpGraph\Query\Result\Architecture;
+use PhpGraph\Query\Result\Connection;
+use PhpGraph\Query\Result\Impact;
+use PhpGraph\Query\Result\NamespaceGroup;
+use PhpGraph\Query\Result\Overview;
+use PhpGraph\Query\Result\Path;
+use PhpGraph\Query\Result\PathMode;
+use PhpGraph\Query\Result\RankedNode;
+use PhpGraph\Query\Result\Subgraph;
+
+/**
+ * Read-only queries over a graph. Returns structures; rendering belongs to the presentation layer.
+ */
+final class GraphQuery
+{
+    private const STOPWORDS = [
+        'the', 'and', 'for', 'with', 'what', 'which', 'how', 'does', 'show', 'from', 'into', 'that', 'this',
+        'les', 'des', 'une', 'quel', 'quels', 'quelle', 'quelles', 'comment', 'dans', 'pour', 'avec', 'est', 'sont',
+    ];
+
+    /**
+     * Relations that a dependency path may walk backwards: from an abstraction to what implements it,
+     * and from a method to the class that owns it.
+     */
+    private const REVERSIBLE_IN_DEPENDENCY_PATH = [
+        Relation::Implements,
+        Relation::Extends,
+        Relation::Overrides,
+        Relation::HasMethod,
+    ];
+
+    /**
+     * Class name suffixes worth counting: they hint at the building blocks and the entry points.
+     */
+    private const SUFFIXES = [
+        'Controller', 'Action', 'Command', 'Query', 'Handler', 'Event', 'Listener', 'Subscriber', 'Message',
+        'Repository', 'Factory', 'Service', 'Provider', 'Exception', 'Interface', 'Dto', 'DTO', 'Type', 'Voter',
+        'Middleware', 'Job', 'Policy', 'Request', 'Resource', 'Response', 'Validator', 'Normalizer', 'Transformer',
+    ];
+
+    private ?Architecture $architecture = null;
+
+    public function __construct(
+        private readonly Graph $graph,
+        private readonly ?ProjectSummary $summary = null,
+    ) {
+    }
+
+    public function overview(): Overview
+    {
+        $nodesByKind = [];
+        $application = [];
+        $tests = 0;
+        foreach ($this->graph->nodes() as $node) {
+            $nodesByKind[$node->kind->value] = ($nodesByKind[$node->kind->value] ?? 0) + 1;
+            if (!$node->kind->isClassLike() || $node->kind === NodeKind::External) {
+                continue;
+            }
+            if ($node->file !== null && TestFiles::isTest($node->file)) {
+                ++$tests;
+            } else {
+                $application[] = $node;
+            }
+        }
+        ksort($nodesByKind);
+
+        $namespaces = [];
+        $global = 0;
+        $layers = [];
+        $suffixes = [];
+        foreach ($application as $node) {
+            // In a multi-service repository, the service is the first level of the tree: billing@App\Domain\Order.
+            $at = strpos($node->id, '@');
+            $segments = explode('\\', $at === false ? $node->id : substr($node->id, $at + 1));
+            $short = array_pop($segments);
+            if ($at !== false) {
+                array_unshift($segments, substr($node->id, 0, $at));
+            }
+            if ($segments === []) {
+                ++$global;
+            } else {
+                $namespaces[] = $segments;
+            }
+            foreach ($this->layerSegments($segments) as $segment => $role) {
+                $layers[$role][$segment] = ($layers[$role][$segment] ?? 0) + 1;
+            }
+            foreach (self::SUFFIXES as $suffix) {
+                if (str_ends_with($short, $suffix) && $short !== $suffix) {
+                    $suffixes[$suffix] = ($suffixes[$suffix] ?? 0) + 1;
+                    break;
+                }
+            }
+        }
+        foreach ($layers as &$segments) {
+            arsort($segments);
+        }
+        unset($segments);
+        arsort($suffixes);
+
+        $root = [];
+        while ($namespaces !== [] && $global === 0) {
+            $first = $namespaces[0][\count($root)] ?? null;
+            foreach ($namespaces as $segments) {
+                if (!isset($segments[\count($root)]) || $segments[\count($root)] !== $first || \count($segments) === \count($root) + 1) {
+                    break 2;
+                }
+            }
+            $root[] = (string) $first;
+        }
+
+        return new Overview(
+            $this->summary,
+            $nodesByKind,
+            \count($application),
+            $tests,
+            $global,
+            implode('\\', $root),
+            $this->groups($namespaces, \count($root), 3),
+            $layers,
+            $suffixes,
+        );
+    }
+
+    public function graph(): Graph
+    {
+        return $this->graph;
+    }
+
+    public function architecture(): Architecture
+    {
+        return $this->architecture ??= (new LayerRules($this->graph))->check();
+    }
+
+    public function impactOf(Node $changed, int $maxDepth = 3, int $limit = 200): Impact
+    {
+        return (new ImpactAnalysis($this->graph))->of($changed, $maxDepth, $limit);
+    }
+
+    /**
+     * @param list<list<string>> $namespaces namespace segments of each application class
+     *
+     * @return list<NamespaceGroup>
+     */
+    private function groups(array $namespaces, int $depth, int $levels): array
+    {
+        $byName = [];
+        foreach ($namespaces as $segments) {
+            if (isset($segments[$depth])) {
+                $byName[$segments[$depth]][] = $segments;
+            }
+        }
+        uasort($byName, static fn (array $a, array $b): int => \count($b) <=> \count($a));
+
+        $groups = [];
+        foreach ($byName as $name => $members) {
+            // A namespace whose classes all sit in one sub-namespace reads as one: PrestaShop\PrestaShop.
+            $name = (string) $name;
+            $end = $depth + 1;
+            while (($next = $this->sharedSegment($members, $end)) !== null) {
+                $name .= '\\' . $next;
+                ++$end;
+            }
+
+            $layers = [];
+            foreach ($members as $segments) {
+                foreach ($this->layerSegments(\array_slice($segments, $depth)) as $segment => $role) {
+                    $layers[$segment] = ($layers[$segment] ?? 0) + 1;
+                }
+            }
+            arsort($layers);
+
+            $groups[] = new NamespaceGroup(
+                $name,
+                \count($members),
+                $layers,
+                $levels > 1 ? $this->groups($members, $end, $levels - 1) : [],
+            );
+        }
+
+        return $groups;
+    }
+
+    /**
+     * The segment every namespace has at this position, when they all go deeper than it.
+     *
+     * @param list<list<string>> $namespaces
+     */
+    private function sharedSegment(array $namespaces, int $position): ?string
+    {
+        $shared = null;
+        foreach ($namespaces as $segments) {
+            $segment = $segments[$position] ?? null;
+            if ($segment === null || ($shared !== null && $segment !== $shared)) {
+                return null;
+            }
+            $shared = $segment;
+        }
+
+        return $shared;
+    }
+
+    /**
+     * @param list<string> $segments
+     *
+     * @return array<string, string> the first layer-like segment => its role, or nothing
+     */
+    private function layerSegments(array $segments): array
+    {
+        $layer = Layers::of($segments);
+
+        return $layer === null ? [] : [$layer['segment'] => $layer['role']];
+    }
+
+    /**
+     * @return list<Node>
+     */
+    public function candidates(string $name, int $limit = 5): array
+    {
+        $needle = mb_strtolower(ltrim(trim($name), '\\'));
+        if ($needle === '') {
+            return [];
+        }
+
+        // billing@Order: Order in the billing service (or a service whose last directory is billing).
+        $service = null;
+        if (str_contains($needle, '@') && !str_contains($needle, '\\@')) {
+            [$service, $needle] = explode('@', $needle, 2);
+            $needle = ltrim($needle, '\\');
+        }
+
+        $exact = $this->graph->node(ltrim(trim($name), '\\'));
+        $scored = [];
+
+        foreach ($this->graph->nodes() as $node) {
+            $label = mb_strtolower($node->label);
+            $id = mb_strtolower($node->id);
+            if ($service !== null) {
+                $nodeService = mb_strtolower((string) $node->service);
+                if ($nodeService !== $service && !str_ends_with($nodeService, '/' . $service)) {
+                    continue;
+                }
+                $id = substr($id, (int) strpos($id, '@') + 1);
+            }
+
+            $tier = match (true) {
+                $exact !== null && $node->id === $exact->id => 0,
+                $label === $needle || rtrim($label, '()') === $needle => 1,
+                $id === $needle || str_ends_with($id, '\\' . $needle) => 2,
+                str_contains($label, $needle) => 3,
+                str_contains($id, $needle) => 4,
+                default => null,
+            };
+
+            if ($tier === null) {
+                continue;
+            }
+
+            $scored[] = [$tier, $node->kind === NodeKind::External ? 1 : 0, -$this->graph->degree($node->id), $node];
+        }
+
+        usort($scored, static fn (array $a, array $b): int => [$a[0], $a[1], $a[2]] <=> [$b[0], $b[1], $b[2]]);
+
+        return array_map(static fn (array $row): Node => $row[3], \array_slice($scored, 0, $limit));
+    }
+
+    public function resolve(string $name): ?Node
+    {
+        return $this->candidates($name, 1)[0] ?? null;
+    }
+
+    /**
+     * Outgoing connections first, then by relation and label of the other end.
+     *
+     * @return list<Connection>
+     */
+    public function connections(Node $node, Direction $direction = Direction::Both): array
+    {
+        $connections = [];
+        foreach ($this->graph->incident($node->id) as $item) {
+            if ($direction === Direction::Out && !$item['forward']) {
+                continue;
+            }
+            if ($direction === Direction::In && $item['forward']) {
+                continue;
+            }
+            $connections[] = new Connection($item['edge'], $item['other'], $item['forward']);
+        }
+
+        usort(
+            $connections,
+            fn (Connection $a, Connection $b): int => [$b->forward, $a->edge->relation->value, $this->label($a->other)]
+                <=> [$a->forward, $b->edge->relation->value, $this->label($b->other)],
+        );
+
+        return $connections;
+    }
+
+    /**
+     * Tries the most meaningful mode first and falls back to looser ones.
+     */
+    public function shortestPath(Node $from, Node $to): ?Path
+    {
+        foreach (PathMode::cases() as $mode) {
+            $hops = $this->findPath($from, $to, $mode);
+            if ($hops !== null) {
+                return new Path($from, $to, $hops, $mode);
+            }
+        }
+
+        return null;
+    }
+
+    public function subgraph(string $question, int $depth = 2, int $budget = 40): Subgraph
+    {
+        $terms = $this->terms($question);
+
+        $scored = [];
+        foreach ($this->graph->nodes() as $node) {
+            if ($node->kind === NodeKind::File || $node->kind === NodeKind::External) {
+                continue;
+            }
+
+            $score = $this->score($node, $terms);
+            if ($score > 0) {
+                $scored[] = [$score, $this->graph->degree($node->id), $node];
+            }
+        }
+
+        usort($scored, static fn (array $a, array $b): int => [$b[0], $b[1]] <=> [$a[0], $a[1]]);
+        $seeds = array_map(static fn (array $row): Node => $row[2], \array_slice($scored, 0, 3));
+
+        $selected = [];
+        $frontier = [];
+        foreach ($seeds as $seed) {
+            $selected[$seed->id] = true;
+            $frontier[] = $seed->id;
+        }
+
+        for ($level = 1; $level <= $depth && $frontier !== []; ++$level) {
+            $next = [];
+            foreach ($frontier as $id) {
+                foreach ($this->graph->incident($id) as $item) {
+                    if (isset($selected[$item['other']]) || \count($selected) >= $budget) {
+                        continue;
+                    }
+                    $selected[$item['other']] = true;
+                    $next[] = $item['other'];
+                }
+            }
+            $frontier = $next;
+        }
+
+        $nodes = [];
+        foreach (array_keys($selected) as $id) {
+            $node = $this->graph->node((string) $id);
+            if ($node !== null) {
+                $nodes[] = $node;
+            }
+        }
+
+        $edges = [];
+        foreach ($this->graph->edges() as $edge) {
+            if (isset($selected[$edge->source], $selected[$edge->target])) {
+                $edges[] = $edge;
+            }
+        }
+
+        return new Subgraph($terms, $seeds, $nodes, $edges);
+    }
+
+    /**
+     * @return list<RankedNode>
+     */
+    public function godNodes(int $limit = 15): array
+    {
+        $ranked = [];
+        foreach ($this->graph->nodes() as $node) {
+            if ($node->kind === NodeKind::File || $node->kind === NodeKind::External) {
+                continue;
+            }
+            $ranked[] = new RankedNode($node, $this->graph->degree($node->id));
+        }
+
+        usort($ranked, static fn (RankedNode $a, RankedNode $b): int => $b->degree <=> $a->degree);
+
+        return \array_slice($ranked, 0, $limit);
+    }
+
+    public function label(string $id): string
+    {
+        return $this->graph->node($id)->label ?? $id;
+    }
+
+    /**
+     * Breadth-first search, so the first path found is a shortest one for the given mode.
+     *
+     * @return list<Connection>|null
+     */
+    private function findPath(Node $start, Node $end, PathMode $mode): ?array
+    {
+        /** @var array<string, array{string, Connection}|null> $previous */
+        $previous = [$start->id => null];
+        $queue = new \SplQueue();
+        $queue->enqueue($start->id);
+
+        while (!$queue->isEmpty()) {
+            /** @var string $current */
+            $current = $queue->dequeue();
+            if ($current === $end->id) {
+                break;
+            }
+
+            foreach ($this->graph->incident($current) as $item) {
+                $other = $item['other'];
+                if (!$this->canStep($item['edge']->relation, $item['forward'], $mode)) {
+                    continue;
+                }
+                if (\array_key_exists($other, $previous)) {
+                    // Two edges between the same nodes, same hop: keep the one that tells more (dispatches over instantiates).
+                    $reached = $previous[$other];
+                    if ($reached !== null && $reached[0] === $current && $this->weight($item['edge']->relation) > $this->weight($reached[1]->edge->relation)) {
+                        $previous[$other] = [$current, new Connection($item['edge'], $other, $item['forward'])];
+                    }
+                    continue;
+                }
+                if ($other !== $end->id && !$this->canTraverse($other, $mode)) {
+                    continue;
+                }
+                $previous[$other] = [$current, new Connection($item['edge'], $other, $item['forward'])];
+                $queue->enqueue($other);
+            }
+        }
+
+        if (!isset($previous[$end->id])) {
+            return null;
+        }
+
+        $hops = [];
+        $cursor = $end->id;
+        while ($previous[$cursor] !== null) {
+            [$parent, $connection] = $previous[$cursor];
+            array_unshift($hops, $connection);
+            $cursor = $parent;
+        }
+
+        return $hops;
+    }
+
+    private function weight(Relation $relation): int
+    {
+        return match ($relation) {
+            Relation::Dispatches, Relation::HandledBy, Relation::Calls => 3,
+            Relation::Implements, Relation::Extends, Relation::Overrides, Relation::UsesTrait, Relation::HasMethod => 2,
+            Relation::Instantiates => 1,
+            default => 0,
+        };
+    }
+
+    private function canStep(Relation $relation, bool $forward, PathMode $mode): bool
+    {
+        if ($mode !== PathMode::Dependency || $forward) {
+            return true;
+        }
+
+        return \in_array($relation, self::REVERSIBLE_IN_DEPENDENCY_PATH, true);
+    }
+
+    /**
+     * Files and external nodes are hubs: going through them links unrelated classes
+     * (two classes both using LoggerInterface are not related through it).
+     */
+    private function canTraverse(string $id, PathMode $mode): bool
+    {
+        if ($mode === PathMode::Any) {
+            return true;
+        }
+
+        $kind = $this->graph->node($id)?->kind;
+
+        return $kind !== NodeKind::File && $kind !== NodeKind::External;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function terms(string $question): array
+    {
+        $parts = preg_split('/[^\p{L}\p{N}_]+/u', mb_strtolower($question), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        return array_values(array_unique(array_filter(
+            $parts,
+            static fn (string $part): bool => mb_strlen($part) >= 3 && !\in_array($part, self::STOPWORDS, true),
+        )));
+    }
+
+    /**
+     * @param list<string> $terms
+     */
+    private function score(Node $node, array $terms): int
+    {
+        $label = mb_strtolower($node->label);
+        $id = mb_strtolower($node->id);
+        $score = 0;
+
+        foreach ($terms as $term) {
+            if ($label === $term || rtrim($label, '()') === $term) {
+                $score += 5;
+            } elseif (str_contains($label, $term)) {
+                $score += 2;
+            } elseif (str_contains($id, $term)) {
+                ++$score;
+            }
+        }
+
+        return $score;
+    }
+}

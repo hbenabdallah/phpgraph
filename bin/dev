@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# Runs a command in a PHP container when PHP is not installed locally: bin/dev composer check
+# Host network: containers cannot reach a local DNS resolver such as systemd-resolved (127.0.0.53).
+exec docker run --rm -i --network host -v "$(pwd)":/app -w /app -u "$(id -u):$(id -g)" -e COMPOSER_HOME=/tmp/composer composer:2 "$@"

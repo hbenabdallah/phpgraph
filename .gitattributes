@@ -1,0 +1,15 @@
+# Left out of the archive Composer installs: users get src/, bin/phpgraph, the README and the license.
+/.github export-ignore
+/bin/dev export-ignore
+/corpus export-ignore
+/docs export-ignore
+/tests export-ignore
+/tools export-ignore
+/.dockerignore export-ignore
+/.gitattributes export-ignore
+/.php-cs-fixer.dist.php export-ignore
+/CONTRIBUTING.md export-ignore
+/Dockerfile export-ignore
+/phpstan.dist.neon export-ignore
+/phpunit.xml.dist export-ignore
+/.gitignore export-ignore
