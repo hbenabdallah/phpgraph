@@ -1,0 +1,80 @@
+{
+    "name": "hbenabdallah/phpgraph",
+    "description": "Knowledge graph builder and query tool for PHP projects, exposed to AI assistants via CLI and MCP",
+    "type": "library",
+    "keywords": [
+        "php",
+        "static-analysis",
+        "knowledge-graph",
+        "mcp",
+        "ai",
+        "ddd",
+        "hexagonal-architecture",
+        "microservices",
+        "code-navigation",
+        "sherpa",
+        "claude-code",
+        "codex",
+        "cursor"
+    ],
+    "homepage": "https://github.com/hbenabdallah/phpgraph",
+    "license": "LicenseRef-PolyForm-Shield-1.0.0",
+    "authors": [
+        {
+            "name": "Houssem Eddine BENABDALLAH",
+            "email": "benabdallahhoussemedine@gmail.com"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/hbenabdallah/phpgraph/issues",
+        "source": "https://github.com/hbenabdallah/phpgraph"
+    },
+    "require": {
+        "php": ">=8.2",
+        "nikic/php-parser": "^5.0",
+        "symfony/console": "^7.0",
+        "symfony/finder": "^7.0",
+        "symfony/yaml": "^7.4"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0",
+        "phpstan/phpstan": "^2.1",
+        "friendsofphp/php-cs-fixer": "^3.64"
+    },
+    "autoload": {
+        "psr-4": {
+            "PhpGraph\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "PhpGraph\\Tests\\": "tests/"
+        }
+    },
+    "bin": [
+        "bin/phpgraph"
+    ],
+    "scripts": {
+        "test": "phpunit",
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "cs": "php-cs-fixer fix --dry-run --diff",
+        "cs:fix": "php-cs-fixer fix",
+        "check": [
+            "@cs",
+            "@analyse",
+            "@test"
+        ],
+        "corpus:fetch": "php tools/corpus.php fetch",
+        "corpus:measure": [
+            "Composer\\Config::disableProcessTimeout",
+            "php tools/corpus.php measure"
+        ],
+        "phar": "@php -d phar.readonly=0 tools/build-phar.php"
+    },
+    "config": {
+        "platform": {
+            "php": "8.2.0"
+        },
+        "sort-packages": true
+    }
+}

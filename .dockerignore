@@ -1,0 +1,8 @@
+.git
+vendor
+build
+corpus/checkouts
+phpgraph-out
+.claude
+.phpunit.cache
+.php-cs-fixer.cache

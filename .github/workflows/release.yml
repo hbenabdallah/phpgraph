@@ -1,0 +1,69 @@
+name: Release
+
+# Publishes a release when a version tag is pushed (git tag v0.1.0 && git push origin v0.1.0):
+# - the PHAR and its checksum, attached to a GitHub release (download counts on the release page);
+# - the Docker image ghcr.io/<owner>/phpgraph, for amd64 and arm64 (pull counts on the package page).
+# Packagist follows the tags by itself once the package is submitted there.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  phar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          ini-values: phar.readonly=0
+          coverage: none
+      - run: composer install --no-interaction --no-progress
+      - run: composer check
+      - name: Build the PHAR
+        run: PHPGRAPH_VERSION="${GITHUB_REF_NAME}" php -d phar.readonly=0 tools/build-phar.php
+      - name: Check the PHAR
+        run: |
+          php build/phpgraph.phar --version | grep -F "${GITHUB_REF_NAME#v}"
+          php build/phpgraph.phar build tests/Fixtures/src -o /tmp/phpgraph-out
+          php build/phpgraph.phar overview -g /tmp/phpgraph-out/graph.json
+      - run: cd build && sha256sum phpgraph.phar > phpgraph.phar.sha256
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/phpgraph.phar
+            build/phpgraph.phar.sha256
+          generate_release_notes: true
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/phpgraph
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: PHPGRAPH_VERSION=${{ github.ref_name }}

@@ -1,0 +1,8 @@
+/vendor/
+/phpgraph-out/
+/.phpunit.cache/
+/.php-cs-fixer.cache
+/.idea/
+/.phpunit.result.cache
+/corpus/checkouts/
+/build/

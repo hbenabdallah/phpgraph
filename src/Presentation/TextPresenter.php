@@ -1,0 +1,567 @@
+<?php
+
+declare(strict_types=1);
+
+namespace PhpGraph\Presentation;
+
+use PhpGraph\Builder\CallStats;
+use PhpGraph\Graph\Edge;
+use PhpGraph\Graph\Node;
+use PhpGraph\Query\Direction;
+use PhpGraph\Query\GraphQuery;
+use PhpGraph\Query\Result\LayerViolation;
+use PhpGraph\Query\Result\NamespaceGroup;
+use PhpGraph\Query\Result\PathMode;
+
+/**
+ * Plain-text answers shared by the CLI and the MCP server. Kept compact: the main reader is an AI assistant.
+ */
+final class TextPresenter
+{
+    public function __construct(private readonly GraphQuery $query)
+    {
+    }
+
+    public function explain(string $name, Direction $direction = Direction::Both, int $limit = 60): string
+    {
+        $candidates = $this->query->candidates($name, 6);
+        if ($candidates === []) {
+            return \sprintf('No node matching "%s".', $name);
+        }
+
+        $node = $candidates[0];
+        $graph = $this->query->graph();
+        $lines = [
+            'Node: ' . $node->label,
+            '  Id:        ' . $node->id,
+            '  Kind:      ' . $node->kind->value,
+            ...($node->service === null ? [] : ['  Service:   ' . $node->service]),
+            '  Source:    ' . $this->location($node),
+            '  Degree:    ' . $graph->degree($node->id),
+            '',
+        ];
+
+        $connections = $this->query->connections($node, $direction);
+
+        $lines[] = \sprintf('Connections (%d):', \count($connections));
+        foreach (\array_slice($connections, 0, $limit) as $connection) {
+            $other = $graph->node($connection->other);
+            $lines[] = rtrim(\sprintf(
+                '  %s %s [%s] [%s]  %s',
+                $connection->forward ? '-->' : '<--',
+                $this->query->label($connection->other),
+                $connection->edge->relation->value,
+                $connection->edge->confidence->value,
+                $other?->file === null ? '' : $this->location($other),
+            ));
+        }
+        if (\count($connections) > $limit) {
+            $lines[] = \sprintf('  ... %d more', \count($connections) - $limit);
+        }
+
+        $others = array_filter(
+            \array_slice($candidates, 1),
+            static fn (Node $other): bool => rtrim(mb_strtolower($other->label), '()') === rtrim(mb_strtolower($node->label), '()')
+                || mb_strtolower($other->label) === mb_strtolower(trim($name)),
+        );
+        if ($others !== []) {
+            $lines[] = '';
+            $lines[] = 'Other matches: ' . implode(', ', array_map(static fn (Node $other): string => $other->id, $others));
+        }
+
+        return implode("\n", $lines);
+    }
+
+    public function path(string $from, string $to): string
+    {
+        $start = $this->query->resolve($from);
+        $end = $this->query->resolve($to);
+
+        if ($start === null || $end === null) {
+            return \sprintf('No node matching "%s".', $start === null ? $from : $to);
+        }
+
+        if ($start->id === $end->id) {
+            return 'Both names resolve to the same node: ' . $start->label;
+        }
+
+        $path = $this->query->shortestPath($start, $end);
+        if ($path === null) {
+            return \sprintf('No path between "%s" and "%s".', $start->label, $end->label);
+        }
+
+        $line = '  ' . $start->label;
+        foreach ($path->hops as $hop) {
+            $line .= $hop->forward
+                ? \sprintf(' --%s--> %s', $hop->edge->relation->value, $this->query->label($hop->other))
+                : \sprintf(' <--%s-- %s', $hop->edge->relation->value, $this->query->label($hop->other));
+        }
+
+        $note = match ($path->mode) {
+            PathMode::Dependency => '',
+            PathMode::Undirected => "\nNo dependency path: this one ignores edge direction.",
+            PathMode::Any => "\nNo dependency path: this one ignores edge direction and goes through files or external nodes.",
+        };
+
+        return \sprintf("Shortest path (%d hops):\n%s%s", \count($path->hops), $line, $note);
+    }
+
+    public function query(string $question, int $depth = 2, int $budget = 40): string
+    {
+        $subgraph = $this->query->subgraph($question, $depth, $budget);
+
+        if ($subgraph->terms === []) {
+            return 'The question contains no searchable term.';
+        }
+        if ($subgraph->seeds === []) {
+            return 'No node matches the question terms: ' . implode(', ', $subgraph->terms);
+        }
+
+        $lines = [
+            'Question: ' . $question,
+            'Seeds: ' . implode(', ', array_map(static fn (Node $node): string => $node->label, $subgraph->seeds)),
+            '',
+            'Nodes (' . \count($subgraph->nodes) . '):',
+        ];
+
+        foreach ($subgraph->nodes as $node) {
+            $lines[] = \sprintf('  - %s [%s] %s', $node->label, $node->kind->value, $this->location($node));
+        }
+
+        $edgeLimit = $budget * 3;
+        $lines[] = '';
+        $lines[] = 'Edges (' . \count($subgraph->edges) . '):';
+        foreach (\array_slice($subgraph->edges, 0, $edgeLimit) as $edge) {
+            $lines[] = '  ' . $this->formatEdge($edge);
+        }
+        if (\count($subgraph->edges) > $edgeLimit) {
+            $lines[] = \sprintf('  ... %d more', \count($subgraph->edges) - $edgeLimit);
+        }
+
+        return implode("\n", $lines);
+    }
+
+    public function godNodes(int $limit = 15): string
+    {
+        $lines = ['God nodes (most connected):'];
+        foreach ($this->query->godNodes($limit) as $index => $ranked) {
+            $lines[] = \sprintf(
+                '  %d. %s [%s] degree %d  %s',
+                $index + 1,
+                $ranked->node->label,
+                $ranked->node->kind->value,
+                $ranked->degree,
+                $this->location($ranked->node),
+            );
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * The first answer an agent needs on an unknown project: stack, structure and the limits of the graph.
+     */
+    public function overview(): string
+    {
+        $overview = $this->query->overview();
+        $summary = $overview->summary;
+        $lines = ['# Project overview', ''];
+
+        $lines[] = '## Stack';
+        if ($summary === null) {
+            $lines[] = 'Unknown: this graph was built by an older phpgraph. Rebuild it to see the stack and the call statistics.';
+        } elseif ($summary->stack === []) {
+            $lines[] = 'No composer.json: no Composer dependencies.';
+        }
+        foreach ($summary === null ? [] : $summary->stack as $application) {
+            $lines[] = \sprintf(
+                '- %s%s%s',
+                $application['directory'] === '.' ? 'Root application' : $application['directory'],
+                $application['php'] === null ? '' : ', PHP ' . $application['php'],
+                $application['locked'] ? '' : ' (no composer.lock: constraints, not installed versions)',
+            );
+            $byRole = [];
+            foreach ($application['packages'] as $name => $package) {
+                $byRole[$package['role']][] = $name . ' ' . $package['version'];
+            }
+            foreach (['framework', 'persistence', 'messaging', 'tests', 'analysis'] as $role) {
+                if (isset($byRole[$role])) {
+                    $lines[] = \sprintf('  %s: %s', $role, implode(', ', $byRole[$role]));
+                }
+            }
+        }
+
+        if ($summary !== null && $summary->services !== []) {
+            $lines[] = '';
+            $lines[] = '## Services';
+            $lines[] = \sprintf(
+                '%d services, each with its own namespace space: ids read service@Class (billing@App\\Domain\\Order), and a name '
+                . 'resolves in its service, then in the shared root code, never in another service. Services meet through '
+                . 'contracts only. The tree below starts with them.',
+                \count($summary->services),
+            );
+            $lines[] = '- ' . implode(', ', \array_slice($summary->services, 0, 30)) . (\count($summary->services) > 30 ? ', ...' : '');
+        }
+
+        $lines[] = '';
+        $lines[] = '## Size';
+        $lines[] = \sprintf(
+            '%d application classes, %d test classes (tests/, spec/, Behat/, *Test.php...), %s.',
+            $overview->applicationClasses,
+            $overview->testClasses,
+            implode(', ', array_map(static fn (string $kind, int $count): string => $count . ' ' . $kind, array_keys($overview->nodesByKind), $overview->nodesByKind)),
+        );
+
+        $lines[] = '';
+        $lines[] = '## Structure of application code';
+        $lines[] = 'Read from namespaces: layer names in brackets are namespace segments found below, not a verdict on the architecture.';
+        if ($overview->root !== '') {
+            $lines[] = 'Root namespace: ' . $overview->root;
+        }
+        if ($overview->globalClasses > 0) {
+            $lines[] = \sprintf('%d classes without namespace.', $overview->globalClasses);
+        }
+        foreach (\array_slice($overview->namespaces, 0, 12) as $group) {
+            $lines[] = '- ' . $this->namespaceGroup($group);
+            foreach (\array_slice($group->children, 0, 8) as $child) {
+                $lines[] = '  - ' . $this->namespaceGroup($child);
+                // A third level only where the second is too coarse to tell anything: Sylius\Bundle, Sylius\Component.
+                if (\count($group->children) <= 3) {
+                    foreach (\array_slice($child->children, 0, 8) as $grandChild) {
+                        $lines[] = '    - ' . $this->namespaceGroup($grandChild);
+                    }
+                    if (\count($child->children) > 8) {
+                        $lines[] = \sprintf('    - ... %d more', \count($child->children) - 8);
+                    }
+                }
+            }
+            if (\count($group->children) > 8) {
+                $lines[] = \sprintf('  - ... %d more', \count($group->children) - 8);
+            }
+        }
+        if (\count($overview->namespaces) > 12) {
+            $lines[] = \sprintf('- ... %d more', \count($overview->namespaces) - 12);
+        }
+
+        $lines[] = '';
+        if ($overview->layers === []) {
+            $lines[] = 'Layers: no layer-like namespace segment (Domain, Application, Infrastructure, Adapter, Controller...).';
+        } else {
+            $lines[] = 'Layers (application classes below a layer-like segment):';
+            foreach ($overview->layers as $role => $segments) {
+                $lines[] = \sprintf('  %s: %s', $role, $this->counts($segments));
+            }
+        }
+        if ($overview->suffixes !== []) {
+            $lines[] = 'Class name suffixes: ' . $this->counts(\array_slice($overview->suffixes, 0, 15, true));
+        }
+
+        $architecture = $this->query->architecture();
+        if ($overview->layers !== []) {
+            $lines[] = '';
+            $lines[] = '## Layer rules';
+            $lines[] = 'Default rules of a layered architecture, checked on application code: domain must not depend on application, '
+                . 'infrastructure or interface; application and port must not depend on infrastructure or interface.';
+            if ($architecture->violations === []) {
+                $lines[] = '- No dependency breaks them.';
+            } else {
+                $lines[] = \sprintf('- %d class dependencies break them: %s. Details: phpgraph check.', \count($architecture->violations), $this->counts($this->violationPairs($architecture->violations)));
+                foreach (\array_slice($architecture->violations, 0, 5) as $violation) {
+                    $lines[] = '  ' . $this->violation($violation);
+                }
+            }
+            if ($architecture->contextDependencies !== []) {
+                $lines[] = \sprintf(
+                    '- Dependencies between bounded contexts (read %s the layer segment, EXTRACTED and INFERRED relations): %s%s.',
+                    $architecture->layerFirst ? 'after' : 'before',
+                    $this->counts(\array_slice($architecture->contextDependencies, 0, 10, true)),
+                    \count($architecture->contextDependencies) > 10 ? \sprintf(', ... %d more pairs', \count($architecture->contextDependencies) - 10) : '',
+                );
+            }
+        }
+
+        $bus = $summary?->bus;
+        if ($bus !== null && !$bus->isEmpty()) {
+            $lines[] = '';
+            $lines[] = '## Messages';
+            $lines[] = 'Sender --dispatches--> message --handled_by--> handler, linked through the message class (application code).';
+            $lines[] = \sprintf('- Handlers linked to their message: %s.', $this->confidenceCounts($bus->handlers));
+            $lines[] = \sprintf('- Sends linked to their message: %s.', $this->confidenceCounts($bus->sends));
+            if ($bus->contracts > 0) {
+                $lines[] = \sprintf('- %d message classes sent by one service and handled by another: message --contract--> message.', $bus->contracts);
+            }
+            if ($bus->messagesWithoutHandlerCount > 0) {
+                $lines[] = \sprintf(
+                    '- %d sent messages have no handler in the project (handled by a dependency, another service, or not detected): %s%s.',
+                    $bus->messagesWithoutHandlerCount,
+                    implode(', ', $bus->messagesWithoutHandler),
+                    $bus->messagesWithoutHandlerCount > \count($bus->messagesWithoutHandler) ? ', ...' : '',
+                );
+            }
+            if ($bus->messagesNeverSentCount > 0) {
+                $lines[] = \sprintf(
+                    '- %d handled messages are never sent by the project (sent by a dependency or another service, deserialized, or sent untyped): %s%s.',
+                    $bus->messagesNeverSentCount,
+                    implode(', ', $bus->messagesNeverSent),
+                    $bus->messagesNeverSentCount > \count($bus->messagesNeverSent) ? ', ...' : '',
+                );
+            }
+            if ($bus->untypedSends > 0) {
+                $lines[] = \sprintf('- %d sends carry a message of unknown type or a channel name computed at runtime: their handler cannot be linked.', $bus->untypedSends);
+            }
+        }
+
+        $http = $summary?->http;
+        if ($http !== null && ($http->routes > 0 || $http->requests > 0)) {
+            $lines[] = '';
+            $lines[] = '## HTTP';
+            $lines[] = 'Route nodes (route:GET /orders/{id}) are the entry points: route --handled_by--> controller; caller --requests--> route.';
+            $unresolved = $http->routes - $http->routesWithHandler - $http->routesToDependencies;
+            $lines[] = \sprintf(
+                '- %d routes (attributes, Laravel route files, YAML routing files): %d handled by a controller of the project%s%s.',
+                $http->routes,
+                $http->routesWithHandler,
+                $http->routesToDependencies > 0 ? \sprintf(', %d by a controller of a dependency', $http->routesToDependencies) : '',
+                $unresolved > 0 ? \sprintf(', %d without one: no controller (a route only the front end uses), a closure, or a controller service no configuration of the project declares (generated at runtime by a bundle)', $unresolved) : '',
+            );
+            if ($http->requests > 0) {
+                $lines[] = \sprintf(
+                    '- %d HTTP calls in application code: %d reach a route of the project%s, %d go elsewhere (external APIs, or a path computed at runtime).',
+                    $http->requests,
+                    $http->requestsToProject,
+                    $http->requestsToServices > 0 ? \sprintf(' (%d in another service)', $http->requestsToServices) : '',
+                    $http->requests - $http->requestsToProject - $http->methodMismatchCount,
+                );
+            }
+            if ($http->methodMismatchCount > 0) {
+                $lines[] = \sprintf(
+                    '- %d HTTP calls match the path of a route declared for other methods only (would fail as written; linked AMBIGUOUS): %s%s.',
+                    $http->methodMismatchCount,
+                    implode('; ', $http->methodMismatches),
+                    $http->methodMismatchCount > \count($http->methodMismatches) ? '; ...' : '',
+                );
+            }
+        }
+
+        $lines[] = '';
+        $lines[] = '## What the graph does not know';
+        if ($summary !== null) {
+            $calls = $summary->applicationCalls;
+            $lines[] = \sprintf(
+                '- Method calls in application code: %d. Resolved %s (INFERRED %s, AMBIGUOUS %s), to dependencies %s, receiver type unknown %s.',
+                $calls->total(),
+                $this->percent($calls->inferred + $calls->ambiguous, $calls),
+                $this->percent($calls->inferred, $calls),
+                $this->percent($calls->ambiguous, $calls),
+                $this->percent($calls->outsideProject, $calls),
+                $this->percent($calls->unknownReceiver, $calls),
+            );
+            if ($summary->mostUnresolvedMethods !== []) {
+                $lines[] = '  Most frequent unresolved calls: ' . $this->counts(array_combine(
+                    array_map(static fn (int|string $name): string => '->' . $name . '()', array_keys($summary->mostUnresolvedMethods)),
+                    $summary->mostUnresolvedMethods,
+                ));
+            }
+            $lines[] = match (true) {
+                $summary->stack === [] => '- No Composer application: dependencies, if any, are not Composer packages and are not read.',
+                $summary->vendorDirectories === 0 => '- No installed vendor/: call chains stop at the first dependency. Run composer install and rebuild.',
+                default => $summary->options->readVendor
+                    ? \sprintf('- Dependencies: %d vendor/ directories, %d dependency files read for their signatures (not graph nodes).', $summary->vendorDirectories, $summary->vendorFilesRead)
+                    : '- Dependencies not read (--no-vendor): call chains stop at the first dependency.',
+            };
+            if ($summary->options->excludes !== []) {
+                $lines[] = '- Excluded from the build: ' . implode(', ', $summary->options->excludes);
+            }
+            if ($summary->filesFailed > 0) {
+                $lines[] = \sprintf('- %d files could not be parsed: see GRAPH_REPORT.md.', $summary->filesFailed);
+            }
+            if ($summary->duplicateCount > 0) {
+                $lines[] = \sprintf(
+                    '- %d names declared more than once, only the first is a node: %s%s.',
+                    $summary->duplicateCount,
+                    implode(', ', $summary->duplicates),
+                    $summary->duplicateCount > \count($summary->duplicates) ? ', ...' : '',
+                );
+            }
+        }
+        $lines[] = '- Not modelled: calls to global functions, dynamic calls ($obj->$name(), __call), service container configuration, '
+            . 'handlers and routes declared only in XML, controllers named by a service id, and API schemas (OpenAPI, protobuf).';
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Every dependency breaking a layer rule, for phpgraph check.
+     *
+     * @param list<string> $accepted violation keys ("From -> To") listed in a baseline
+     */
+    public function layerViolations(array $accepted = []): string
+    {
+        $violations = array_values(array_filter(
+            $this->query->architecture()->violations,
+            static fn (LayerViolation $violation): bool => !\in_array($violation->key(), $accepted, true),
+        ));
+        if ($violations === []) {
+            return $accepted === [] ? 'No dependency breaks the layer rules.' : 'No new dependency breaks the layer rules.';
+        }
+
+        $lines = [\sprintf('%d class dependencies break the layer rules%s:', \count($violations), $accepted === [] ? '' : ' (not in the baseline)')];
+        foreach ($this->violationPairs($violations) as $pair => $count) {
+            $lines[] = '';
+            $lines[] = \sprintf('%s (%d):', $pair, $count);
+            foreach ($violations as $violation) {
+                if ($violation->fromLayer . ' -> ' . $violation->toLayer === $pair) {
+                    $lines[] = '  ' . $this->violation($violation);
+                }
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * What depends on a class or a method, directly or not: what a change may break.
+     */
+    public function impact(string $name, int $depth = 3): string
+    {
+        $node = $this->query->candidates($name, 1)[0] ?? null;
+        if ($node === null) {
+            return \sprintf('No node matching "%s".', $name);
+        }
+
+        $impact = $this->query->impactOf($node, $depth);
+        $tests = array_values(array_filter($impact->classes, static fn ($class): bool => $class->isTest));
+        $application = array_values(array_filter($impact->classes, static fn ($class): bool => !$class->isTest));
+
+        $lines = [
+            \sprintf('Impact of changing %s [%s], %s', $node->label, $node->kind->value, $this->location($node)),
+            \sprintf(
+                '%d application classes and %d test classes depend on it, up to %d relations away%s.',
+                \count($application),
+                \count($tests),
+                $impact->maxDepth,
+                $impact->truncated ? ' (stopped at the limit: more exist)' : '',
+            ),
+            'Each class is shown with the first relation that reaches it and the weakest confidence on the way.',
+        ];
+
+        for ($depth = 1; $depth <= $impact->maxDepth; ++$depth) {
+            $atDepth = array_filter($application, static fn ($class): bool => $class->depth === $depth);
+            if ($atDepth === []) {
+                continue;
+            }
+            $lines[] = '';
+            $lines[] = $depth === 1 ? 'Direct dependents:' : \sprintf('%d relations away:', $depth);
+            foreach (\array_slice($atDepth, 0, 40) as $class) {
+                $lines[] = \sprintf('  - %s [%s]  via %s  %s', $this->query->label($class->class), $class->confidence->value, $this->formatEdge($class->edge), $this->classLocation($class->class));
+            }
+            if (\count($atDepth) > 40) {
+                $lines[] = \sprintf('  - ... %d more', \count($atDepth) - 40);
+            }
+        }
+
+        if ($tests !== []) {
+            $lines[] = '';
+            $lines[] = 'Tests to run:';
+            foreach (\array_slice($tests, 0, 40) as $class) {
+                $lines[] = \sprintf('  - %s  %s', $this->query->label($class->class), $this->classLocation($class->class));
+            }
+            if (\count($tests) > 40) {
+                $lines[] = \sprintf('  - ... %d more', \count($tests) - 40);
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function classLocation(string $class): string
+    {
+        $node = $this->query->graph()->node($class);
+
+        return $node === null ? '' : $this->location($node);
+    }
+
+    /**
+     * @param list<LayerViolation> $violations
+     *
+     * @return array<string, int> "domain -> infrastructure" => class dependencies, largest first
+     */
+    private function violationPairs(array $violations): array
+    {
+        $pairs = [];
+        foreach ($violations as $violation) {
+            $pair = $violation->fromLayer . ' -> ' . $violation->toLayer;
+            $pairs[$pair] = ($pairs[$pair] ?? 0) + 1;
+        }
+        arsort($pairs);
+
+        return $pairs;
+    }
+
+    private function violation(LayerViolation $violation): string
+    {
+        $node = $this->query->graph()->node(explode('::', $violation->edge->source)[0]);
+
+        return \sprintf(
+            '%s -> %s: %s%s  %s',
+            $violation->from,
+            $violation->to,
+            $this->formatEdge($violation->edge),
+            $violation->edges > 1 ? \sprintf(' (+%d more)', $violation->edges - 1) : '',
+            $node === null ? '' : $this->location($node),
+        );
+    }
+
+    /**
+     * @param array<string, int> $counts confidence value => count
+     */
+    private function confidenceCounts(array $counts): string
+    {
+        $parts = [];
+        foreach (['EXTRACTED', 'INFERRED', 'AMBIGUOUS'] as $confidence) {
+            if (isset($counts[$confidence])) {
+                $parts[] = $counts[$confidence] . ' ' . $confidence;
+            }
+        }
+
+        return $parts === [] ? 'none' : implode(', ', $parts);
+    }
+
+    private function namespaceGroup(NamespaceGroup $group): string
+    {
+        return \sprintf('%s (%d)%s', $group->name, $group->classes, $group->layers === [] ? '' : ' [' . $this->counts(\array_slice($group->layers, 0, 4, true)) . ']');
+    }
+
+    /**
+     * @param array<string, int> $counts
+     */
+    private function counts(array $counts): string
+    {
+        return implode(', ', array_map(static fn (int|string $name, int $count): string => $name . ' ' . $count, array_keys($counts), $counts));
+    }
+
+    private function percent(int $part, CallStats $calls): string
+    {
+        return $calls->total() === 0 ? '-' : \sprintf('%.0f%%', 100 * $part / $calls->total());
+    }
+
+    private function formatEdge(Edge $edge): string
+    {
+        return \sprintf(
+            '%s --%s--> %s [%s]',
+            $this->query->label($edge->source),
+            $edge->relation->value,
+            $this->query->label($edge->target),
+            $edge->confidence->value,
+        );
+    }
+
+    private function location(Node $node): string
+    {
+        if ($node->file === null) {
+            return '(external)';
+        }
+
+        return $node->line === null ? $node->file : \sprintf('%s L%d', $node->file, $node->line);
+    }
+}

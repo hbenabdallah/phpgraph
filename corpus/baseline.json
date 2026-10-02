@@ -1,0 +1,784 @@
+[
+    {
+        "name": "php-ddd-example",
+        "commit": "9271c467943f835ab3b6e5ba30bdbd710aca9d73",
+        "filesParsed": 304,
+        "filesFailed": 0,
+        "duplicates": 0,
+        "nodes": 1507,
+        "classLike": 295,
+        "methods": 770,
+        "external": 123,
+        "edges": 4117,
+        "vendorFilesRead": 104,
+        "edgesByConfidence": {
+            "EXTRACTED": 3182,
+            "INFERRED": 922,
+            "AMBIGUOUS": 13
+        },
+        "calls": {
+            "total": 1333,
+            "inferred": 915,
+            "ambiguous": 13,
+            "outsideProject": 358,
+            "unknownReceiver": 47,
+            "chainOutsideProject": 8
+        },
+        "applicationCalls": {
+            "total": 653,
+            "inferred": 446,
+            "ambiguous": 3,
+            "outsideProject": 193,
+            "unknownReceiver": 11,
+            "chainOutsideProject": 4
+        },
+        "testCalls": {
+            "total": 680,
+            "inferred": 469,
+            "ambiguous": 10,
+            "outsideProject": 165,
+            "unknownReceiver": 36,
+            "chainOutsideProject": 4
+        },
+        "bus": {
+            "handlers": {
+                "EXTRACTED": 13,
+                "INFERRED": 1
+            },
+            "sends": {
+                "INFERRED": 7
+            },
+            "untypedSends": 7,
+            "messagesWithoutHandlerCount": 1,
+            "messagesWithoutHandler": [
+                "CodelyTv\\Mooc\\CoursesCounter\\Domain\\CoursesCounterIncrementedDomainEvent"
+            ],
+            "messagesNeverSentCount": 7,
+            "messagesNeverSent": [
+                "CodelyTv\\Backoffice\\Courses\\Application\\SearchAll\\SearchAllBackofficeCoursesQuery",
+                "CodelyTv\\Mooc\\Videos\\Application\\Create\\CreateVideoCommand",
+                "CodelyTv\\Mooc\\Videos\\Application\\Find\\FindVideoQuery",
+                "CodelyTv\\Mooc\\Videos\\Application\\Trim\\TrimVideoCommand",
+                "CodelyTv\\Shared\\Domain\\Bus\\Event\\DomainEvent",
+                "channel:kernel.exception",
+                "channel:kernel.request"
+            ],
+            "contracts": 0
+        },
+        "http": {
+            "routes": 13,
+            "routesWithHandler": 12,
+            "requests": 0,
+            "requestsToProject": 0,
+            "requestsToServices": 0,
+            "routesToDependencies": 1,
+            "methodMismatchCount": 0,
+            "methodMismatches": []
+        },
+        "services": 0,
+        "architecture": {
+            "layerViolations": 0,
+            "contextPairs": 14,
+            "layerFirst": false
+        },
+        "seconds": 0.44,
+        "peakMemoryMb": 22
+    },
+    {
+        "name": "sylius",
+        "commit": "2689b337cf342cfc723f26adcc28f2c88447c8f0",
+        "filesParsed": 4946,
+        "filesFailed": 0,
+        "duplicates": 1,
+        "nodes": 34354,
+        "classLike": 4449,
+        "methods": 23781,
+        "external": 904,
+        "edges": 131604,
+        "vendorFilesRead": 580,
+        "edgesByConfidence": {
+            "EXTRACTED": 106549,
+            "INFERRED": 24926,
+            "AMBIGUOUS": 129
+        },
+        "calls": {
+            "total": 102569,
+            "inferred": 22772,
+            "ambiguous": 133,
+            "outsideProject": 53810,
+            "unknownReceiver": 25854,
+            "chainOutsideProject": 24897
+        },
+        "applicationCalls": {
+            "total": 19668,
+            "inferred": 4399,
+            "ambiguous": 19,
+            "outsideProject": 11244,
+            "unknownReceiver": 4006,
+            "chainOutsideProject": 3435
+        },
+        "testCalls": {
+            "total": 82901,
+            "inferred": 18373,
+            "ambiguous": 114,
+            "outsideProject": 42566,
+            "unknownReceiver": 21848,
+            "chainOutsideProject": 21462
+        },
+        "bus": {
+            "handlers": {
+                "EXTRACTED": 139,
+                "INFERRED": 1,
+                "AMBIGUOUS": 1
+            },
+            "sends": {
+                "INFERRED": 61,
+                "AMBIGUOUS": 7
+            },
+            "untypedSends": 4,
+            "messagesWithoutHandlerCount": 13,
+            "messagesWithoutHandler": [
+                "Sylius\\Bundle\\UserBundle\\Event\\UserEvent",
+                "channel:sylius.cart_clear",
+                "channel:sylius.cart_item_post_add",
+                "channel:sylius.cart_item_post_remove",
+                "channel:sylius.cart_post_change",
+                "channel:sylius.cart_post_clear",
+                "channel:sylius.cart_summary",
+                "channel:sylius.carts.post_remove",
+                "channel:sylius.carts.pre_remove",
+                "channel:sylius.menu.admin.main"
+            ],
+            "messagesNeverSentCount": 85,
+            "messagesNeverSent": [
+                "Sylius\\Bundle\\AdminBundle\\Command\\CreateAdminUser",
+                "Sylius\\Bundle\\ApiBundle\\Command\\Account\\ChangePaymentMethod",
+                "Sylius\\Bundle\\ApiBundle\\Command\\Account\\RegisterShopUser",
+                "Sylius\\Bundle\\ApiBundle\\Command\\Account\\RequestResetPasswordToken",
+                "Sylius\\Bundle\\ApiBundle\\Command\\Account\\RequestShopUserVerification",
+                "Sylius\\Bundle\\ApiBundle\\Command\\Account\\ResetPassword",
+                "Sylius\\Bundle\\ApiBundle\\Command\\Account\\VerifyShopUser",
+                "Sylius\\Bundle\\ApiBundle\\Command\\Catalog\\AddProductReview",
+                "Sylius\\Bundle\\ApiBundle\\Command\\Checkout\\ShipShipment",
+                "Sylius\\Bundle\\ApiBundle\\Command\\Payment\\UpdatePaymentRequest"
+            ],
+            "contracts": 0
+        },
+        "http": {
+            "routes": 188,
+            "routesWithHandler": 41,
+            "requests": 0,
+            "requestsToProject": 0,
+            "requestsToServices": 0,
+            "routesToDependencies": 13,
+            "methodMismatchCount": 0,
+            "methodMismatches": []
+        },
+        "services": 0,
+        "architecture": {
+            "layerViolations": 0,
+            "contextPairs": 0,
+            "layerFirst": false
+        },
+        "seconds": 6.53,
+        "peakMemoryMb": 406
+    },
+    {
+        "name": "akeneo-pim",
+        "commit": "77d98c30f8af96a34c9d4056c8d78146ac03a43b",
+        "filesParsed": 8416,
+        "filesFailed": 0,
+        "duplicates": 1,
+        "nodes": 56888,
+        "classLike": 8447,
+        "methods": 38595,
+        "external": 888,
+        "edges": 206766,
+        "vendorFilesRead": 651,
+        "edgesByConfidence": {
+            "EXTRACTED": 151470,
+            "INFERRED": 53718,
+            "AMBIGUOUS": 1578
+        },
+        "calls": {
+            "total": 159031,
+            "inferred": 60919,
+            "ambiguous": 1805,
+            "outsideProject": 55404,
+            "unknownReceiver": 40903,
+            "chainOutsideProject": 15938
+        },
+        "applicationCalls": {
+            "total": 33850,
+            "inferred": 17070,
+            "ambiguous": 308,
+            "outsideProject": 12082,
+            "unknownReceiver": 4390,
+            "chainOutsideProject": 1498
+        },
+        "testCalls": {
+            "total": 125181,
+            "inferred": 43849,
+            "ambiguous": 1497,
+            "outsideProject": 43322,
+            "unknownReceiver": 36513,
+            "chainOutsideProject": 14440
+        },
+        "bus": {
+            "handlers": {
+                "EXTRACTED": 171,
+                "INFERRED": 67,
+                "AMBIGUOUS": 5
+            },
+            "sends": {
+                "INFERRED": 192
+            },
+            "untypedSends": 5,
+            "messagesWithoutHandlerCount": 35,
+            "messagesWithoutHandler": [
+                "Akeneo\\Category\\Api\\Event\\CategoryCreatedEvent",
+                "Akeneo\\Connectivity\\Connection\\Domain\\Apps\\Event\\AppUserGroupCreated",
+                "Akeneo\\Pim\\Enrichment\\Component\\Product\\EntityWithFamily\\Event\\ParentHasBeenAddedToProduct",
+                "Akeneo\\Pim\\Enrichment\\Product\\API\\Event\\Completeness\\ProductWasCompletedOnChannelLocaleCollection",
+                "Akeneo\\Pim\\Enrichment\\Product\\API\\Event\\ProductWasCreated",
+                "Akeneo\\Pim\\Enrichment\\Product\\API\\Event\\ProductWasUpdated",
+                "Akeneo\\Platform\\Bundle\\InstallerBundle\\Event\\InstallerEvent",
+                "Akeneo\\Platform\\Component\\EventQueue\\BulkEvent",
+                "Akeneo\\Tool\\Bundle\\MeasureBundle\\Event\\MeasurementFamilyCreated",
+                "Akeneo\\Tool\\Bundle\\MeasureBundle\\Event\\MeasurementFamilyDeleted"
+            ],
+            "messagesNeverSentCount": 95,
+            "messagesNeverSent": [
+                "Akeneo\\Catalogs\\ServiceAPI\\Command\\CreateCatalogCommand",
+                "Akeneo\\Catalogs\\ServiceAPI\\Command\\DeleteCatalogCommand",
+                "Akeneo\\Catalogs\\ServiceAPI\\Command\\DeleteProductMappingSchemaCommand",
+                "Akeneo\\Catalogs\\ServiceAPI\\Command\\UpdateCatalogCommand",
+                "Akeneo\\Catalogs\\ServiceAPI\\Command\\UpdateProductMappingSchemaCommand",
+                "Akeneo\\Catalogs\\ServiceAPI\\Query\\GetCatalogQuery",
+                "Akeneo\\Catalogs\\ServiceAPI\\Query\\GetCatalogsByOwnerUsernameQuery",
+                "Akeneo\\Catalogs\\ServiceAPI\\Query\\GetMappedProductsQuery",
+                "Akeneo\\Catalogs\\ServiceAPI\\Query\\GetProductIdentifiersQuery",
+                "Akeneo\\Catalogs\\ServiceAPI\\Query\\GetProductMappingSchemaQuery"
+            ],
+            "contracts": 0
+        },
+        "http": {
+            "routes": 464,
+            "routesWithHandler": 386,
+            "requests": 2,
+            "requestsToProject": 0,
+            "requestsToServices": 0,
+            "routesToDependencies": 2,
+            "methodMismatchCount": 0,
+            "methodMismatches": []
+        },
+        "services": 0,
+        "architecture": {
+            "layerViolations": 33,
+            "contextPairs": 13,
+            "layerFirst": false
+        },
+        "seconds": 10.28,
+        "peakMemoryMb": 518
+    },
+    {
+        "name": "prestashop",
+        "commit": "dec15c65a3f3a0c27cfd1dc221a7b89bff036fa2",
+        "filesParsed": 7850,
+        "filesFailed": 0,
+        "duplicates": 5,
+        "nodes": 49984,
+        "classLike": 7291,
+        "methods": 32895,
+        "external": 1094,
+        "edges": 175698,
+        "vendorFilesRead": 557,
+        "edgesByConfidence": {
+            "EXTRACTED": 124848,
+            "INFERRED": 49119,
+            "AMBIGUOUS": 1731
+        },
+        "calls": {
+            "total": 116618,
+            "inferred": 58692,
+            "ambiguous": 2180,
+            "outsideProject": 45664,
+            "unknownReceiver": 10082,
+            "chainOutsideProject": 3424
+        },
+        "applicationCalls": {
+            "total": 75698,
+            "inferred": 39388,
+            "ambiguous": 1959,
+            "outsideProject": 27128,
+            "unknownReceiver": 7223,
+            "chainOutsideProject": 1910
+        },
+        "testCalls": {
+            "total": 40920,
+            "inferred": 19304,
+            "ambiguous": 221,
+            "outsideProject": 18536,
+            "unknownReceiver": 2859,
+            "chainOutsideProject": 1514
+        },
+        "bus": {
+            "handlers": {
+                "EXTRACTED": 547,
+                "INFERRED": 493,
+                "AMBIGUOUS": 25
+            },
+            "sends": {
+                "INFERRED": 240
+            },
+            "untypedSends": 9,
+            "messagesWithoutHandlerCount": 4,
+            "messagesWithoutHandler": [
+                "PrestaShopBundle\\Event\\FilterSearchCriteriaEvent",
+                "PrestaShopBundle\\Event\\ModuleManagementEvent",
+                "PrestaShopBundle\\Service\\Hook\\RenderingHookEvent",
+                "channel:module.reset"
+            ],
+            "messagesNeverSentCount": 93,
+            "messagesNeverSent": [
+                "PrestaShop\\PrestaShop\\Core\\Domain\\Address\\Command\\SetRequiredFieldsForAddressCommand",
+                "PrestaShop\\PrestaShop\\Core\\Domain\\Alias\\Query\\GetAliasForEditing",
+                "PrestaShop\\PrestaShop\\Core\\Domain\\Attachment\\Command\\BulkDeleteAttachmentsCommand",
+                "PrestaShop\\PrestaShop\\Core\\Domain\\Attachment\\Query\\GetAttachment",
+                "PrestaShop\\PrestaShop\\Core\\Domain\\AttributeGroup\\Attribute\\Command\\BulkDeleteAttributeCommand",
+                "PrestaShop\\PrestaShop\\Core\\Domain\\AttributeGroup\\Command\\BulkDeleteAttributeGroupCommand",
+                "PrestaShop\\PrestaShop\\Core\\Domain\\AttributeGroup\\Command\\DeleteAttributeTextureImageCommand",
+                "PrestaShop\\PrestaShop\\Core\\Domain\\Carrier\\Command\\BulkDeleteCarrierCommand",
+                "PrestaShop\\PrestaShop\\Core\\Domain\\Carrier\\Command\\BulkToggleCarrierStatusCommand",
+                "PrestaShop\\PrestaShop\\Core\\Domain\\Carrier\\Command\\DeleteCarrierCommand"
+            ],
+            "contracts": 0
+        },
+        "http": {
+            "routes": 768,
+            "routesWithHandler": 767,
+            "requests": 0,
+            "requestsToProject": 0,
+            "requestsToServices": 0,
+            "routesToDependencies": 1,
+            "methodMismatchCount": 0,
+            "methodMismatches": []
+        },
+        "services": 0,
+        "architecture": {
+            "layerViolations": 23,
+            "contextPairs": 293,
+            "layerFirst": true
+        },
+        "seconds": 10.02,
+        "peakMemoryMb": 442
+    },
+    {
+        "name": "ecotone-quickstart",
+        "commit": "17a7c9bff0f03cf344dc6e5971f99223bc91d9bd",
+        "filesParsed": 583,
+        "filesFailed": 0,
+        "duplicates": 5,
+        "nodes": 2205,
+        "classLike": 443,
+        "methods": 901,
+        "external": 222,
+        "edges": 6710,
+        "vendorFilesRead": 58,
+        "edgesByConfidence": {
+            "EXTRACTED": 6147,
+            "INFERRED": 560,
+            "AMBIGUOUS": 3
+        },
+        "calls": {
+            "total": 1145,
+            "inferred": 289,
+            "ambiguous": 3,
+            "outsideProject": 789,
+            "unknownReceiver": 64,
+            "chainOutsideProject": 59
+        },
+        "applicationCalls": {
+            "total": 730,
+            "inferred": 233,
+            "ambiguous": 2,
+            "outsideProject": 435,
+            "unknownReceiver": 60,
+            "chainOutsideProject": 55
+        },
+        "testCalls": {
+            "total": 415,
+            "inferred": 56,
+            "ambiguous": 1,
+            "outsideProject": 354,
+            "unknownReceiver": 4,
+            "chainOutsideProject": 4
+        },
+        "bus": {
+            "handlers": {
+                "EXTRACTED": 193
+            },
+            "sends": {
+                "INFERRED": 192
+            },
+            "untypedSends": 1,
+            "messagesWithoutHandlerCount": 2,
+            "messagesWithoutHandler": [
+                "AuthoritativeClassmap@App\\Domain\\Event\\CustomerRegistered",
+                "BuildingBlocks@App\\Domain\\Order\\Event\\OrderWasCancelled"
+            ],
+            "messagesNeverSentCount": 68,
+            "messagesNeverSent": [
+                "BuildingBlocks@App\\Domain\\Product\\Command\\ChangeProductPrice",
+                "BuildingBlocks@App\\Domain\\Product\\Event\\ProductWasAdded",
+                "BuildingBlocks@App\\Domain\\Product\\Event\\ProductWasApproved",
+                "Conversion@App\\Conversion\\GetOrder",
+                "Conversion@App\\Conversion\\PlaceOrder",
+                "EmittingEventsFromProjection@App\\Domain\\Event\\MoneyWasAddedToWallet",
+                "EmittingEventsFromProjection@App\\Domain\\Event\\MoneyWasSubtractedFromWallet",
+                "EmittingEventsFromProjection@App\\ReadModel\\WalletBalance\\WalletBalanceWasChanged",
+                "EventProjecting/PartitionedProjection@App\\EventProjecting\\PartitionedProjection\\Domain\\Event\\WalletWasCreated",
+                "EventProjecting/PartitionedProjection@App\\EventProjecting\\PartitionedProjection\\Domain\\Event\\WalletWasCredited"
+            ],
+            "contracts": 148
+        },
+        "http": {
+            "routes": 0,
+            "routesWithHandler": 0,
+            "requests": 0,
+            "requestsToProject": 0,
+            "requestsToServices": 0,
+            "routesToDependencies": 0,
+            "methodMismatchCount": 0,
+            "methodMismatches": []
+        },
+        "services": 47,
+        "architecture": {
+            "layerViolations": 7,
+            "contextPairs": 0,
+            "layerFirst": false
+        },
+        "seconds": 0.56,
+        "peakMemoryMb": 28
+    },
+    {
+        "name": "bookstack",
+        "commit": "f585a7d9100a99cba8479c1ef5fd56e05562daea",
+        "filesParsed": 1513,
+        "filesFailed": 0,
+        "duplicates": 0,
+        "nodes": 6965,
+        "classLike": 698,
+        "methods": 4076,
+        "external": 325,
+        "edges": 22732,
+        "vendorFilesRead": 347,
+        "edgesByConfidence": {
+            "EXTRACTED": 14055,
+            "INFERRED": 7989,
+            "AMBIGUOUS": 688
+        },
+        "calls": {
+            "total": 25144,
+            "inferred": 8966,
+            "ambiguous": 859,
+            "outsideProject": 11580,
+            "unknownReceiver": 3739,
+            "chainOutsideProject": 2049
+        },
+        "applicationCalls": {
+            "total": 7111,
+            "inferred": 3275,
+            "ambiguous": 313,
+            "outsideProject": 2625,
+            "unknownReceiver": 898,
+            "chainOutsideProject": 487
+        },
+        "testCalls": {
+            "total": 18033,
+            "inferred": 5691,
+            "ambiguous": 546,
+            "outsideProject": 8955,
+            "unknownReceiver": 2841,
+            "chainOutsideProject": 1562
+        },
+        "bus": {
+            "handlers": {
+                "INFERRED": 1
+            },
+            "sends": {
+                "INFERRED": 1,
+                "AMBIGUOUS": 2
+            },
+            "untypedSends": 0,
+            "messagesWithoutHandlerCount": 0,
+            "messagesWithoutHandler": [],
+            "messagesNeverSentCount": 0,
+            "messagesNeverSent": [],
+            "contracts": 0
+        },
+        "http": {
+            "routes": 340,
+            "routesWithHandler": 340,
+            "requests": 0,
+            "requestsToProject": 0,
+            "requestsToServices": 0,
+            "routesToDependencies": 0,
+            "methodMismatchCount": 0,
+            "methodMismatches": []
+        },
+        "services": 0,
+        "architecture": {
+            "layerViolations": 0,
+            "contextPairs": 0,
+            "layerFirst": false
+        },
+        "seconds": 2.76,
+        "peakMemoryMb": 104
+    },
+    {
+        "name": "wordpress",
+        "commit": "9a4e59f112b1121b052f1f94bcf15b5e3a848fca",
+        "filesParsed": 1899,
+        "filesFailed": 0,
+        "duplicates": 50,
+        "nodes": 18019,
+        "classLike": 840,
+        "methods": 7580,
+        "external": 117,
+        "edges": 37535,
+        "vendorFilesRead": 0,
+        "edgesByConfidence": {
+            "EXTRACTED": 19173,
+            "INFERRED": 16966,
+            "AMBIGUOUS": 1396
+        },
+        "calls": {
+            "total": 26382,
+            "inferred": 20878,
+            "ambiguous": 2469,
+            "outsideProject": 636,
+            "unknownReceiver": 2399,
+            "chainOutsideProject": 186
+        },
+        "applicationCalls": {
+            "total": 26382,
+            "inferred": 20878,
+            "ambiguous": 2469,
+            "outsideProject": 636,
+            "unknownReceiver": 2399,
+            "chainOutsideProject": 186
+        },
+        "testCalls": {
+            "total": 0,
+            "inferred": 0,
+            "ambiguous": 0,
+            "outsideProject": 0,
+            "unknownReceiver": 0,
+            "chainOutsideProject": 0
+        },
+        "bus": {
+            "handlers": {
+                "INFERRED": 1195
+            },
+            "sends": {
+                "INFERRED": 3233,
+                "AMBIGUOUS": 27
+            },
+            "untypedSends": 331,
+            "messagesWithoutHandlerCount": 2189,
+            "messagesWithoutHandler": [
+                "Core_Upgrader",
+                "IXR_Error",
+                "Language_Pack_Upgrader",
+                "Plugin_Upgrader",
+                "Theme_Upgrader",
+                "WP_Block_List",
+                "WP_Block_Template",
+                "WP_Connector_Registry",
+                "WP_Customize_Manager",
+                "WP_Customize_Selective_Refresh"
+            ],
+            "messagesNeverSentCount": 184,
+            "messagesNeverSent": [
+                "channel:_wp_post_revision_field_footnotes",
+                "channel:add_blog_metadata",
+                "channel:add_option_new_admin_email",
+                "channel:add_site_option_new_admin_email",
+                "channel:add_term_metadata",
+                "channel:added_blog_meta",
+                "channel:added_comment_meta",
+                "channel:added_post_meta",
+                "channel:added_term_meta",
+                "channel:added_user_meta"
+            ],
+            "contracts": 0
+        },
+        "http": {
+            "routes": 0,
+            "routesWithHandler": 0,
+            "requests": 0,
+            "requestsToProject": 0,
+            "requestsToServices": 0,
+            "routesToDependencies": 0,
+            "methodMismatchCount": 0,
+            "methodMismatches": []
+        },
+        "services": 0,
+        "architecture": {
+            "layerViolations": 0,
+            "contextPairs": 0,
+            "layerFirst": false
+        },
+        "seconds": 5.28,
+        "peakMemoryMb": 97
+    },
+    {
+        "name": "laravel-rabbitmq-microservices",
+        "commit": "9617625630a356668a583e212007d65fea9a4d43",
+        "filesParsed": 127,
+        "filesFailed": 0,
+        "duplicates": 0,
+        "nodes": 391,
+        "classLike": 71,
+        "methods": 74,
+        "external": 109,
+        "edges": 762,
+        "vendorFilesRead": 96,
+        "edgesByConfidence": {
+            "EXTRACTED": 739,
+            "INFERRED": 19,
+            "AMBIGUOUS": 4
+        },
+        "calls": {
+            "total": 123,
+            "inferred": 2,
+            "ambiguous": 5,
+            "outsideProject": 85,
+            "unknownReceiver": 31,
+            "chainOutsideProject": 10
+        },
+        "applicationCalls": {
+            "total": 113,
+            "inferred": 2,
+            "ambiguous": 5,
+            "outsideProject": 79,
+            "unknownReceiver": 27,
+            "chainOutsideProject": 10
+        },
+        "testCalls": {
+            "total": 10,
+            "inferred": 0,
+            "ambiguous": 0,
+            "outsideProject": 6,
+            "unknownReceiver": 4,
+            "chainOutsideProject": 0
+        },
+        "bus": {
+            "handlers": {
+                "INFERRED": 9
+            },
+            "sends": {
+                "INFERRED": 4
+            },
+            "untypedSends": 0,
+            "messagesWithoutHandlerCount": 0,
+            "messagesWithoutHandler": [],
+            "messagesNeverSentCount": 1,
+            "messagesNeverSent": [
+                "main@App\\Jobs\\ProductDeletedJobcls"
+            ],
+            "contracts": 4
+        },
+        "http": {
+            "routes": 10,
+            "routesWithHandler": 8,
+            "requests": 0,
+            "requestsToProject": 0,
+            "requestsToServices": 0,
+            "routesToDependencies": 0,
+            "methodMismatchCount": 0,
+            "methodMismatches": []
+        },
+        "services": 3,
+        "architecture": {
+            "layerViolations": 0,
+            "contextPairs": 0,
+            "layerFirst": false
+        },
+        "seconds": 0.37,
+        "peakMemoryMb": 38
+    },
+    {
+        "name": "art-gallery",
+        "commit": "f2605cce17136ee2bd3cffd11dde54b8bfaf788b",
+        "filesParsed": 266,
+        "filesFailed": 0,
+        "duplicates": 0,
+        "nodes": 696,
+        "classLike": 140,
+        "methods": 148,
+        "external": 99,
+        "edges": 1692,
+        "vendorFilesRead": 75,
+        "edgesByConfidence": {
+            "EXTRACTED": 1672,
+            "INFERRED": 16,
+            "AMBIGUOUS": 4
+        },
+        "calls": {
+            "total": 519,
+            "inferred": 24,
+            "ambiguous": 1,
+            "outsideProject": 328,
+            "unknownReceiver": 166,
+            "chainOutsideProject": 56
+        },
+        "applicationCalls": {
+            "total": 511,
+            "inferred": 24,
+            "ambiguous": 1,
+            "outsideProject": 328,
+            "unknownReceiver": 158,
+            "chainOutsideProject": 56
+        },
+        "testCalls": {
+            "total": 8,
+            "inferred": 0,
+            "ambiguous": 0,
+            "outsideProject": 0,
+            "unknownReceiver": 8,
+            "chainOutsideProject": 0
+        },
+        "bus": {
+            "handlers": [],
+            "sends": [],
+            "untypedSends": 16,
+            "messagesWithoutHandlerCount": 0,
+            "messagesWithoutHandler": [],
+            "messagesNeverSentCount": 0,
+            "messagesNeverSent": [],
+            "contracts": 0
+        },
+        "http": {
+            "routes": 39,
+            "routesWithHandler": 35,
+            "requests": 1,
+            "requestsToProject": 0,
+            "requestsToServices": 0,
+            "routesToDependencies": 0,
+            "methodMismatchCount": 1,
+            "methodMismatches": [
+                "POST /api/products/info, declared for GET /api/products/info"
+            ]
+        },
+        "services": 5,
+        "architecture": {
+            "layerViolations": 0,
+            "contextPairs": 0,
+            "layerFirst": false
+        },
+        "seconds": 0.53,
+        "peakMemoryMb": 44
+    }
+]

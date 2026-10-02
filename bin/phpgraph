@@ -1,0 +1,36 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use PhpGraph\Command\BuildCommand;
+use PhpGraph\Command\CheckCommand;
+use PhpGraph\Command\ExplainCommand;
+use PhpGraph\Command\ImpactCommand;
+use PhpGraph\Command\McpConfigCommand;
+use PhpGraph\Command\OverviewCommand;
+use PhpGraph\Command\PathCommand;
+use PhpGraph\Command\QueryCommand;
+use PhpGraph\Command\ServeCommand;
+use Symfony\Component\Console\Application;
+
+foreach ([__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php', getenv('PHPGRAPH_AUTOLOAD') ?: ''] as $autoload) {
+    if ($autoload !== '' && is_file($autoload)) {
+        require $autoload;
+        break;
+    }
+}
+
+$application = new Application('phpgraph', PhpGraph\Version::get());
+$application->addCommands([
+    new BuildCommand(),
+    new OverviewCommand(),
+    new QueryCommand(),
+    new PathCommand(),
+    new ExplainCommand(),
+    new ImpactCommand(),
+    new CheckCommand(),
+    new McpConfigCommand(),
+    new ServeCommand(),
+]);
+$application->run();
