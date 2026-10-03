@@ -1,0 +1,43 @@
+name: Edge
+
+# Every push to main publishes its PHAR and executables as the pre-release "edge": what install.sh installs for
+# dev-main. "edge" is not a version: Packagist skips the tag, and releases/latest never points to a pre-release.
+# The tag moves with main, unlike version tags, which must never move.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: edge
+  cancel-in-progress: true
+
+jobs:
+  build:
+    uses: ./.github/workflows/binaries.yml
+    with:
+      version: dev-main
+
+  publish:
+    needs: build
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      # A platform whose binary failed is left out; nothing is published without the PHAR, which runs the checks.
+      - run: test -f dist/phpgraph.phar && ls dist
+      - name: Replace the edge pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete edge --cleanup-tag --yes || true
+          gh release create edge dist/* --prerelease --target "$GITHUB_SHA" --title "dev-main" \
+            --notes "Built from main at $GITHUB_SHA. Not a release: install a version for production use."

@@ -1,0 +1,83 @@
+name: Binaries
+
+# Builds the PHAR and the executables needing no PHP (tools/build-binary.sh), runs each of them, and leaves them as
+# artifacts with their checksums. Called by release.yml (version tags) and edge.yml (every push to main).
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version written into the PHAR and printed by --version
+        required: true
+        type: string
+
+env:
+  # As --version prints it: v0.2.0 is printed 0.2.0.
+  VERSION: ${{ inputs.version }}
+
+jobs:
+  phar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          ini-values: phar.readonly=0
+          coverage: none
+      - run: composer install --no-interaction --no-progress
+      - run: composer check
+      - name: Build the PHAR
+        run: PHPGRAPH_VERSION="${{ inputs.version }}" php -d phar.readonly=0 tools/build-phar.php
+      - name: Check the PHAR
+        run: |
+          php build/phpgraph.phar --version | grep -F "${VERSION#v}"
+          php build/phpgraph.phar build tests/Fixtures/src -o /tmp/phpgraph-out
+          php build/phpgraph.phar overview -g /tmp/phpgraph-out/graph.json
+      - run: cd build && sha256sum phpgraph.phar > phpgraph.phar.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phpgraph.phar
+          path: |
+            build/phpgraph.phar
+            build/phpgraph.phar.sha256
+
+  # A static PHP runtime with the PHAR appended, built and run on each platform.
+  binary:
+    needs: phar
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest, name: phpgraph-linux-x86_64 }
+          - { runner: ubuntu-24.04-arm, name: phpgraph-linux-aarch64 }
+          - { runner: macos-15, name: phpgraph-macos-aarch64 }
+          - { runner: macos-15-intel, name: phpgraph-macos-x86_64 }
+          - { runner: windows-latest, name: phpgraph-windows-x86_64.exe }
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: phpgraph.phar
+          path: build
+      - uses: actions/cache@v4
+        with:
+          path: build/static-php/downloads
+          key: static-php-${{ matrix.name }}-${{ hashFiles('tools/build-binary.sh') }}
+      - run: tools/build-binary.sh
+      - name: Check the binary
+        run: |
+          build/${{ matrix.name }} --version | grep -F "${VERSION#v}"
+          build/${{ matrix.name }} build tests/Fixtures/src -o phpgraph-check
+          build/${{ matrix.name }} overview -g phpgraph-check/graph.json
+      - run: cd build && sha256sum ${{ matrix.name }} > ${{ matrix.name }}.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            build/${{ matrix.name }}
+            build/${{ matrix.name }}.sha256
