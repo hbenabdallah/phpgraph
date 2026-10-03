@@ -14,6 +14,7 @@ use PhpGraph\Presentation\TextPresenter;
 use PhpGraph\Query\GraphQuery;
 use PhpGraph\Query\ReportGenerator;
 use PhpGraph\Storage\JsonGraphStorage;
+use PhpGraph\Version;
 
 /**
  * The graph of one project on disk: graph.json and GRAPH_REPORT.md in the output directory, rebuilt when the
@@ -131,6 +132,7 @@ final class ProjectGraph
             'generatedAt' => $summary->generatedAt,
             'filesParsed' => $result->filesParsed,
             'fingerprint' => $fingerprint,
+            'phpgraph' => ['version' => Version::get(), 'builder' => Version::builder()],
             'options' => $this->options->toArray(),
             'summary' => $summary->toArray(),
         ]);
@@ -204,7 +206,15 @@ final class ProjectGraph
         }
 
         if ($this->builtFingerprint === null) {
-            $saved = $this->savedMeta()['fingerprint'] ?? null;
+            $meta = $this->savedMeta();
+            // Built by another phpgraph, or in another format: rebuilt, whatever the sources.
+            if (($meta['phpgraph']['builder'] ?? null) !== Version::builder() || $this->storage->format($this->graphPath()) !== JsonGraphStorage::FORMAT) {
+                $this->say('the graph was built by another version of phpgraph');
+                $this->build();
+
+                return true;
+            }
+            $saved = $meta['fingerprint'] ?? null;
             $this->builtFingerprint = \is_string($saved) ? $saved : '';
         }
         $current = SourceFiles::fingerprint($this->root, $this->options->excludes);

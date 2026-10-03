@@ -131,7 +131,7 @@ phpgraph serve [chemin]                      # le serveur MCP, sur stdio
 phpgraph mcp-config claude|codex|cursor|json [--docker image]
 ```
 
-Options de `build` : `-e` pour exclure des chemins (répétable), `--no-vendor` pour ne pas lire les dépendances, `--no-cache` pour tout analyser à nouveau. `vendor`, `node_modules`, `var`, `.git` et les fichiers ignorés par les `.gitignore` du projet lui-même ne sont pas analysés ; un dépôt git au-dessus du projet n'applique jamais ses règles, si bien qu'un projet copié dans un dossier ignoré est quand même lu. Quand le dossier contient des fichiers PHP mais qu'ils sont tous exclus, `build` échoue en le disant, et chaque réponse MCP commence par cet avertissement au lieu de servir un graphe vide. La mémoire n'est pas limitée par défaut ; `PHPGRAPH_MEMORY_LIMIT=2G` fixe une limite.
+Options de `build` : `-e` pour exclure des chemins (répétable), `--no-vendor` pour ne pas lire les dépendances, `--no-cache` pour tout analyser à nouveau. `vendor`, `node_modules`, `var`, `.git` et les fichiers ignorés par les `.gitignore` du projet lui-même ne sont pas analysés ; un dépôt git au-dessus du projet n'applique jamais ses règles, si bien qu'un projet copié dans un dossier ignoré est quand même lu. Quand le dossier contient des fichiers PHP mais qu'ils sont tous exclus, `build` échoue en le disant, et chaque réponse MCP commence par cet avertissement au lieu de servir un graphe vide. La mémoire n'est pas limitée par défaut ; `PHPGRAPH_MEMORY_LIMIT=2G` fixe une limite. Avec PHP installé, opcache et son JIT accélèrent les builds d'environ 20 % : `php -d opcache.enable_cli=1 -d opcache.jit=tracing -d opcache.jit_buffer_size=128M vendor/bin/phpgraph build` (l'image Docker et les commandes affichées par `mcp-config` les utilisent déjà).
 
 ## Ce que contient le graphe
 
@@ -254,6 +254,8 @@ Deux petits projets microservices complètent le corpus : [deux services Laravel
 ## Contribuer
 
 Les issues et les pull requests sont les bienvenues. Voir [CONTRIBUTING.md](https://github.com/hbenabdallah/phpgraph/blob/main/CONTRIBUTING.md) : `composer check` doit passer (php-cs-fixer, PHPStan niveau 8, PHPUnit), et les évolutions de l'analyse se jugent sur le corpus. Sans PHP installé, `bin/dev composer check` lance tout dans Docker.
+
+Ce qui reste stable d'une version à l'autre (commandes, outils MCP, format de `graph.json`) est listé dans [docs/STABILITY.md](https://github.com/hbenabdallah/phpgraph/blob/main/docs/STABILITY.md) ; les changements sont dans le [changelog](https://github.com/hbenabdallah/phpgraph/blob/main/CHANGELOG.md).
 
 Les versions se publient en poussant un tag : le [workflow de release](https://github.com/hbenabdallah/phpgraph/blob/main/.github/workflows/release.yml) construit le PHAR, les exécutables pour Linux, macOS et Windows (`tools/build-binary.sh`) et l'image Docker `ghcr.io/hbenabdallah/phpgraph`.
 

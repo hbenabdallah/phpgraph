@@ -12,7 +12,8 @@
 set -euo pipefail
 
 SPC_VERSION=2.8.5
-PHP_VERSION=8.4
+# Opcache is left out: in the static runtime it crashes (segmentation fault, tested with static-php-cli 2.8).
+PHP_VERSION=8.5
 # tokenizer and ctype for the parser, mbstring, dom and xml for the configuration files, phar to run the archive,
 # zlib and iconv for the dependencies; outside Windows, pcntl and posix for the console (signals, the current user).
 EXTENSIONS=ctype,dom,iconv,mbstring,phar,tokenizer,xml,zlib

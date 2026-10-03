@@ -26,11 +26,17 @@ final class McpServerTest extends TestCase
         @rmdir(\dirname($this->graphPath));
     }
 
-    public function testInitializeEchoesClientProtocolVersion(): void
+    public function testInitializeNegotiatesTheProtocolVersion(): void
     {
         $response = $this->call(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'initialize', 'params' => ['protocolVersion' => '2025-06-18']]);
 
         self::assertSame('2025-06-18', $response['result']['protocolVersion']);
+
+        $latest = McpServer::PROTOCOLS[\count(McpServer::PROTOCOLS) - 1];
+        foreach ([['protocolVersion' => '2099-01-01'], []] as $params) {
+            $response = $this->call(['jsonrpc' => '2.0', 'id' => 2, 'method' => 'initialize', 'params' => $params]);
+            self::assertSame($latest, $response['result']['protocolVersion'] ?? null, 'a version it does not speak: its latest');
+        }
         self::assertSame('phpgraph', $response['result']['serverInfo']['name']);
         self::assertStringContainsString('Call overview first', $response['result']['instructions']);
     }

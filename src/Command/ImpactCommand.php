@@ -32,7 +32,7 @@ final class ImpactCommand extends AbstractGraphCommand
         if ($section !== null && !\in_array($section, TextPresenter::IMPACT_SECTIONS, true)) {
             $output->writeln(\sprintf('<error>Unknown section "%s": %s.</error>', \is_string($section) ? $section : '', implode(', ', TextPresenter::IMPACT_SECTIONS)));
 
-            return Command::FAILURE;
+            return Command::INVALID;
         }
 
         $output->writeln(

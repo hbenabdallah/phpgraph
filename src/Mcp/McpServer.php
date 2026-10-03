@@ -10,7 +10,11 @@ use PhpGraph\Query\GraphQueryProvider;
 
 final class McpServer
 {
-    private const DEFAULT_PROTOCOL = '2024-11-05';
+    /**
+     * The MCP protocol versions this server speaks, oldest first. It answers with the client's version when it is one
+     * of them, else with the latest: the client then decides whether it can go on (MCP lifecycle).
+     */
+    public const PROTOCOLS = ['2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25'];
 
     private const NAME = 'phpgraph';
 
@@ -99,7 +103,7 @@ final class McpServer
     private function initialize(array $params): array
     {
         return [
-            'protocolVersion' => \is_string($params['protocolVersion'] ?? null) ? $params['protocolVersion'] : self::DEFAULT_PROTOCOL,
+            'protocolVersion' => \in_array($params['protocolVersion'] ?? null, self::PROTOCOLS, true) ? $params['protocolVersion'] : self::PROTOCOLS[\count(self::PROTOCOLS) - 1],
             'capabilities' => ['tools' => new \stdClass()],
             'serverInfo' => ['name' => self::NAME, 'version' => $this->version],
             'instructions' => self::INSTRUCTIONS,

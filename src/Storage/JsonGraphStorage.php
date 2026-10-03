@@ -9,6 +9,11 @@ use PhpGraph\Graph\Graph;
 final class JsonGraphStorage
 {
     /**
+     * The format of graph.json: 2 since nodes carry their service. Changes only with a major version of phpgraph.
+     */
+    public const FORMAT = 2;
+
+    /**
      * @param array<string, mixed> $meta
      */
     public function save(Graph $graph, string $path, array $meta = []): void
@@ -19,7 +24,7 @@ final class JsonGraphStorage
         }
 
         // Version 2: nodes of a multi-service repository carry their service. Version 1 files still load.
-        $payload = ['version' => 2, 'meta' => $meta] + $graph->toArray();
+        $payload = ['version' => self::FORMAT, 'meta' => $meta] + $graph->toArray();
 
         $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
@@ -30,6 +35,16 @@ final class JsonGraphStorage
 
             throw new \RuntimeException(sprintf('Cannot write graph to "%s".', $path));
         }
+    }
+
+    /**
+     * The format of a graph file, read from its first bytes (`version` is written first), null when unreadable.
+     */
+    public function format(string $path): ?int
+    {
+        $head = (string) @file_get_contents($path, false, null, 0, 256);
+
+        return preg_match('/^\s*\{\s*"version"\s*:\s*(\d+)/', $head, $match) === 1 ? (int) $match[1] : null;
     }
 
     /**
@@ -59,6 +74,15 @@ final class JsonGraphStorage
         }
 
         $data = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+        $format = \is_array($data) ? $data['version'] ?? null : null;
+        if ($format !== self::FORMAT) {
+            throw new \RuntimeException(sprintf(
+                'Graph file "%s" is in format %s, this phpgraph reads format %d. Rebuild it: phpgraph build.',
+                $path,
+                \is_scalar($format) ? (string) $format : 'unknown',
+                self::FORMAT,
+            ));
+        }
 
         return [Graph::fromArray($data), \is_array($data['meta'] ?? null) ? $data['meta'] : []];
     }

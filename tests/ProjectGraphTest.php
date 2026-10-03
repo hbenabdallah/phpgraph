@@ -105,6 +105,35 @@ final class ProjectGraphTest extends TestCase
         self::assertStringContainsString('App\Invoice', $this->text($server->handle($getInvoice)));
     }
 
+    public function testAGraphBuiltByAnotherPhpgraphIsRebuilt(): void
+    {
+        $this->project()->build();
+        $path = $this->root . '/phpgraph-out/graph.json';
+        $data = json_decode((string) file_get_contents($path), true);
+        self::assertIsArray($data);
+        $data['meta']['phpgraph']['builder'] = 'an older phpgraph';
+        file_put_contents($path, json_encode($data));
+
+        self::assertTrue($this->project()->refresh(), 'same sources, other builder');
+        self::assertFalse($this->project()->refresh());
+    }
+
+    public function testAGraphInAnotherFormatIsRefusedThenRebuilt(): void
+    {
+        $this->project()->build();
+        $path = $this->root . '/phpgraph-out/graph.json';
+        file_put_contents($path, (string) preg_replace('/^\{\s*"version":\s*2/', '{"version": 1', (string) file_get_contents($path)));
+
+        $message = null;
+        try {
+            (new \PhpGraph\Storage\JsonGraphStorage())->loadWithMeta($path);
+        } catch (\RuntimeException $exception) {
+            $message = $exception->getMessage();
+        }
+        self::assertStringContainsString('is in format 1, this phpgraph reads format 2', (string) $message);
+        self::assertTrue($this->project()->refresh());
+    }
+
     private function project(): ProjectGraph
     {
         return ProjectGraph::reusingSavedOptions($this->root, $this->root . '/phpgraph-out', null, checkInterval: 0.0);
