@@ -22,8 +22,9 @@ use PhpGraph\Query\Result\ImpactedClass;
  *
  * - A method is also reached through the interface or parent method it implements: the callers of
  *   `OrderRepository::save` may run `DbalOrderRepository::save` (INFERRED, the call is resolved at runtime).
- * - A method reading a property the changed method writes depends on it (`reads_state_of`): its callers are reached
- *   too, marked as reached through the state.
+ * - A method reading a property the changed method writes depends on it (`reads_state_of`): its callers are listed as
+ *   possibly affected through the state, not followed further; the tests calling the reading methods themselves are
+ *   listed apart.
  * - A service receiving the changed one among others (a tagged collection) is listed, not followed: its users do not
  *   depend on that member.
  * - Test code is followed without the depth limit, through test helpers (fakers, fixtures): a test using a faker that
@@ -112,7 +113,9 @@ final class ImpactAnalysis
                         // A service receiving the change among others: its tests. Inherited code: none, they test the other subclasses.
                         $stopped[$dependent] = !$inherited;
                     }
-                    if ($followed) {
+                    // Through the state: the callers of a method reading it (hasErrors()) are listed as possibly affected,
+                    // not followed, since most of them never see what the change records. Their tests are still looked for.
+                    if ($followed && !(isset($viaState[$dependent]) && $this->classOf($dependent) !== $root)) {
                         $methods = $this->wholeClass($dependent, $reached, $confidence);
                         foreach (isset($viaState[$dependent]) ? $methods : [] as $method) {
                             $viaState[$method] = true;
@@ -125,7 +128,12 @@ final class ImpactAnalysis
         }
 
         // Test code, without the depth limit: tests reach the change through their helpers.
-        $frontier = array_keys(array_filter($confidence, static fn (string $id): bool => ($stopped[$id] ?? true) === true, \ARRAY_FILTER_USE_KEY));
+        // Not from the callers reached through the state: their tests are about everything else they do.
+        $frontier = array_keys(array_filter(
+            $confidence,
+            fn (string $id): bool => ($stopped[$id] ?? true) === true && !(isset($viaState[$id]) && $this->classOf($id) !== $root),
+            \ARRAY_FILTER_USE_KEY,
+        ));
         $tests = 0;
         for ($depth = $maxDepth + 1; $frontier !== [] && $tests < self::MAX_TESTS; ++$depth) {
             $next = [];

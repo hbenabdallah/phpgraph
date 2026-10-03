@@ -186,16 +186,19 @@ final class McpServer
                     . 'and handlers of a message), nearest first, each with the relation that reaches it and the weakest '
                     . 'confidence on the way, with the source lines of the calls. Follows methods, not whole classes: a class '
                     . 'is reached only through the methods that use the change. Also reaches the callers of the interface or '
-                    . 'parent method a method implements (INFERRED), and, in a separate list, the code depending on the state '
-                    . 'the method writes (callers of methods reading the same properties, such as all() or hasErrors() for '
-                    . 'add()). Lists the tests to run apart, found through test helpers (fakers) without the depth limit. '
+                    . 'parent method a method implements (INFERRED), and, in a separate list, the code possibly affected '
+                    . 'through the state the method writes (direct callers of methods reading the same properties, such as '
+                    . 'all() or hasErrors() for add(), not followed further). Lists the tests to run apart, found through test helpers (fakers) without the depth limit. '
                     . 'Stops at a service receiving the change among others (a tagged collection) and at inherited code '
-                    . 'shared with other subclasses, which are listed but not followed.',
+                    . 'shared with other subclasses, which are listed but not followed. Lists are cut at 40 entries: '
+                    . 'pass limit 0 for complete lists, or section to get a single one.',
                 'inputSchema' => [
                     'type' => 'object',
                     'properties' => [
                         'name' => $name,
                         'depth' => $integer('How many relations away to follow (default 3).'),
+                        'limit' => $integer('Entries per list (default 40); 0 for complete lists, instead of reading the cut ones node by node.'),
+                        'section' => ['type' => 'string', 'enum' => TextPresenter::IMPACT_SECTIONS, 'description' => 'Only one list: direct (the call chain), state (possibly affected through the state it changes), tests (to run, and possibly affected), helpers.'],
                     ],
                     'required' => ['name'],
                 ],
@@ -257,7 +260,12 @@ final class McpServer
                 ),
                 'shortest_path' => $presenter->path($this->requireString($arguments, 'from'), $this->requireString($arguments, 'to')),
                 'overview' => $presenter->overview(),
-                'impact_of' => $presenter->impact($this->requireString($arguments, 'name'), max(1, (int) ($arguments['depth'] ?? 3))),
+                'impact_of' => $presenter->impact(
+                    $this->requireString($arguments, 'name'),
+                    max(1, (int) ($arguments['depth'] ?? 3)),
+                    max(0, (int) ($arguments['limit'] ?? 40)),
+                    \is_string($arguments['section'] ?? null) && \in_array($arguments['section'], TextPresenter::IMPACT_SECTIONS, true) ? $arguments['section'] : null,
+                ),
                 default => $presenter->godNodes(max(1, (int) ($arguments['limit'] ?? 15))),
             };
             $warning = $presenter->warning();

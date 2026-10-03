@@ -30,9 +30,11 @@ final class ImpactTest extends TestCase
         'src/Validation/Clock.php' => 'namespace App\Validation; class Clock { public function now(): string { return ""; } }',
         'src/Validation/Rule.php' => 'namespace App\Validation; interface Rule { public function apply(Notification $n): void; }',
         'src/Validation/StockRule.php' => 'namespace App\Validation; final class StockRule implements Rule { public function apply(Notification $n): void { $n->add("stock"); } }',
+        'src/Validation/NormRule.php' => 'namespace App\Validation; final class NormRule implements Rule { public function apply(Notification $n): void { $n->add("norm"); } }',
         'src/Validation/Validator.php' => 'namespace App\Validation; final class Validator { /** @param iterable<Rule> $rules */ public function __construct(private iterable $rules, private Rule $rule) {}'
             . ' public function validate(Notification $n): void { $this->rule->apply($n); } }',
         'src/Validation/PromiseCheck.php' => 'namespace App\Validation; final class PromiseCheck { public function check(Notification $n): bool { return count($n->all()) > 0; } }',
+        'src/Validation/Report.php' => 'namespace App\Validation; final class Report { public function __construct(private PromiseCheck $check) {} public function render(Notification $n): string { return $this->check->check($n) ? "ok" : "ko"; } }',
         'src/Validation/Dispatcher.php' => 'namespace App\Validation; final class Dispatcher { public function __construct(private iterable $rules) {} }',
         'src/Validation/Endpoint.php' => 'namespace App\Validation; final class Endpoint { public function __construct(private Dispatcher $dispatcher) {} }',
         // Use cases sharing a template method.
@@ -58,6 +60,20 @@ final class ImpactTest extends TestCase
         $impact = $this->impact($graph, 'App\Validation\Notification::add');
         self::assertTrue($impact['App\Validation\PromiseCheck']->throughState, 'it reads what add() records, through all()');
         self::assertFalse($impact['App\Validation\StockRule']->throughState);
+        self::assertArrayNotHasKey('App\Validation\Report', $impact, 'the callers of a reader are not followed further');
+    }
+
+    public function testListsCanBeCompleteOrAlone(): void
+    {
+        $presenter = new TextPresenter(new GraphQuery($this->buildProject(self::PROJECT)->graph));
+
+        $cut = $presenter->impact('App\Validation\Notification::add', 3, 1);
+        self::assertStringContainsString('... 1 more', $cut);
+        self::assertStringNotContainsString('  - ... ', $presenter->impact('App\Validation\Notification::add', 3, 0));
+
+        $state = $presenter->impact('App\Validation\Notification::add', 3, 0, 'state');
+        self::assertStringContainsString('Possibly affected through the state', $state);
+        self::assertStringNotContainsString('Direct dependents', $state);
     }
 
     public function testCallsThroughAnInterfaceReachTheImplementation(): void

@@ -518,92 +518,114 @@ final class TextPresenter
     /**
      * What depends on a class or a method, directly or not: what a change may break.
      */
-    public function impact(string $name, int $depth = 3): string
+    public const IMPACT_SECTIONS = ['direct', 'state', 'tests', 'helpers'];
+
+    /**
+     * @param int     $limit   entries per section, 0 for all
+     * @param ?string $section one of IMPACT_SECTIONS, null for all of them
+     */
+    public function impact(string $name, int $depth = 3, int $limit = 40, ?string $section = null): string
     {
         $node = $this->query->candidates($name, 1)[0] ?? null;
         if ($node === null) {
             return \sprintf('No node matching "%s".', $name);
         }
 
-        $impact = $this->query->impactOf($node, $depth);
+        // Complete lists: the search itself goes further than its usual 200 classes.
+        $impact = $this->query->impactOf($node, $depth, $limit === 0 ? 5000 : 200);
         $isTestCase = fn (string $class): bool => preg_match('/(Test|TestCase|Cest|Spec|Context|Feature)$/', $this->query->label($class)) === 1;
-        $tests = array_values(array_filter($impact->classes, static fn ($class): bool => $class->isTest && $isTestCase($class->class)));
-        $helpers = array_values(array_filter($impact->classes, static fn ($class): bool => $class->isTest && !$isTestCase($class->class)));
-        $application = array_values(array_filter($impact->classes, static fn ($class): bool => !$class->isTest && !$class->throughState));
-        $throughState = array_values(array_filter($impact->classes, static fn ($class): bool => !$class->isTest && $class->throughState));
+        $groups = ['direct' => [], 'state' => [], 'tests' => [], 'stateTests' => [], 'helpers' => []];
+        foreach ($impact->classes as $class) {
+            $key = match (true) {
+                $class->isTest && !$isTestCase($class->class) => 'helpers',
+                $class->isTest => $class->throughState ? 'stateTests' : 'tests',
+                default => $class->throughState ? 'state' : 'direct',
+            };
+            $groups[$key][] = $class;
+        }
+
+        // What is reached through the state only possibly depends on the change: the classes and tests in the modules
+        // of the direct dependents first (their first two namespace segments).
+        $module = static fn (string $class): string => implode('\\', \array_slice(explode('\\', $class), 0, 2));
+        $modules = array_fill_keys(array_map(static fn ($class): string => $module($class->class), $groups['direct']), true);
+        foreach (['state', 'stateTests'] as $key) {
+            usort($groups[$key], static fn ($a, $b): int => [isset($modules[$module($b->class)]), $a->depth] <=> [isset($modules[$module($a->class)]), $b->depth]);
+        }
 
         $lines = [
             \sprintf('Impact of changing %s [%s], %s', $node->label, $node->kind->value, $this->location($node)),
             \sprintf(
-                '%d application classes and %d test classes depend on it, up to %d relations away%s.',
-                \count($application) + \count($throughState),
-                \count($tests),
+                '%d application classes depend on it up to %d relations away, %d more possibly through the state it changes; '
+                . '%d tests to run, %d possibly affected through the state; %d test helpers%s.',
+                \count($groups['direct']),
                 $impact->maxDepth,
+                \count($groups['state']),
+                \count($groups['tests']),
+                \count($groups['stateTests']),
+                \count($groups['helpers']),
                 $impact->truncated ? ' (stopped at the limit: more exist)' : '',
             ),
-            'Each class is shown with the first relation that reaches it (with its lines in the source) and the weakest '
-            . 'confidence on the way. Tests are followed further, through test helpers.',
+            'Each class comes with the first relation reaching it, its source lines and the weakest confidence on the way. '
+            . \sprintf('Lists show %s entries: impact_of with limit 0 (CLI: --all) gives all, section (direct, state, tests, helpers) one list.', $limit === 0 ? 'all' : 'the first ' . $limit),
         ];
+        $wanted = static fn (string $name): bool => $section === null || $section === $name;
+        $slice = static fn (array $entries): array => $limit === 0 ? $entries : \array_slice($entries, 0, $limit);
+        $more = static function (array $entries) use ($limit, &$lines): void {
+            if ($limit > 0 && \count($entries) > $limit) {
+                $lines[] = \sprintf('  - ... %d more', \count($entries) - $limit);
+            }
+        };
 
-        for ($depth = 1; $depth <= $impact->maxDepth; ++$depth) {
-            $atDepth = array_filter($application, static fn ($class): bool => $class->depth === $depth);
-            if ($atDepth === []) {
+        if ($wanted('direct')) {
+            for ($level = 1; $level <= $impact->maxDepth; ++$level) {
+                $atDepth = array_values(array_filter($groups['direct'], static fn ($class): bool => $class->depth === $level));
+                if ($atDepth === []) {
+                    continue;
+                }
+                $lines[] = '';
+                $lines[] = $level === 1 ? 'Direct dependents:' : \sprintf('%d relations away:', $level);
+                foreach ($slice($atDepth) as $class) {
+                    $lines[] = \sprintf(
+                        '  - %s [%s]  via %s%s%s  %s',
+                        $this->query->label($class->class),
+                        $class->confidence->value,
+                        $this->formatEdge($class->edge),
+                        $class->through === null ? '' : ' (calls it through ' . $this->query->label($class->through) . ')',
+                        $class->followed ? '' : ($class->edge->relation === \PhpGraph\Graph\Relation::Receives
+                            ? ' (receives it among others: its users are not followed)'
+                            : ' (inherited code shared with other subclasses: its callers are not followed)'),
+                        $this->classLocation($class->class),
+                    );
+                }
+                $more($atDepth);
+            }
+        }
+
+        if ($wanted('state') && $groups['state'] !== []) {
+            $lines[] = '';
+            $lines[] = 'Possibly affected through the state it changes (INFERRED): they call a method reading what it writes '
+                . '(order, duplicates, count), whether or not they ever see what it records. Not followed further; those in '
+                . 'the modules of the direct dependents first:';
+            foreach ($slice($groups['state']) as $class) {
+                $lines[] = \sprintf('  - %s  via %s  %s', $this->query->label($class->class), $this->formatEdge($class->edge), $this->classLocation($class->class));
+            }
+            $more($groups['state']);
+        }
+
+        foreach ([
+            'tests' => ['tests', 'Tests to run:'],
+            'stateTests' => ['tests', 'Tests possibly affected through the state (they call a method reading it; those in the modules of the direct dependents first):'],
+            'helpers' => ['helpers', 'Test helpers on the way (fakers, fixtures, base classes):'],
+        ] as $key => [$name, $title]) {
+            if (!$wanted($name) || $groups[$key] === []) {
                 continue;
             }
             $lines[] = '';
-            $lines[] = $depth === 1 ? 'Direct dependents:' : \sprintf('%d relations away:', $depth);
-            foreach (\array_slice($atDepth, 0, 40) as $class) {
-                $lines[] = \sprintf(
-                    '  - %s [%s]  via %s%s%s  %s',
-                    $this->query->label($class->class),
-                    $class->confidence->value,
-                    $this->formatEdge($class->edge),
-                    $class->through === null ? '' : ' (calls it through ' . $this->query->label($class->through) . ')',
-                    $class->followed ? '' : ($class->edge->relation === \PhpGraph\Graph\Relation::Receives
-                        ? ' (receives it among others: its users are not followed)'
-                        : ' (inherited code shared with other subclasses: its callers are not followed)'),
-                    $this->classLocation($class->class),
-                );
-            }
-            if (\count($atDepth) > 40) {
-                $lines[] = \sprintf('  - ... %d more', \count($atDepth) - 40);
-            }
-        }
-
-        if ($throughState !== []) {
-            $lines[] = '';
-            $lines[] = \sprintf(
-                'Through the state it changes (%d, INFERRED): they use a method reading what it writes, so a change of what '
-                . 'it records (order, duplicates, count) reaches them:',
-                \count($throughState),
-            );
-            foreach (\array_slice($throughState, 0, 40) as $class) {
-                $lines[] = \sprintf('  - %s  via %s  %s', $this->query->label($class->class), $this->formatEdge($class->edge), $this->classLocation($class->class));
-            }
-            if (\count($throughState) > 40) {
-                $lines[] = \sprintf('  - ... %d more', \count($throughState) - 40);
-            }
-        }
-
-        if ($tests !== []) {
-            $lines[] = '';
-            $lines[] = 'Tests to run:';
-            foreach (\array_slice($tests, 0, 40) as $class) {
+            $lines[] = $title;
+            foreach ($slice($groups[$key]) as $class) {
                 $lines[] = \sprintf('  - %s  %s', $this->query->label($class->class), $this->classLocation($class->class));
             }
-            if (\count($tests) > 40) {
-                $lines[] = \sprintf('  - ... %d more', \count($tests) - 40);
-            }
-        }
-        if ($helpers !== []) {
-            $lines[] = '';
-            $lines[] = 'Test helpers on the way (fakers, fixtures, base classes):';
-            foreach (\array_slice($helpers, 0, 20) as $class) {
-                $lines[] = \sprintf('  - %s  %s', $this->query->label($class->class), $this->classLocation($class->class));
-            }
-            if (\count($helpers) > 20) {
-                $lines[] = \sprintf('  - ... %d more', \count($helpers) - 20);
-            }
+            $more($groups[$key]);
         }
 
         return implode("\n", $lines);
