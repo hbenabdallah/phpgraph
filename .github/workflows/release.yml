@@ -2,45 +2,57 @@ name: Release
 
 # Publishes a release when a version tag is pushed (git tag v0.1.0 && git push origin v0.1.0):
 # - the PHAR and its checksum, attached to a GitHub release (download counts on the release page);
+# - executables needing no PHP, for Linux and macOS (x86_64, aarch64) and Windows (x86_64), with their checksums,
+#   attached to the same release (built by binaries.yml);
 # - the Docker image ghcr.io/<owner>/phpgraph, for amd64 and arm64 (pull counts on the package page).
 # Packagist follows the tags by itself once the package is submitted there.
+#
+# A release whose publication failed is published again from the Actions tab (Run workflow, with its tag): the code
+# of the tag, built by the workflows of main. Version tags never move.
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to publish again (v0.1.4)
+        required: true
+        type: string
 
 permissions:
   contents: write
   packages: write
 
 jobs:
-  phar:
+  build:
+    uses: ./.github/workflows/binaries.yml
+    with:
+      version: ${{ inputs.tag || github.ref_name }}
+      ref: ${{ inputs.tag || github.ref }}
+
+  release:
+    needs: build
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      # Only phpgraph's: the Docker job leaves a build record artifact too.
+      - uses: actions/download-artifact@v4
         with:
-          php-version: '8.2'
-          ini-values: phar.readonly=0
-          coverage: none
-      - run: composer install --no-interaction --no-progress
-      - run: composer check
-      - name: Build the PHAR
-        run: PHPGRAPH_VERSION="${GITHUB_REF_NAME}" php -d phar.readonly=0 tools/build-phar.php
-      - name: Check the PHAR
-        run: |
-          php build/phpgraph.phar --version | grep -F "${GITHUB_REF_NAME#v}"
-          php build/phpgraph.phar build tests/Fixtures/src -o /tmp/phpgraph-out
-          php build/phpgraph.phar overview -g /tmp/phpgraph-out/graph.json
-      - run: cd build && sha256sum phpgraph.phar > phpgraph.phar.sha256
+          pattern: phpgraph*
+          path: dist
+          merge-multiple: true
+      # A platform whose binary failed is left out; nothing is published without the PHAR, which runs the checks.
+      - run: test -f dist/phpgraph.phar && ls dist
       - uses: softprops/action-gh-release@v2
         with:
-          files: |
-            build/phpgraph.phar
-            build/phpgraph.phar.sha256
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          files: dist/*
           generate_release_notes: true
 
+  # Published on the tag push only: an image is never rebuilt for a release published again.
   docker:
+    if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
