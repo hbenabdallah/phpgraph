@@ -126,6 +126,7 @@ final class GraphBuilder
         $dispatches = [];
         $returnTypes = [];
         $propertyTypes = [];
+        /** @var array<string, string> $constants */
         $constants = [];
         $routes = [];
         $requests = [];
@@ -134,6 +135,12 @@ final class GraphBuilder
         $containerArguments = [];
         $routePrefixes = [];
         $parameterTypes = [];
+        /** @var array<string, \Closure(string): string> $fileIds file => its names as project ids */
+        $fileIds = [];
+        // By reference: both are filled while the files are read, the helpers are evaluated after.
+        $configuration = new ConfigurationEvaluator(function (string $constant, string $file) use (&$fileIds, &$constants): ?string {
+            return isset($fileIds[$file]) ? $constants[$this->qualifiedMember($constant, $fileIds[$file])] ?? null : null;
+        });
         foreach ($extractions as $path => $extraction) {
             $isTest = TestFiles::isTest((string) $path);
             $service = $serviceMap->serviceOf((string) $path);
@@ -166,6 +173,14 @@ final class GraphBuilder
             }
             foreach ($extraction->serviceArguments as $argument) {
                 $containerArguments[$service][] = $argument;
+            }
+            $fileIds[(string) $path] = $id;
+            $member = fn (string $name): string => str_contains($name, '::') ? $this->qualifiedMember($name, $id) : $id($name);
+            foreach ($extraction->configurationHelpers as $helper => $definition) {
+                $configuration->addHelper($member((string) $helper), $definition, (string) $path);
+            }
+            foreach ($extraction->configurationCalls as $call) {
+                $configuration->addCall(['caller' => $call['caller'] === null ? null : $member($call['caller']), 'callee' => $member($call['callee'])] + $call, (string) $path, $service);
             }
             foreach ($extraction->routePrefixes as $loader => $prefixes) {
                 $routePrefixes[$service][$loader] = [...$routePrefixes[$service][$loader] ?? [], ...$prefixes];
@@ -255,6 +270,19 @@ final class GraphBuilder
         }
 
         // Handlers the container configuration declares come first: the edge keeps their confidence, EXTRACTED.
+        // Services declared by configuration helpers called with literal arguments.
+        $evaluated = $configuration->evaluate();
+        foreach ($evaluated['definitions'] as $service => $definitions) {
+            foreach ($definitions as $serviceId => $target) {
+                $containerDefinitions[$service][$serviceId] ??= $target;
+            }
+        }
+        foreach ($evaluated['tags'] as $service => $tags) {
+            $containerTags[$service] = [...$containerTags[$service] ?? [], ...$tags];
+        }
+        foreach ($evaluated['arguments'] as $service => $arguments) {
+            $containerArguments[$service] = [...$containerArguments[$service] ?? [], ...$arguments];
+        }
         $container = new ContainerServices($root, $configurationFiles, $serviceMap, $containerDefinitions, $containerTags, $previous->configuration ?? [], $containerArguments);
         $handlers = [...(new TaggedHandlers($graph, $names, $types, $parameterTypes))->facts($container), ...$handlers];
         $injections = (new ServiceInjections($graph, $names, $container, new TaggedClasses($graph, $names, $types, $container)))->resolve();

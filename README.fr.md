@@ -39,7 +39,7 @@ phpgraph analyse tout le projet une fois (avec [`nikic/php-parser`](https://gith
 - **Architecture** : couches DDD et hexagonales, bounded contexts, règles de couches vérifiées en CI (`phpgraph check`) et analyse d'impact (`impact_of`) : ce qui dépend d'une classe ou d'une méthode, et les tests à lancer.
 - **Messages et événements** : envoi → message → handler pour Symfony Messenger, les jobs et événements Laravel, Ecotone, le CQRS de PrestaShop, les hooks WordPress, les événements de domaine et vos propres bus, à partir des attributs, de la configuration des services (YAML, XML, PHP) ou de la forme du code.
 - **HTTP** : routes (attributs Symfony, fichiers de routage YAML et PHP, ressources API Platform, fichiers de routes Laravel, contrôleurs nommés par identifiant de service) reliées à leurs contrôleurs, et appels HTTP reliés aux routes qu'ils atteignent. Une route dont la classe contrôleur n'existe ni dans le projet ni dans `vendor/` est signalée avec son fichier de routage.
-- **Injection de dépendances** : ce que la configuration du conteneur Symfony injecte au-delà des types du constructeur, tous les services d'un tag (`tagged_iterator`, `#[AutowireIterator]`) ou un service nommé par son identifiant, en PHP, YAML ou XML : un validateur est relié aux règles qu'il reçoit.
+- **Injection de dépendances** : ce que la configuration du conteneur Symfony injecte au-delà des types du constructeur, tous les services d'un tag (`tagged_iterator`, `#[AutowireIterator]`) ou un service nommé par son identifiant, en PHP, YAML ou XML, y compris dans des helpers appelés avec des arguments littéraux (`Wiring::wire($services, 'sales', ...)`, évalués, jamais exécutés) : un validateur est relié aux règles qu'il reçoit.
 - **Microservices** : un espace d'identifiants par service, et des liens entre services par leurs contrats : classes de messages partagées, clés de routage, routes HTTP.
 - **Serveur MCP sans configuration** : construit au premier usage, reconstruit de façon incrémentale quand le code change (environ 3 s par modification sur un projet de 8 400 fichiers).
 
@@ -248,7 +248,7 @@ Deux petits projets microservices complètent le corpus : [deux services Laravel
 - Pas de génériques : le type des éléments d'un `foreach` reste inconnu, et `Collection<Foo>` est lu comme `Collection`.
 - Les chaînes s'arrêtent aux méthodes magiques, aux classes internes de PHP et aux dépendances sans type de retour exploitable.
 - Sans `vendor/` installé, les chaînes d'appels s'arrêtent à la première dépendance.
-- Les services construits à l'exécution (passes de compilation, extensions de bundle, identifiants calculés dans le code), les routes en XML, les ressources API Platform déclarées en XML ou YAML et les schémas d'API (OpenAPI, protobuf) ne sont pas lus ; les injections non reliées sont listées par `overview`.
+- Les services construits à l'exécution (passes de compilation, extensions de bundle, identifiants calculés à partir de valeurs connues seulement à l'exécution), les routes en XML, les ressources API Platform déclarées en XML ou YAML et les schémas d'API (OpenAPI, protobuf) ne sont pas lus ; les injections non reliées sont listées par `overview`.
 - Deux services qui déclarent une classe de message du même nom sont supposés la partager.
 
 ## Contribuer

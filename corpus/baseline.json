@@ -94,7 +94,7 @@
             "contextPairs": 14,
             "layerFirst": false
         },
-        "seconds": 0.46,
+        "seconds": 0.51,
         "peakMemoryMb": 24
     },
     {
@@ -211,8 +211,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 6.98,
-        "peakMemoryMb": 438
+        "seconds": 8.69,
+        "peakMemoryMb": 444
     },
     {
         "name": "akeneo-pim",
@@ -327,8 +327,8 @@
             "contextPairs": 13,
             "layerFirst": false
         },
-        "seconds": 11.68,
-        "peakMemoryMb": 564
+        "seconds": 12.84,
+        "peakMemoryMb": 572
     },
     {
         "name": "prestashop",
@@ -437,8 +437,8 @@
             "contextPairs": 293,
             "layerFirst": true
         },
-        "seconds": 11.45,
-        "peakMemoryMb": 488
+        "seconds": 11.83,
+        "peakMemoryMb": 498
     },
     {
         "name": "ecotone-quickstart",
@@ -535,7 +535,7 @@
             "layerFirst": false
         },
         "seconds": 0.62,
-        "peakMemoryMb": 28
+        "peakMemoryMb": 30
     },
     {
         "name": "bookstack",
@@ -618,8 +618,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 3.25,
-        "peakMemoryMb": 108
+        "seconds": 3.06,
+        "peakMemoryMb": 112
     },
     {
         "name": "wordpress",
@@ -724,8 +724,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 6.58,
-        "peakMemoryMb": 111
+        "seconds": 5.85,
+        "peakMemoryMb": 113
     },
     {
         "name": "laravel-rabbitmq-microservices",
@@ -890,7 +890,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.55,
-        "peakMemoryMb": 44
+        "seconds": 0.54,
+        "peakMemoryMb": 46
     }
 ]

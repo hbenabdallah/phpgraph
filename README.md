@@ -39,7 +39,7 @@ phpgraph parses the whole project once (with [`nikic/php-parser`](https://github
 - **Architecture**: DDD and hexagonal layers, bounded contexts, layer rules checked in CI (`phpgraph check`), and impact analysis (`impact_of`): what depends on a class or method, and which tests to run.
 - **Messages and events**: sender → message → handler for Symfony Messenger, Laravel jobs and events, Ecotone, PrestaShop CQRS, WordPress hooks, domain events and your own buses, from attributes, service configuration (YAML, XML, PHP) or code shape.
 - **HTTP**: routes (Symfony attributes, YAML and PHP routing files, API Platform resources, Laravel route files, controllers named by container service id) linked to controllers, and HTTP calls linked to the routes they reach. A route whose controller class exists neither in the project nor in `vendor/` is reported with its routing file.
-- **Dependency injection**: what the Symfony container configuration injects beyond constructor types, every service of a tag (`tagged_iterator`, `#[AutowireIterator]`) or a service named by id, from PHP, YAML or XML configuration: a validator is linked to the rules it receives.
+- **Dependency injection**: what the Symfony container configuration injects beyond constructor types, every service of a tag (`tagged_iterator`, `#[AutowireIterator]`) or a service named by id, from PHP, YAML or XML configuration, including helpers called with literal arguments (`Wiring::wire($services, 'sales', ...)`, evaluated, never run): a validator is linked to the rules it receives.
 - **Microservices**: one id space per service, and links between services through their contracts: shared message classes, routing keys, HTTP routes.
 - **Zero-configuration MCP server**: built on first use, rebuilt incrementally when the code changes (about 3 s per edit on an 8,400-file project).
 
@@ -248,7 +248,7 @@ Two small microservices projects complete the corpus: [two Laravel services over
 - No generics: the element type of a `foreach` stays unknown, and `Collection<Foo>` is read as `Collection`.
 - Chains stop at magic methods, PHP internal classes, and dependencies without a usable return type.
 - Without an installed `vendor/`, call chains stop at the first dependency.
-- Services built at runtime (compiler passes, bundle extensions, ids computed in code), XML routes, API Platform resources declared in XML or YAML, and API schemas (OpenAPI, protobuf) are not read; injections that cannot be linked are listed by `overview`.
+- Services built at runtime (compiler passes, bundle extensions, ids computed from values only known at runtime), XML routes, API Platform resources declared in XML or YAML, and API schemas (OpenAPI, protobuf) are not read; injections that cannot be linked are listed by `overview`.
 - Two services declaring a message class of the same name are assumed to share it.
 
 ## Contributing

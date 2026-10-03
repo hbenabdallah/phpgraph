@@ -31,6 +31,10 @@ final readonly class FileExtraction
      * @param array<string, list<string>> $routePrefixes route loader (`api_platform`) => prefixes its import adds
      * @param array<string, array{reads: list<string>, writes: list<string>}> $stateAccess
      *                                             method id => the properties of `$this` it reads and changes
+     * @param array<string, array{params: list<string>, facts: list<array<string, mixed>>}> $configurationHelpers
+     *                                             service configuration written in helpers, as templates (ConfigurationHelpers)
+     * @param list<array{caller: ?string, callee: string, args: list<array{?string, ?array<mixed>}>, line: int}> $configurationCalls
+     *                                             calls that may be to such helpers, with their arguments as templates
      */
     public function __construct(
         public array $nodes,
@@ -49,6 +53,8 @@ final readonly class FileExtraction
         public array $serviceArguments = [],
         public array $routePrefixes = [],
         public array $stateAccess = [],
+        public array $configurationHelpers = [],
+        public array $configurationCalls = [],
     ) {
     }
 }

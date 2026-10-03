@@ -92,10 +92,16 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<int, true> property fetches being written, not read: `$this->items[] = $item` */
     private array $writtenFetches = [];
 
+    private readonly ConfigurationHelpers $configuration;
+
+    private readonly bool $inConfigurationDirectory;
+
     public function __construct(private readonly string $path)
     {
         $this->fileId = 'file:' . $path;
         $this->bus = new BusExtractor();
+        $this->configuration = new ConfigurationHelpers(fn (Name $name): ?string => $this->resolveName($name));
+        $this->inConfigurationDirectory = preg_match('#(^|/)config/#', $path) === 1;
         // Laravel prefixes the routes of routes/api.php with /api.
         $this->http = new RouteExtractor($path, preg_match('#(^|/)routes/api\.php$#', $path) === 1 ? ['api'] : []);
         $this->nodes[] = new Node($this->fileId, $path, NodeKind::File, $path, 1);
@@ -123,6 +129,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                 'reads' => array_map('strval', array_keys($access['reads'])),
                 'writes' => array_map('strval', array_keys($access['writes'])),
             ], $this->stateAccess),
+            $this->configuration->helpers(),
+            $this->configuration->calls(),
         );
     }
 
@@ -257,6 +265,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         if ($node instanceof Stmt\ClassMethod || $node instanceof Stmt\Function_) {
+            $this->configuration->leaveCallable();
             $this->currentCallable = null;
             $this->localTypes = [];
             $this->pinned = [];
@@ -368,6 +377,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         $this->currentCallable = $id;
+        $this->configuration->enterCallable($id, $node->params, array_values(array_map(fn (AstNode\Param $param): ?string => $this->singleType($param->type), $node->params)));
         $this->localTypes = [];
         $this->pinned = [];
         $this->outerScopes = [];
@@ -540,6 +550,16 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
         if ($node instanceof Expr\MethodCall && $node->name instanceof Identifier) {
             $this->onPossibleServiceDefinition($node);
+            $this->configuration->onMethodCall($node);
+        }
+        // A configuration helper may be called: Wiring::wire($services, 'sales_order', ...).
+        if ($node instanceof Expr\StaticCall && $node->class instanceof Name && $node->name instanceof Identifier) {
+            $class = $this->resolveName($node->class);
+            if ($class !== null) {
+                $this->configuration->onCall($class . '::' . $node->name->toString(), $node->args, $this->inConfigurationDirectory, $node->getStartLine());
+            }
+        } elseif ($node instanceof Expr\FuncCall && $node->name instanceof Name) {
+            $this->configuration->onCall(ltrim($node->name->toString(), '\\'), $node->args, $this->inConfigurationDirectory, $node->getStartLine());
         }
 
         if ($node instanceof Expr\MethodCall || $node instanceof Expr\StaticCall || $node instanceof Expr\FuncCall) {
