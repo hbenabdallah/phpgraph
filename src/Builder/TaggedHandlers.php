@@ -6,7 +6,6 @@ namespace PhpGraph\Builder;
 
 use PhpGraph\Extractor\HandlerFact;
 use PhpGraph\Graph\Graph;
-use PhpGraph\Graph\NodeKind;
 
 /**
  * Handlers the container configuration declares with a tag, recognised by its name whatever the framework or the
@@ -42,6 +41,7 @@ final class TaggedHandlers
     public function facts(ContainerServices $container): array
     {
         $facts = [];
+        $tagged = new TaggedClasses($this->graph, $this->names, $this->types, $container);
         foreach ($container->tags() as $tag) {
             $listener = preg_match(self::EVENT_LISTENER, $tag['name']) === 1 && !str_starts_with($tag['name'], 'doctrine.');
             $handler = preg_match(self::MESSAGE_HANDLER, $tag['name']) === 1 && preg_match(self::IGNORED, $tag['name']) !== 1;
@@ -49,7 +49,7 @@ final class TaggedHandlers
                 continue;
             }
 
-            foreach ($this->classes($tag, $container) as $class) {
+            foreach ($tagged->of($tag) as $class) {
                 $fact = $listener ? $this->listener($class, $tag['attributes'], $tag['service']) : $this->handler($class, $tag['attributes'], $tag['service']);
                 if ($fact !== null) {
                     $file = $this->graph->node($class)?->file;
@@ -103,35 +103,5 @@ final class TaggedHandlers
         return str_contains($event, '\\')
             ? new HandlerFact($class, $method, $this->names->canonical($event, $service), HandlerFact::CONFIG)
             : new HandlerFact($class, $method, null, HandlerFact::CONFIG, $event);
-    }
-
-    /**
-     * @param array{service: string, id: ?string, instanceof: ?string, name: string, attributes: array<string, string>} $tag
-     *
-     * @return list<string> project classes the tag applies to
-     */
-    private function classes(array $tag, ContainerServices $container): array
-    {
-        if ($tag['id'] !== null) {
-            $class = $container->classOf($tag['id'], $tag['service']);
-            $class = $class === null ? null : $this->names->canonical($class, $tag['service']);
-
-            return $class !== null && $this->isProjectClass($class) ? [$class] : [];
-        }
-
-        $type = $this->names->canonical((string) $tag['instanceof'], $tag['service']);
-        $classes = [];
-        foreach ($this->graph->nodes() as $node) {
-            if ($node->kind === NodeKind::PhpClass && $node->id !== $type && \in_array($type, $this->types->lineage($node->id), true)) {
-                $classes[] = $node->id;
-            }
-        }
-
-        return $classes;
-    }
-
-    private function isProjectClass(string $class): bool
-    {
-        return $this->graph->node($class)?->kind === NodeKind::PhpClass;
     }
 }

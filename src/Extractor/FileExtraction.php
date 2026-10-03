@@ -25,6 +25,10 @@ final readonly class FileExtraction
      * @param list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}> $serviceTags
      *                                             container tags declared in PHP: `->tag('messenger.message_handler')`
      * @param array<string, string> $parameterTypes method id => class of its first parameter
+     * @param list<array{id: string, tag: ?string, service: ?string}> $serviceArguments
+     *                                             what a service receives from the container: the services of a tag
+     *                                             (`tagged_iterator('app.rule')`) or one service (`service('app.mailer')`)
+     * @param array<string, list<string>> $routePrefixes route loader (`api_platform`) => prefixes its import adds
      */
     public function __construct(
         public array $nodes,
@@ -40,6 +44,8 @@ final readonly class FileExtraction
         public array $services = [],
         public array $serviceTags = [],
         public array $parameterTypes = [],
+        public array $serviceArguments = [],
+        public array $routePrefixes = [],
     ) {
     }
 }

@@ -83,6 +83,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<string, string> */
     private array $parameterTypes = [];
 
+    /** @var list<array{id: string, tag: ?string, service: ?string}> */
+    private array $serviceArguments = [];
+
     public function __construct(private readonly string $path)
     {
         $this->fileId = 'file:' . $path;
@@ -108,6 +111,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->services,
             $this->serviceTags,
             $this->parameterTypes,
+            $this->serviceArguments,
+            $this->http->loaderPrefixes(),
         );
     }
 
@@ -129,6 +134,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
         if ($node instanceof Stmt\ClassLike) {
             return $this->onClassLike($node);
+        }
+
+        if ($node instanceof Stmt\Expression && $node->expr instanceof Expr\MethodCall) {
+            $this->onPossibleRoutingConfigurator($node->expr);
         }
 
         if ($node instanceof Stmt\ClassMethod) {
@@ -278,13 +287,29 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
         $this->currentClass = $fqcn;
         $this->currentParent = null;
-        $this->classAttributes = $this->attributes($node->attrGroups);
         foreach ($node->stmts as $statement) {
             if ($statement instanceof Stmt\ClassConst) {
                 foreach ($statement->consts as $constant) {
                     if ($constant->value instanceof AstNode\Scalar\String_) {
                         $this->constants[$fqcn . '::' . $constant->name->toString()] = $constant->value->value;
                     }
+                }
+            }
+        }
+        // After the constants: #[Route(self::PATH)] reads one.
+        $this->classAttributes = $this->attributes($node->attrGroups);
+        if ($node instanceof Stmt\Class_) {
+            $resources = new ApiPlatformResources($this->path, fn (Name $name): ?string => $this->resolveName($name), $this->pathValue(...));
+            foreach ($resources->routes($fqcn, $node->attrGroups) as $route) {
+                $this->http->addRoute($route);
+            }
+        }
+        // #[AutoconfigureTag('app.rule')]: the class, or every class implementing the interface, gets the tag.
+        foreach ($node->attrGroups as $group) {
+            foreach ($group->attrs as $attribute) {
+                $tag = $this->argumentNode($attribute->args, 0)?->value;
+                if (str_ends_with((string) $this->resolveName($attribute->name), 'AutoconfigureTag') && $tag instanceof AstNode\Scalar\String_) {
+                    $this->serviceTags[] = ['id' => null, 'instanceof' => $fqcn, 'name' => $tag->value, 'attributes' => []];
                 }
             }
         }
@@ -342,6 +367,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
         foreach ($this->typeNames($node->returnType) as $type) {
             $this->reference($id, $type);
+        }
+
+        if ($kind === NodeKind::Method && $this->currentClass !== null && strtolower($node->name->toString()) === '__construct') {
+            $this->onInjectedParameters($this->currentClass, $node->params);
         }
 
         if ($kind === NodeKind::Method) {
@@ -657,6 +686,25 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             return;
         }
 
+        // ->args([tagged_iterator('app.rule')]), ->arg('$mailer', service('app.mailer')), ->call('setLogger', [service('logger')]).
+        if (\in_array($name, ['args', 'arg', 'call'], true)) {
+            [$id] = $this->definedService($node->var);
+            $values = $name === 'args' ? [$first] : [$second];
+            $decorated = $this->decoratedService($node->var);
+            foreach ($id === null ? [] : $values as $value) {
+                foreach ($value === null ? [] : $this->injectedValues($value->value) as $injected) {
+                    // A decorator receives the service it decorates: `->decorate(Repository::class)->args([service('.inner')])`.
+                    $target = $injected['service'];
+                    if ($decorated !== null && ($target === '.inner' || $target === $id . '.inner')) {
+                        $target = $decorated;
+                    }
+                    $this->serviceArguments[] = ['id' => (string) $id, 'tag' => $injected['tag'], 'service' => $target];
+                }
+            }
+
+            return;
+        }
+
         if (($name !== 'set' && $name !== 'alias') || $first === null) {
             return;
         }
@@ -672,6 +720,106 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         } elseif ($name === 'set' && ($target !== null || str_contains($id, '\\'))) {
             $this->services[$id] = $target ?? $id;
         }
+    }
+
+    /**
+     * What a configuration value injects: `tagged_iterator('t')`, `tagged_locator('t')` (or `['tag' => 't']`),
+     * `service('id')`, and those inside arrays (`iterator([...])`, `->args([...])`).
+     *
+     * @return list<array{tag: ?string, service: ?string}>
+     */
+    private function injectedValues(Expr $value): array
+    {
+        if ($value instanceof Expr\Array_) {
+            $injected = [];
+            foreach ($value->items as $item) {
+                array_push($injected, ...$this->injectedValues($item->value));
+            }
+
+            return $injected;
+        }
+        if (!$value instanceof Expr\FuncCall || !$value->name instanceof Name) {
+            return [];
+        }
+
+        $function = strtolower($value->name->getLast());
+        $argument = $this->argumentNode($value->args, 0)?->value;
+        if ($function === 'iterator' && $argument !== null) {
+            return $this->injectedValues($argument);
+        }
+        $string = $argument === null ? null : ($this->stringValue($argument) ?? $this->classConstant($argument));
+        if ($argument instanceof Expr\Array_) {
+            foreach ($argument->items as $item) {
+                if ($item->key instanceof AstNode\Scalar\String_ && $item->key->value === 'tag') {
+                    $string = $this->stringValue($item->value);
+                }
+            }
+        }
+        if ($string === null || str_starts_with($string, 'const:')) {
+            return [];
+        }
+
+        return match ($function) {
+            'tagged_iterator', 'tagged_locator' => [['tag' => $string, 'service' => null]],
+            'service' => [['tag' => null, 'service' => $string]],
+            default => [],
+        };
+    }
+
+    /**
+     * Constructor parameters the container fills from attributes: `#[AutowireIterator('app.rule')]`,
+     * `#[TaggedIterator('app.rule')]`, the locator variants, `#[Autowire(service: 'app.mailer')]`.
+     *
+     * @param array<AstNode\Param> $params
+     */
+    private function onInjectedParameters(string $class, array $params): void
+    {
+        foreach ($params as $param) {
+            foreach ($param->attrGroups as $group) {
+                foreach ($group->attrs as $attribute) {
+                    $name = (string) $this->resolveName($attribute->name);
+                    $short = substr($name, (int) strrpos('\\' . $name, '\\'));
+                    foreach ($attribute->args as $position => $argument) {
+                        $key = $argument->name?->toString();
+                        $value = $argument->value instanceof AstNode\Scalar\String_ ? $argument->value->value : $this->classConstant($argument->value);
+                        if ($value === null) {
+                            continue;
+                        }
+                        if (\in_array($short, ['AutowireIterator', 'TaggedIterator', 'AutowireLocator', 'TaggedLocator'], true) && ($key === 'tag' || ($key === null && $position === 0))) {
+                            $this->serviceArguments[] = ['id' => $class, 'tag' => $value, 'service' => null];
+                        } elseif ($short === 'Autowire' && $key === 'service') {
+                            $this->serviceArguments[] = ['id' => $class, 'tag' => null, 'service' => $value];
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * A statement of a Symfony PHP routing file: a call chain on a RoutingConfigurator.
+     */
+    private function onPossibleRoutingConfigurator(Expr\MethodCall $chain): void
+    {
+        $calls = [];
+        $root = $chain->var;
+        for ($call = $chain; $call instanceof Expr\MethodCall; $call = $call->var) {
+            if (!$call->name instanceof Identifier) {
+                return;
+            }
+            $arguments = array_values(array_map(
+                static fn (AstNode\Arg $argument): Expr => $argument->value,
+                array_filter($call->args, static fn ($argument): bool => $argument instanceof AstNode\Arg && !$argument->unpack),
+            ));
+            array_unshift($calls, [strtolower($call->name->toString()), $arguments]);
+            $root = $call->var;
+        }
+        $type = $this->typeOf($root);
+        if ($type?->className === null || preg_match('/(Routing|Collection)Configurator$/', $type->className) !== 1) {
+            return;
+        }
+
+        $this->http->onRoutingConfigurator($calls, $chain->getStartLine(), fn (Name $name): ?string => $this->resolveName($name), $this->pathValue(...));
     }
 
     /**
@@ -748,7 +896,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     }
 
     /**
-     * The service a configurator chain defines: [id, null] for ->set('id', ...), [null, type] for ->instanceof(Type::class).
+     * The service a configurator chain defines: [id, null] for ->set('id', ...), [null, type] for ->instanceof(Type::class),
+     * [namespace, null] for ->load('App\\Rule\\', '../src/Rule/'): an id ending with a backslash, as in YAML.
      *
      * @return array{?string, ?string}
      */
@@ -761,7 +910,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $argument = $this->argumentNode($chain->args, 0)?->value;
             $value = $argument instanceof AstNode\Scalar\String_ ? $argument->value : ($argument === null ? null : $this->classConstant($argument));
             $name = strtolower($chain->name->toString());
-            if ($name === 'set') {
+            if ($name === 'set' || ($name === 'load' && $value !== null && str_ends_with($value, '\\'))) {
                 return [$value, null];
             }
             if ($name === 'instanceof') {
@@ -770,6 +919,21 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         return [null, null];
+    }
+
+    /**
+     * The service a configurator chain decorates: `->decorate(Repository::class)`.
+     */
+    private function decoratedService(Expr $chain): ?string
+    {
+        for (; $chain instanceof Expr\MethodCall; $chain = $chain->var) {
+            $argument = $this->argumentNode($chain->args, 0)?->value;
+            if ($chain->name instanceof Identifier && strtolower($chain->name->toString()) === 'decorate' && $argument !== null) {
+                return $argument instanceof AstNode\Scalar\String_ ? $argument->value : $this->classConstant($argument);
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -950,6 +1114,27 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     }
 
     /**
+     * A route path: a string, a class constant (`self::ROUTE`), or a concatenation of both. A constant of another file
+     * is written `{const:Class::NAME}`, for the builder to replace.
+     */
+    private function pathValue(Expr $expr): ?string
+    {
+        if ($expr instanceof Expr\BinaryOp\Concat) {
+            $left = $this->pathValue($expr->left);
+            $right = $this->pathValue($expr->right);
+
+            return $left === null || $right === null ? null : $left . $right;
+        }
+
+        $value = $this->stringValue($expr);
+        if ($value === null || !str_starts_with($value, 'const:')) {
+            return $value;
+        }
+
+        return $this->constants[substr($value, 6)] ?? '{' . $value . '}';
+    }
+
+    /**
      * Attribute names and the arguments the bus detection reads: `handles: Message::class`, `method: 'onMessage'`.
      *
      * @param array<AstNode\AttributeGroup> $groups
@@ -966,7 +1151,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                 foreach ($attribute->args as $position => $argument) {
                     $name = $argument->name?->toString();
                     if (($name === null && $position === 0) || $name === 'path') {
-                        $path = $argument->value instanceof AstNode\Scalar\String_ ? $argument->value->value : $path;
+                        $path = $this->pathValue($argument->value) ?? $path;
                     }
                     if ($name === 'methods') {
                         $values = $argument->value instanceof Expr\Array_ ? array_map(static fn ($item) => $item->value, $argument->value->items) : [$argument->value];

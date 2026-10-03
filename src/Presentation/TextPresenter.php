@@ -354,10 +354,10 @@ final class TextPresenter
             $lines[] = 'Route nodes (route:GET /orders/{id}) are the entry points: route --handled_by--> controller; caller --requests--> route.';
             $unresolved = $http->routes - $http->routesWithHandler - $http->routesToDependencies - $http->routesToMissingControllers;
             $lines[] = \sprintf(
-                '- %d routes (attributes, Laravel route files, YAML routing files): %d handled by a controller of the project%s%s.',
+                '- %d routes (attributes, API Platform resources, Laravel route files, Symfony YAML and PHP routing files): %d handled by a controller of the project%s%s.',
                 $http->routes,
                 $http->routesWithHandler,
-                $http->routesToDependencies > 0 ? \sprintf(', %d by a controller of a dependency', $http->routesToDependencies) : '',
+                $http->routesToDependencies > 0 ? \sprintf(', %d by a controller of a dependency (or API Platform itself)', $http->routesToDependencies) : '',
                 $unresolved > 0 ? \sprintf(', %d without one: no controller (a route only the front end uses), a closure, or a controller service no configuration of the project declares (generated at runtime by a bundle)', $unresolved) : '',
             );
             if ($http->routesToMissingControllers > 0) {
@@ -392,6 +392,27 @@ final class TextPresenter
 
         if ($overview->routes !== []) {
             array_push($lines, '', ...$this->routeList($overview->routes));
+        }
+
+        $injections = $summary?->injections;
+        if ($injections !== null && $injections->injections > 0) {
+            $lines[] = '';
+            $lines[] = '## Container injections';
+            $lines[] = 'What the container configuration injects beyond constructor types: service --receives--> each service of a tag '
+                . '(tagged_iterator, #[AutowireIterator]) or a service named by id (service(), @id, the decorated .inner).';
+            $lines[] = \sprintf(
+                '- %d injections into application code: %d linked (%d receives edges)%s.',
+                $injections->injections,
+                $injections->linked,
+                $injections->edges,
+                $injections->unlinkedCount > 0 ? \sprintf(
+                    ', %d name services the project\'s configuration does not define: framework or bundle services, or ids '
+                    . 'computed at runtime. Those that look like the project\'s own first: %s%s',
+                    $injections->unlinkedCount,
+                    implode('; ', $injections->unlinked),
+                    $injections->unlinkedCount > \count($injections->unlinked) ? '; ...' : '',
+                ) : '',
+            );
         }
 
         $lines[] = '';
@@ -435,8 +456,8 @@ final class TextPresenter
                 );
             }
         }
-        $lines[] = '- Not modelled: calls to global functions, dynamic calls ($obj->$name(), __call), service container configuration, '
-            . 'handlers and routes declared only in XML, controllers named by a service id, and API schemas (OpenAPI, protobuf).';
+        $lines[] = '- Not modelled: calls to global functions, dynamic calls ($obj->$name(), __call), routes declared in XML, '
+            . 'services built at runtime (compiler passes, bundle extensions, ids computed in code), and API schemas (OpenAPI, protobuf).';
 
         return implode("\n", $lines);
     }
@@ -631,19 +652,17 @@ final class TextPresenter
             return $lines;
         }
 
-        $groups = [];
-        foreach ($routes as $route) {
-            // The first segments up to a literal one: /{_locale}/account, /api, /orders.
-            $prefix = '';
-            foreach (explode('/', trim($route->path, '/')) as $segment) {
-                $prefix .= '/' . $segment;
-                if (!str_starts_with($segment, '{') && !str_starts_with($segment, ':')) {
-                    break;
+        // A prefix holding more than a third of the routes (/api) is split by its next literal segment (/api/orders).
+        $groups = $this->routeGroups($routes, 1);
+        foreach ($groups as $key => $group) {
+            if ($group['count'] > max(10, intdiv(\count($routes), 3))) {
+                $deeper = $this->routeGroups($group['routes'], $group['depth'] + 1);
+                // Only when it groups: /orders/1, /orders/2... are no better than /orders.
+                if (\count($deeper) > 1 && \count($deeper) <= intdiv($group['count'], 2)) {
+                    unset($groups[$key]);
+                    $groups += $deeper;
                 }
             }
-            $key = ($route->route->service === null ? '' : $route->route->service . ': ') . $prefix;
-            $groups[$key]['count'] = ($groups[$key]['count'] ?? 0) + 1;
-            $groups[$key]['files'][(string) $route->route->file] = true;
         }
         uasort($groups, static fn (array $a, array $b): int => $b['count'] <=> $a['count']);
 
@@ -663,6 +682,35 @@ final class TextPresenter
         }
 
         return $lines;
+    }
+
+    /**
+     * Routes by the first $depth literal segments of their path, and the placeholders before them: /{_locale}/account.
+     *
+     * @param list<RouteEntry> $routes
+     *
+     * @return array<string, array{count: int, depth: int, files: array<string, true>, routes: list<RouteEntry>}>
+     */
+    private function routeGroups(array $routes, int $depth): array
+    {
+        $groups = [];
+        foreach ($routes as $route) {
+            $prefix = '';
+            $literals = 0;
+            foreach (explode('/', trim($route->path, '/')) as $segment) {
+                $prefix .= '/' . $segment;
+                if (!str_starts_with($segment, '{') && !str_starts_with($segment, ':') && ++$literals === $depth) {
+                    break;
+                }
+            }
+            $key = ($route->route->service === null ? '' : $route->route->service . ': ') . $prefix;
+            $groups[$key]['count'] = ($groups[$key]['count'] ?? 0) + 1;
+            $groups[$key]['depth'] = $depth;
+            $groups[$key]['files'][(string) $route->route->file] = true;
+            $groups[$key]['routes'][] = $route;
+        }
+
+        return $groups;
     }
 
     private function location(Node $node): string

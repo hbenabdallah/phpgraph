@@ -144,6 +144,59 @@ final class HttpTest extends TestCase
         self::assertStringContainsString('- /orders: 20 (src/Controller0.php, src/Controller10.php, src/Controller12.php, ...)', $text);
     }
 
+    public function testApiPlatformResourcesAreRoutesHandledByTheirStateClasses(): void
+    {
+        $result = $this->buildProject([
+            'src/Resource/SupplierResource.php' => 'namespace App\Resource; use ApiPlatform\Metadata\ApiResource; use ApiPlatform\Metadata\Post; use ApiPlatform\Metadata\Get; use App\State\RetrieveProcessor; use App\State\SupplierProvider; use App\Dto\Payload;'
+                . ' #[ApiResource(shortName: "Supplier", routePrefix: "/PO/010_supplier", operations: ['
+                . ' new Post(uriTemplate: "/retrieve-supplier.{_format}", input: Payload::class, processor: RetrieveProcessor::class, extraProperties: ["use_case" => \App\UseCase\RetrieveSupplier::class]),'
+                . ' new Get(uriTemplate: "/suppliers/{id}", provider: SupplierProvider::class)])] final class SupplierResource {}',
+            'src/Resource/PurchaseOrder.php' => 'namespace App\Resource; use ApiPlatform\Metadata\ApiResource; #[ApiResource] class PurchaseOrder {}',
+            'src/Resource/Category.php' => 'namespace App\Resource; use ApiPlatform\Metadata\GetCollection; #[GetCollection(controller: \App\Controller\ListCategories::class)] class Category {}',
+            'src/State/RetrieveProcessor.php' => 'namespace App\State; class RetrieveProcessor { public function process(): void {} }',
+            'src/State/SupplierProvider.php' => 'namespace App\State; class SupplierProvider { public function provide(): void {} }',
+            'src/Controller/ListCategories.php' => 'namespace App\Controller; class ListCategories { public function __invoke(): void {} }',
+            'src/Dto/Payload.php' => 'namespace App\Dto; class Payload {}',
+            'src/UseCase/RetrieveSupplier.php' => 'namespace App\UseCase; class RetrieveSupplier {}',
+            'config/routes/api_platform.php' => 'use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator; return static function (RoutingConfigurator $routes): void { $routes->import(".", "api_platform")->prefix("/api"); };',
+        ]);
+        $graph = $result->graph;
+        $post = 'route:src/Resource/SupplierResource.php#POST /api/PO/010_supplier/retrieve-supplier';
+
+        self::assertContains('POST /api/PO/010_supplier/retrieve-supplier', $this->routes($graph), 'uriTemplate, routePrefix, the api_platform import prefix, no .{_format}');
+        self::assertTrue($this->hasEdge($graph, $post, 'App\State\RetrieveProcessor::process', Relation::HandledBy, Confidence::Extracted), 'a write is handled by its processor');
+        self::assertTrue($this->hasEdge($graph, 'route:src/Resource/SupplierResource.php#GET /api/PO/010_supplier/suppliers/{id}', 'App\State\SupplierProvider::provide', Relation::HandledBy), 'a read by its provider');
+        foreach (['App\Resource\SupplierResource', 'App\Dto\Payload', 'App\UseCase\RetrieveSupplier'] as $class) {
+            self::assertTrue($this->hasEdge($graph, $post, $class, Relation::References, Confidence::Extracted), $class);
+        }
+        foreach (['GET /api/purchase_orders/{id}', 'GET /api/purchase_orders', 'POST /api/purchase_orders', 'PATCH /api/purchase_orders/{id}', 'DELETE /api/purchase_orders/{id}'] as $default) {
+            self::assertContains($default, $this->routes($graph), 'default operations, snake_case and plural');
+        }
+        self::assertTrue($this->hasEdge($graph, 'route:src/Resource/Category.php#GET /api/categories', 'App\Controller\ListCategories::__invoke', Relation::HandledBy), 'an operation attribute alone, with a controller');
+        self::assertSame(5, $result->http->routesToDependencies, 'PurchaseOrder: API Platform itself handles them');
+
+        unlink($this->root . '/config/routes/api_platform.php');
+        $this->write(['config/routes/api_platform.yaml' => "api_platform:\n    resource: .\n    type: api_platform\n    prefix: /v2\n"]);
+        self::assertContains('GET /v2/categories', $this->routes((new \PhpGraph\Builder\GraphBuilder())->build($this->root)->graph), 'the prefix of a YAML import');
+    }
+
+    public function testRoutesOfPhpRoutingFilesAndPathsHeldInConstants(): void
+    {
+        $graph = $this->buildProject([
+            'src/HealthController.php' => 'namespace App; class HealthController { public const ROUTE = "/liveness"; public function __invoke(): void {} }',
+            'src/ProblemController.php' => 'namespace App; use Symfony\Component\Routing\Attribute\Route; class ProblemController { private const BASE = "/problems"; #[Route(self::BASE . "/{type}", methods: ["GET"])] public function show(): void {} }',
+            'src/OrderController.php' => 'namespace App; class OrderController { public function show(): void {} }',
+            'config/routes/health.php' => 'use App\HealthController; use App\OrderController; use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;'
+                . ' return static function (RoutingConfigurator $routes): void {'
+                . ' $routes->add("liveness", HealthController::ROUTE)->controller(HealthController::class);'
+                . ' $routes->add("order_show", "/orders/{id}")->controller([OrderController::class, "show"])->methods(["GET"]); };',
+        ])->graph;
+
+        self::assertTrue($this->hasEdge($graph, 'route:config/routes/health.php#ANY /liveness', 'App\HealthController::__invoke', Relation::HandledBy), 'a constant of another file');
+        self::assertTrue($this->hasEdge($graph, 'route:config/routes/health.php#GET /orders/{id}', 'App\OrderController::show', Relation::HandledBy));
+        self::assertTrue($this->hasEdge($graph, 'route:src/ProblemController.php#GET /problems/{type}', 'App\ProblemController::show', Relation::HandledBy), 'self::CONSTANT in an attribute');
+    }
+
     public function testHttpCallsReachTheRoutesOfAnotherService(): void
     {
         $result = $this->buildProject([

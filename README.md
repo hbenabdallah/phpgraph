@@ -38,13 +38,29 @@ phpgraph parses the whole project once (with [`nikic/php-parser`](https://github
 - **Call graph with type inference**: return types, chained calls (`$a->b()->c()`), local variables, docblocks (`@return`, `@var`), and signatures of your `vendor/` dependencies, so chains go through Doctrine, Symfony or Laravel APIs.
 - **Architecture**: DDD and hexagonal layers, bounded contexts, layer rules checked in CI (`phpgraph check`), and impact analysis (`impact_of`): what depends on a class or method, and which tests to run.
 - **Messages and events**: sender → message → handler for Symfony Messenger, Laravel jobs and events, Ecotone, PrestaShop CQRS, WordPress hooks, domain events and your own buses, from attributes, service configuration (YAML, XML, PHP) or code shape.
-- **HTTP**: routes (Symfony attributes and YAML, Laravel route files, controllers named by container service id) linked to controllers, and HTTP calls linked to the routes they reach. A route whose controller class exists neither in the project nor in `vendor/` is reported with its routing file.
+- **HTTP**: routes (Symfony attributes, YAML and PHP routing files, API Platform resources, Laravel route files, controllers named by container service id) linked to controllers, and HTTP calls linked to the routes they reach. A route whose controller class exists neither in the project nor in `vendor/` is reported with its routing file.
+- **Dependency injection**: what the Symfony container configuration injects beyond constructor types, every service of a tag (`tagged_iterator`, `#[AutowireIterator]`) or a service named by id, from PHP, YAML or XML configuration: a validator is linked to the rules it receives.
 - **Microservices**: one id space per service, and links between services through their contracts: shared message classes, routing keys, HTTP routes.
 - **Zero-configuration MCP server**: built on first use, rebuilt incrementally when the code changes (about 3 s per edit on an 8,400-file project).
 
 ## Quick start
 
-**1. Install** (PHP 8.2+), whichever you prefer:
+**1. Install.** A single executable, no PHP needed (Linux and macOS on x86_64 and ARM, Windows on x86_64):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.sh | sh                  # latest release
+curl -fsSL https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.sh | sh -s -- 0.2.0     # a given release
+curl -fsSL https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.sh | sh -s -- dev-main  # the main branch
+```
+
+```powershell
+irm https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.ps1 | iex                       # Windows
+$env:PHPGRAPH_VERSION = "dev-main"; irm https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.ps1 | iex
+```
+
+The script downloads the binary, checks its SHA-256 and puts it in `~/.local/bin` (Windows: `%LOCALAPPDATA%\Programs\phpgraph`, added to the PATH); `PHPGRAPH_INSTALL_DIR` changes the directory. Run it again to update. `dev-main` is rebuilt on every push to `main` (the `edge` pre-release). The binary is a static PHP runtime with phpgraph inside, built with [static-php-cli](https://github.com/crazywhalecc/static-php-cli).
+
+With PHP 8.2+ installed, or with Docker:
 
 ```bash
 composer require --dev hbenabdallah/phpgraph       # or: composer global require hbenabdallah/phpgraph
@@ -52,14 +68,14 @@ curl -LO https://github.com/hbenabdallah/phpgraph/releases/latest/download/phpgr
 docker pull ghcr.io/hbenabdallah/phpgraph          # nothing else to install
 ```
 
-**2. Connect your agent.** `mcp-config` prints a ready-to-paste configuration with the paths filled in:
+**2. Connect your agent.** `mcp-config` prints a ready-to-paste configuration with the paths filled in (`vendor/bin/phpgraph` when installed with Composer):
 
 ```bash
-vendor/bin/phpgraph mcp-config sherpa    # Sherpa: ~/.config/sherpa/mcp.json, one declaration for every project
-vendor/bin/phpgraph mcp-config claude    # Claude Code: a `claude mcp add` command, or .mcp.json
-vendor/bin/phpgraph mcp-config codex     # Codex: ~/.codex/config.toml
-vendor/bin/phpgraph mcp-config cursor    # Cursor: .cursor/mcp.json, shareable with the team
-vendor/bin/phpgraph mcp-config json      # any other MCP client over stdio
+phpgraph mcp-config sherpa    # Sherpa: ~/.config/sherpa/mcp.json, one declaration for every project
+phpgraph mcp-config claude    # Claude Code: a `claude mcp add` command, or .mcp.json
+phpgraph mcp-config codex     # Codex: ~/.codex/config.toml
+phpgraph mcp-config cursor    # Cursor: .cursor/mcp.json, shareable with the team
+phpgraph mcp-config json      # any other MCP client over stdio
 ```
 
 With [Sherpa](https://github.com/hbenabdallah/sherpa), a terminal coding agent, one declaration in `~/.config/sherpa/mcp.json` serves every project: Sherpa starts its MCP servers from the project it runs in.
@@ -67,7 +83,7 @@ With [Sherpa](https://github.com/hbenabdallah/sherpa), a terminal coding agent, 
 ```json
 {
   "mcpServers": {
-    "phpgraph": { "command": "php", "args": ["/path/to/phpgraph.phar", "serve"] }
+    "phpgraph": { "command": "/home/you/.local/bin/phpgraph", "args": ["serve"] }
   }
 }
 ```
@@ -75,7 +91,7 @@ With [Sherpa](https://github.com/hbenabdallah/sherpa), a terminal coding agent, 
 With Claude Code (absolute paths, as `mcp-config` prints them):
 
 ```bash
-claude mcp add phpgraph -- php /path/to/project/vendor/bin/phpgraph serve /path/to/project
+claude mcp add phpgraph -- /home/you/.local/bin/phpgraph serve /path/to/project
 ```
 
 **3. Ask your agent** something like *"Give me an overview of this project"*, *"How does an order get placed?"* or *"What breaks if I change `OrderRepository::save`?"*. The graph is built on the first call, then kept up to date.
@@ -115,7 +131,7 @@ phpgraph serve [path]                        # the MCP server, over stdio
 phpgraph mcp-config claude|codex|cursor|json [--docker image]
 ```
 
-`build` options: `-e` to exclude paths (repeatable), `--no-vendor` not to read dependencies, `--no-cache` to parse every file again. `vendor`, `node_modules`, `var`, `.git` and the files ignored by the project's own `.gitignore` files are skipped; a git repository above the project never applies its rules, so a project copied into an ignored directory is still read. When the directory holds PHP files but every one is excluded, `build` fails and says so, and every MCP answer starts with that warning instead of serving an empty graph.
+`build` options: `-e` to exclude paths (repeatable), `--no-vendor` not to read dependencies, `--no-cache` to parse every file again. `vendor`, `node_modules`, `var`, `.git` and the files ignored by the project's own `.gitignore` files are skipped; a git repository above the project never applies its rules, so a project copied into an ignored directory is still read. When the directory holds PHP files but every one is excluded, `build` fails and says so, and every MCP answer starts with that warning instead of serving an empty graph. Memory is unlimited by default; `PHPGRAPH_MEMORY_LIMIT=2G` sets a limit.
 
 ## What the graph contains
 
@@ -129,6 +145,7 @@ phpgraph mcp-config claude|codex|cursor|json [--docker image]
 | `dispatches`, `handled_by` | sender → message or channel → handler; route → controller |
 | `contract` | a message class sent by one service → the same class handled by another |
 | `requests` | HTTP call → the route it reaches, in the same service or another |
+| `receives` | service → each service the container configuration injects into it (a tag, an id, the decorated service) |
 
 Every relation carries a confidence level:
 
@@ -143,7 +160,7 @@ Every relation carries a confidence level:
 
 | | Handlers and listeners | Messages sent | HTTP |
 |---|---|---|---|
-| **Symfony** | `#[AsMessageHandler]`, `#[AsEventListener]`, tags `messenger.message_handler` and `kernel.event_listener` (YAML, XML, PHP, `_instanceof`), `getSubscribedEvents()`, `addListener()` | `MessageBusInterface`, `EventDispatcherInterface`, named events | `#[Route]`, YAML routing with prefixed imports, controllers named by service id |
+| **Symfony** | `#[AsMessageHandler]`, `#[AsEventListener]`, tags `messenger.message_handler` and `kernel.event_listener` (YAML, XML, PHP, `_instanceof`), `getSubscribedEvents()`, `addListener()` | `MessageBusInterface`, `EventDispatcherInterface`, named events | `#[Route]` (paths in class constants too), YAML and PHP routing files, controllers named by service id; API Platform `#[ApiResource]` and operation attributes, handled by their provider, processor or controller |
 | **Laravel** | `$listen`, `Event::listen()`, jobs (`ShouldQueue`, `Dispatchable`) | `event()`, `dispatch()`, facades, `Job::dispatch()` | `Route::get/post/…`, `match`, `resource`, groups with `prefix`, `routes/api.php`; `Http::` client |
 | **Ecotone** | `#[CommandHandler]`, `#[EventHandler]`, `#[QueryHandler]`, routing keys | `CommandBus`, `EventBus`, `DistributedBus`, `sendWithRouting()` | |
 | **PrestaShop** | `#[AsCommandHandler]`, `#[AsQueryHandler]` | `CommandBusInterface::handle()` | YAML routing |
@@ -230,14 +247,14 @@ Two small microservices projects complete the corpus: [two Laravel services over
 - No generics: the element type of a `foreach` stays unknown, and `Collection<Foo>` is read as `Collection`.
 - Chains stop at magic methods, PHP internal classes, and dependencies without a usable return type.
 - Without an installed `vendor/`, call chains stop at the first dependency.
-- Services generated at runtime by a bundle, XML routes and API schemas (OpenAPI, protobuf) are not read.
+- Services built at runtime (compiler passes, bundle extensions, ids computed in code), XML routes, API Platform resources declared in XML or YAML, and API schemas (OpenAPI, protobuf) are not read; injections that cannot be linked are listed by `overview`.
 - Two services declaring a message class of the same name are assumed to share it.
 
 ## Contributing
 
 Issues and pull requests are welcome. See [CONTRIBUTING.md](https://github.com/hbenabdallah/phpgraph/blob/main/CONTRIBUTING.md): `composer check` must pass (php-cs-fixer, PHPStan level 8, PHPUnit), and changes to the analysis are judged on the corpus. Without PHP installed, `bin/dev composer check` runs everything in Docker.
 
-Releases are published by pushing a version tag: the [release workflow](https://github.com/hbenabdallah/phpgraph/blob/main/.github/workflows/release.yml) builds the PHAR and the Docker image `ghcr.io/hbenabdallah/phpgraph`.
+Releases are published by pushing a version tag: the [release workflow](https://github.com/hbenabdallah/phpgraph/blob/main/.github/workflows/release.yml) builds the PHAR, the executables for Linux, macOS and Windows (`tools/build-binary.sh`), and the Docker image `ghcr.io/hbenabdallah/phpgraph`.
 
 ## License
 

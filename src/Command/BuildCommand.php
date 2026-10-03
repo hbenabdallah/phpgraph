@@ -17,14 +17,6 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'build', description: 'Build the knowledge graph of a PHP project')]
 final class BuildCommand extends Command
 {
-    /**
-     * Large projects need several hundred MB (about 420 MB for 8,400 files): the CLI default of 128 MB is too low.
-     */
-    public static function raiseMemoryLimit(): void
-    {
-        ini_set('memory_limit', '-1');
-    }
-
     protected function configure(): void
     {
         $this
@@ -38,8 +30,6 @@ final class BuildCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        self::raiseMemoryLimit();
-
         $root = realpath((string) $input->getArgument('path'));
         if ($root === false || !is_dir($root)) {
             $output->writeln('<error>Project path not found.</error>');

@@ -16,6 +16,9 @@ final class YamlRoutes
 {
     private const MAX_IMPORT_DEPTH = 6;
 
+    /** @var array<string, array<string, list<string>>> routing file => loader type => prefixes */
+    private array $loaderPrefixes = [];
+
     /**
      * @param list<string>          $files   routing files relative to the root
      * @param array<string, string> $bundles bundle name => its directory relative to the root (SyliusShopBundle => src/...)
@@ -44,6 +47,11 @@ final class YamlRoutes
                     continue;
                 }
                 $definition['line'] = $this->line($content, (string) $name);
+                // `api_platform: { resource: ., type: api_platform, prefix: /api }`: a loader of routes declared elsewhere.
+                if (\is_string($definition['type'] ?? null) && $definition['type'] !== 'attribute' && $definition['type'] !== 'annotation') {
+                    $this->loaderPrefixes[$file][$definition['type']][] = \is_string($definition['prefix'] ?? null) ? $definition['prefix'] : '';
+                    continue;
+                }
                 if (\is_string($definition['resource'] ?? null)) {
                     $target = $this->resolve($file, $definition['resource'], $bundles);
                     if ($target !== null) {
@@ -78,6 +86,16 @@ final class YamlRoutes
         }
 
         return $routes;
+    }
+
+    /**
+     * The prefixes the route loaders imported by the files read get (`type: api_platform`), by file.
+     *
+     * @return array<string, array<string, list<string>>>
+     */
+    public function loaderPrefixes(): array
+    {
+        return $this->loaderPrefixes;
     }
 
     /**

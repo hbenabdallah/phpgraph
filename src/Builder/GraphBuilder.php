@@ -10,6 +10,7 @@ use PhpGraph\Extractor\PendingCall;
 use PhpGraph\Extractor\PendingDispatch;
 use PhpGraph\Extractor\PendingRequest;
 use PhpGraph\Extractor\PhpFileExtractor;
+use PhpGraph\Extractor\RouteFact;
 use PhpGraph\Extractor\TypeExpr;
 use PhpGraph\Graph\Confidence;
 use PhpGraph\Graph\Edge;
@@ -130,6 +131,8 @@ final class GraphBuilder
         $requests = [];
         $containerDefinitions = [];
         $containerTags = [];
+        $containerArguments = [];
+        $routePrefixes = [];
         $parameterTypes = [];
         foreach ($extractions as $path => $extraction) {
             $isTest = TestFiles::isTest((string) $path);
@@ -150,13 +153,19 @@ final class GraphBuilder
                 $propertyTypes[$this->qualifiedMember($property, $id)] ??= $id($type);
             }
             foreach ($extraction->routes as $route) {
-                $routes[] = [$route, $service];
+                $routes[] = [$route, $service, $id];
             }
             foreach ($extraction->services as $serviceId => $target) {
                 $containerDefinitions[$service][$serviceId] ??= $target;
             }
             foreach ($extraction->serviceTags as $tag) {
                 $containerTags[$service][] = $tag;
+            }
+            foreach ($extraction->serviceArguments as $argument) {
+                $containerArguments[$service][] = $argument;
+            }
+            foreach ($extraction->routePrefixes as $loader => $prefixes) {
+                $routePrefixes[$service][$loader] = [...$routePrefixes[$service][$loader] ?? [], ...$prefixes];
             }
             foreach ($extraction->parameterTypes as $method => $type) {
                 $parameterTypes[$id($method)] ??= $id($type);
@@ -243,12 +252,25 @@ final class GraphBuilder
         }
 
         // Handlers the container configuration declares come first: the edge keeps their confidence, EXTRACTED.
-        $container = new ContainerServices($root, $configurationFiles, $serviceMap, $containerDefinitions, $containerTags, $previous->configuration ?? []);
+        $container = new ContainerServices($root, $configurationFiles, $serviceMap, $containerDefinitions, $containerTags, $previous->configuration ?? [], $containerArguments);
         $handlers = [...(new TaggedHandlers($graph, $names, $types, $parameterTypes))->facts($container), ...$handlers];
+        $injections = (new ServiceInjections($graph, $names, $container, new TaggedClasses($graph, $names, $types, $container)))->resolve();
         $bus = (new BusResolver($graph, $names, $types, $constants))->resolve($handlers, $dispatches);
-        foreach ((new YamlRoutes())->read($root, $routingFiles, $this->bundles($graph)) as $route) {
+        // Paths held in class constants, now that every file is read.
+        $routes = array_map(fn (array $route): array => [
+            $route[0]->withConstants(fn (string $constant): ?string => $constants[$this->qualifiedMember($constant, $route[2])] ?? null),
+            $route[1],
+        ], $routes);
+        $yamlRoutes = new YamlRoutes();
+        foreach ($yamlRoutes->read($root, $routingFiles, $this->bundles($graph)) as $route) {
             $routes[] = [$route, $serviceMap->serviceOf($route->file)];
         }
+        foreach ($yamlRoutes->loaderPrefixes() as $file => $prefixes) {
+            foreach ($prefixes as $loader => $values) {
+                $routePrefixes[$serviceMap->serviceOf($file)][$loader] = [...$routePrefixes[$serviceMap->serviceOf($file)][$loader] ?? [], ...$values];
+            }
+        }
+        $routes = $this->withLoaderPrefixes($routes, $routePrefixes);
         $http = (new HttpResolver($graph, $names, $types, $container))->resolve($routes, $requests);
         $this->addExternalNodes($graph);
 
@@ -269,6 +291,7 @@ final class GraphBuilder
             new BuildState($options, $files, $environment, $namesFingerprint, $overrides, $calls, $vendor, $container->cache()),
             // An empty graph of a directory holding PHP code: every file was excluded, say so instead of serving it.
             $extractions === [] && $failures === [] ? SourceFiles::countPhpFiles($root) : 0,
+            $injections,
         );
     }
 
@@ -294,6 +317,31 @@ final class GraphBuilder
      *
      * @param \Closure(string): string $id
      */
+    /**
+     * Routes made by a loader (API Platform) get the prefix of its import, `->import('.', 'api_platform')->prefix('/api')`:
+     * one route per prefix, the path as declared when the import is not found.
+     *
+     * @param list<array{RouteFact, string}>                     $routes
+     * @param array<string, array<string, list<string>>>         $prefixes service => loader => prefixes
+     *
+     * @return list<array{RouteFact, string}>
+     */
+    private function withLoaderPrefixes(array $routes, array $prefixes): array
+    {
+        $prefixed = [];
+        foreach ($routes as [$route, $service]) {
+            $loaderPrefixes = $route->loader === null ? [] : array_values(array_unique($prefixes[$service][$route->loader] ?? $prefixes[ServiceMap::ROOT][$route->loader] ?? []));
+            if ($loaderPrefixes === []) {
+                $prefixed[] = [$route, $service];
+            }
+            foreach ($loaderPrefixes as $prefix) {
+                $prefixed[] = [$route->withPath($prefix . '/' . $route->path), $service];
+            }
+        }
+
+        return $prefixed;
+    }
+
     private function qualifiedMember(string $member, \Closure $id): string
     {
         $separator = (int) strrpos($member, '::');

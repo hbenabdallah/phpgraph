@@ -36,6 +36,9 @@ final class RouteExtractor
     /** @var list<PendingRequest> */
     private array $requests = [];
 
+    /** @var array<string, list<string>> route loader => prefixes of its imports */
+    private array $loaderPrefixes = [];
+
     /** @var list<string> path prefixes of the enclosing Laravel route groups */
     private array $prefixes = [];
 
@@ -70,6 +73,65 @@ final class RouteExtractor
                 }
             }
         }
+    }
+
+    public function addRoute(RouteFact $route): void
+    {
+        $this->routes[] = $route;
+    }
+
+    /**
+     * Symfony's PHP routing files: `$routes->add('order_show', '/orders/{id}')->controller([OrderController::class,
+     * 'show'])->methods(['GET'])`, and `$routes->import('.', 'api_platform')->prefix('/api')`.
+     *
+     * @param list<array{string, list<Expr>}> $calls     the calls of the chain, the first one first
+     * @param \Closure(Name): ?string         $resolve
+     * @param \Closure(Expr): ?string         $path      a string, or a class constant holding one
+     */
+    public function onRoutingConfigurator(array $calls, int $line, \Closure $resolve, \Closure $path): void
+    {
+        [$first, $arguments] = $calls[0];
+        if ($first === 'import') {
+            $type = $this->literal($arguments[1] ?? null);
+            foreach ($calls as [$name, $values]) {
+                $prefix = $name === 'prefix' && isset($values[0]) ? $path($values[0]) : null;
+                if ($type !== null && $prefix !== null) {
+                    $this->loaderPrefixes[$type][] = $prefix;
+                }
+            }
+
+            return;
+        }
+        if ($first !== 'add' || !isset($arguments[1])) {
+            return;
+        }
+
+        $routePath = $arguments[1] instanceof Expr\Array_ ? ($arguments[1]->items[0]->value ?? null) : $arguments[1];
+        $routePath = $routePath === null ? null : $path($routePath);
+        if ($routePath === null) {
+            return;
+        }
+        $methods = [];
+        $controller = $action = null;
+        foreach ($calls as [$name, $values]) {
+            if ($name === 'methods') {
+                $methods = array_map('strtoupper', $this->literals($values[0] ?? null) ?? []);
+            } elseif ($name === 'controller') {
+                [$controller, $action] = $this->laravelHandler($values[0] ?? null, $resolve);
+                if ($controller === null && isset($values[0]) && ($this->literal($values[0]) ?? '') !== '' && str_contains((string) $this->literal($values[0]), '::')) {
+                    [$controller, $action] = explode('::', ltrim((string) $this->literal($values[0]), '\\'), 2);
+                }
+            }
+        }
+        $this->routes[] = new RouteFact($methods, RouteFact::normalizePath($routePath), $controller, $action, $this->file, $line);
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    public function loaderPrefixes(): array
+    {
+        return $this->loaderPrefixes;
     }
 
     public function pushPrefix(string $prefix): void

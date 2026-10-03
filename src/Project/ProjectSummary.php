@@ -8,6 +8,7 @@ use PhpGraph\Builder\BuildResult;
 use PhpGraph\Builder\BusStats;
 use PhpGraph\Builder\CallStats;
 use PhpGraph\Builder\HttpStats;
+use PhpGraph\Builder\InjectionStats;
 
 /**
  * What a build learnt beyond the graph itself, saved with it for the overview: stack, call resolution and gaps.
@@ -38,6 +39,7 @@ final readonly class ProjectSummary
         public array $services = [],
         public HttpStats $http = new HttpStats(),
         public int $phpFilesNotRead = 0,
+        public InjectionStats $injections = new InjectionStats(),
     ) {
     }
 
@@ -63,6 +65,7 @@ final readonly class ProjectSummary
             $result->services,
             $result->http,
             $result->phpFilesNotRead,
+            $result->injections,
         );
     }
 
@@ -102,6 +105,7 @@ final readonly class ProjectSummary
             array_values(array_filter($list('services'), 'is_string')),
             HttpStats::fromArray($list('http')),
             $int('phpFilesNotRead'),
+            InjectionStats::fromArray($list('injections')),
         );
     }
 
@@ -127,6 +131,7 @@ final readonly class ProjectSummary
             'services' => $this->services,
             'http' => $this->http->toArray(),
             'phpFilesNotRead' => $this->phpFilesNotRead,
+            'injections' => $this->injections->toArray(),
         ];
     }
 }

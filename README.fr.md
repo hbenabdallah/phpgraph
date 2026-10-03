@@ -38,13 +38,29 @@ phpgraph analyse tout le projet une fois (avec [`nikic/php-parser`](https://gith
 - **Graphe d'appels avec inférence de types** : types de retour, appels enchaînés (`$a->b()->c()`), variables locales, docblocks (`@return`, `@var`), et signatures des dépendances de `vendor/`, pour que les chaînes traversent les API de Doctrine, Symfony ou Laravel.
 - **Architecture** : couches DDD et hexagonales, bounded contexts, règles de couches vérifiées en CI (`phpgraph check`) et analyse d'impact (`impact_of`) : ce qui dépend d'une classe ou d'une méthode, et les tests à lancer.
 - **Messages et événements** : envoi → message → handler pour Symfony Messenger, les jobs et événements Laravel, Ecotone, le CQRS de PrestaShop, les hooks WordPress, les événements de domaine et vos propres bus, à partir des attributs, de la configuration des services (YAML, XML, PHP) ou de la forme du code.
-- **HTTP** : routes (attributs et YAML Symfony, fichiers de routes Laravel, contrôleurs nommés par identifiant de service) reliées à leurs contrôleurs, et appels HTTP reliés aux routes qu'ils atteignent. Une route dont la classe contrôleur n'existe ni dans le projet ni dans `vendor/` est signalée avec son fichier de routage.
+- **HTTP** : routes (attributs Symfony, fichiers de routage YAML et PHP, ressources API Platform, fichiers de routes Laravel, contrôleurs nommés par identifiant de service) reliées à leurs contrôleurs, et appels HTTP reliés aux routes qu'ils atteignent. Une route dont la classe contrôleur n'existe ni dans le projet ni dans `vendor/` est signalée avec son fichier de routage.
+- **Injection de dépendances** : ce que la configuration du conteneur Symfony injecte au-delà des types du constructeur, tous les services d'un tag (`tagged_iterator`, `#[AutowireIterator]`) ou un service nommé par son identifiant, en PHP, YAML ou XML : un validateur est relié aux règles qu'il reçoit.
 - **Microservices** : un espace d'identifiants par service, et des liens entre services par leurs contrats : classes de messages partagées, clés de routage, routes HTTP.
 - **Serveur MCP sans configuration** : construit au premier usage, reconstruit de façon incrémentale quand le code change (environ 3 s par modification sur un projet de 8 400 fichiers).
 
 ## Démarrage rapide
 
-**1. Installer** (PHP 8.2 ou plus), au choix :
+**1. Installer.** Un seul exécutable, sans PHP (Linux et macOS en x86_64 et ARM, Windows en x86_64) :
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.sh | sh                  # dernière version
+curl -fsSL https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.sh | sh -s -- 0.2.0     # une version donnée
+curl -fsSL https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.sh | sh -s -- dev-main  # la branche main
+```
+
+```powershell
+irm https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.ps1 | iex                       # Windows
+$env:PHPGRAPH_VERSION = "dev-main"; irm https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.ps1 | iex
+```
+
+Le script télécharge le binaire, vérifie son SHA-256 et le place dans `~/.local/bin` (Windows : `%LOCALAPPDATA%\Programs\phpgraph`, ajouté au PATH) ; `PHPGRAPH_INSTALL_DIR` change le dossier. Le relancer met à jour. `dev-main` est reconstruit à chaque push sur `main` (la pré-version `edge`). Le binaire est un runtime PHP statique qui contient phpgraph, construit avec [static-php-cli](https://github.com/crazywhalecc/static-php-cli).
+
+Avec PHP 8.2 ou plus, ou avec Docker :
 
 ```bash
 composer require --dev hbenabdallah/phpgraph       # ou : composer global require hbenabdallah/phpgraph
@@ -52,14 +68,14 @@ curl -LO https://github.com/hbenabdallah/phpgraph/releases/latest/download/phpgr
 docker pull ghcr.io/hbenabdallah/phpgraph          # rien d'autre à installer
 ```
 
-**2. Brancher votre agent.** `mcp-config` affiche une configuration prête à coller, avec les chemins remplis :
+**2. Brancher votre agent.** `mcp-config` affiche une configuration prête à coller, avec les chemins remplis (`vendor/bin/phpgraph` après une installation par Composer) :
 
 ```bash
-vendor/bin/phpgraph mcp-config sherpa    # Sherpa : ~/.config/sherpa/mcp.json, une déclaration pour tous les projets
-vendor/bin/phpgraph mcp-config claude    # Claude Code : une commande `claude mcp add`, ou .mcp.json
-vendor/bin/phpgraph mcp-config codex     # Codex : ~/.codex/config.toml
-vendor/bin/phpgraph mcp-config cursor    # Cursor : .cursor/mcp.json, à partager avec l'équipe
-vendor/bin/phpgraph mcp-config json      # tout autre client MCP sur stdio
+phpgraph mcp-config sherpa    # Sherpa : ~/.config/sherpa/mcp.json, une déclaration pour tous les projets
+phpgraph mcp-config claude    # Claude Code : une commande `claude mcp add`, ou .mcp.json
+phpgraph mcp-config codex     # Codex : ~/.codex/config.toml
+phpgraph mcp-config cursor    # Cursor : .cursor/mcp.json, à partager avec l'équipe
+phpgraph mcp-config json      # tout autre client MCP sur stdio
 ```
 
 Avec [Sherpa](https://github.com/hbenabdallah/sherpa), un agent de code pour le terminal, une seule déclaration dans `~/.config/sherpa/mcp.json` sert tous les projets : Sherpa lance ses serveurs MCP depuis le projet où il tourne.
@@ -67,7 +83,7 @@ Avec [Sherpa](https://github.com/hbenabdallah/sherpa), un agent de code pour le 
 ```json
 {
   "mcpServers": {
-    "phpgraph": { "command": "php", "args": ["/chemin/vers/phpgraph.phar", "serve"] }
+    "phpgraph": { "command": "/home/vous/.local/bin/phpgraph", "args": ["serve"] }
   }
 }
 ```
@@ -75,7 +91,7 @@ Avec [Sherpa](https://github.com/hbenabdallah/sherpa), un agent de code pour le 
 Avec Claude Code (chemins absolus, comme les affiche `mcp-config`) :
 
 ```bash
-claude mcp add phpgraph -- php /chemin/du/projet/vendor/bin/phpgraph serve /chemin/du/projet
+claude mcp add phpgraph -- /home/vous/.local/bin/phpgraph serve /chemin/du/projet
 ```
 
 **3. Interroger votre agent**, par exemple : *« Donne-moi une vue d'ensemble de ce projet »*, *« Comment une commande est-elle passée ? »* ou *« Qu'est-ce qui casse si je modifie `OrderRepository::save` ? »*. Le graphe est construit au premier appel, puis tenu à jour.
@@ -115,7 +131,7 @@ phpgraph serve [chemin]                      # le serveur MCP, sur stdio
 phpgraph mcp-config claude|codex|cursor|json [--docker image]
 ```
 
-Options de `build` : `-e` pour exclure des chemins (répétable), `--no-vendor` pour ne pas lire les dépendances, `--no-cache` pour tout analyser à nouveau. `vendor`, `node_modules`, `var`, `.git` et les fichiers ignorés par les `.gitignore` du projet lui-même ne sont pas analysés ; un dépôt git au-dessus du projet n'applique jamais ses règles, si bien qu'un projet copié dans un dossier ignoré est quand même lu. Quand le dossier contient des fichiers PHP mais qu'ils sont tous exclus, `build` échoue en le disant, et chaque réponse MCP commence par cet avertissement au lieu de servir un graphe vide.
+Options de `build` : `-e` pour exclure des chemins (répétable), `--no-vendor` pour ne pas lire les dépendances, `--no-cache` pour tout analyser à nouveau. `vendor`, `node_modules`, `var`, `.git` et les fichiers ignorés par les `.gitignore` du projet lui-même ne sont pas analysés ; un dépôt git au-dessus du projet n'applique jamais ses règles, si bien qu'un projet copié dans un dossier ignoré est quand même lu. Quand le dossier contient des fichiers PHP mais qu'ils sont tous exclus, `build` échoue en le disant, et chaque réponse MCP commence par cet avertissement au lieu de servir un graphe vide. La mémoire n'est pas limitée par défaut ; `PHPGRAPH_MEMORY_LIMIT=2G` fixe une limite.
 
 ## Ce que contient le graphe
 
@@ -129,6 +145,7 @@ Options de `build` : `-e` pour exclure des chemins (répétable), `--no-vendor` 
 | `dispatches`, `handled_by` | envoi → message ou canal → handler ; route → contrôleur |
 | `contract` | une classe de message envoyée par un service → la même classe traitée par un autre |
 | `requests` | appel HTTP → la route qu'il atteint, du même service ou d'un autre |
+| `receives` | service → chaque service que la configuration du conteneur lui injecte (un tag, un identifiant, le service décoré) |
 
 Chaque relation porte un niveau de confiance :
 
@@ -143,7 +160,7 @@ Chaque relation porte un niveau de confiance :
 
 | | Handlers et écouteurs | Messages envoyés | HTTP |
 |---|---|---|---|
-| **Symfony** | `#[AsMessageHandler]`, `#[AsEventListener]`, tags `messenger.message_handler` et `kernel.event_listener` (YAML, XML, PHP, `_instanceof`), `getSubscribedEvents()`, `addListener()` | `MessageBusInterface`, `EventDispatcherInterface`, événements nommés | `#[Route]`, routage YAML avec imports préfixés, contrôleurs nommés par identifiant de service |
+| **Symfony** | `#[AsMessageHandler]`, `#[AsEventListener]`, tags `messenger.message_handler` et `kernel.event_listener` (YAML, XML, PHP, `_instanceof`), `getSubscribedEvents()`, `addListener()` | `MessageBusInterface`, `EventDispatcherInterface`, événements nommés | `#[Route]` (chemins en constantes de classe compris), fichiers de routage YAML et PHP, contrôleurs nommés par identifiant de service ; `#[ApiResource]` et attributs d'opération d'API Platform, traités par leur provider, processor ou contrôleur |
 | **Laravel** | `$listen`, `Event::listen()`, jobs (`ShouldQueue`, `Dispatchable`) | `event()`, `dispatch()`, façades, `Job::dispatch()` | `Route::get/post/…`, `match`, `resource`, groupes avec `prefix`, `routes/api.php` ; client `Http::` |
 | **Ecotone** | `#[CommandHandler]`, `#[EventHandler]`, `#[QueryHandler]`, clés de routage | `CommandBus`, `EventBus`, `DistributedBus`, `sendWithRouting()` | |
 | **PrestaShop** | `#[AsCommandHandler]`, `#[AsQueryHandler]` | `CommandBusInterface::handle()` | routage YAML |
@@ -230,14 +247,14 @@ Deux petits projets microservices complètent le corpus : [deux services Laravel
 - Pas de génériques : le type des éléments d'un `foreach` reste inconnu, et `Collection<Foo>` est lu comme `Collection`.
 - Les chaînes s'arrêtent aux méthodes magiques, aux classes internes de PHP et aux dépendances sans type de retour exploitable.
 - Sans `vendor/` installé, les chaînes d'appels s'arrêtent à la première dépendance.
-- Les services générés à l'exécution par un bundle, les routes en XML et les schémas d'API (OpenAPI, protobuf) ne sont pas lus.
+- Les services construits à l'exécution (passes de compilation, extensions de bundle, identifiants calculés dans le code), les routes en XML, les ressources API Platform déclarées en XML ou YAML et les schémas d'API (OpenAPI, protobuf) ne sont pas lus ; les injections non reliées sont listées par `overview`.
 - Deux services qui déclarent une classe de message du même nom sont supposés la partager.
 
 ## Contribuer
 
 Les issues et les pull requests sont les bienvenues. Voir [CONTRIBUTING.md](https://github.com/hbenabdallah/phpgraph/blob/main/CONTRIBUTING.md) : `composer check` doit passer (php-cs-fixer, PHPStan niveau 8, PHPUnit), et les évolutions de l'analyse se jugent sur le corpus. Sans PHP installé, `bin/dev composer check` lance tout dans Docker.
 
-Les versions se publient en poussant un tag : le [workflow de release](https://github.com/hbenabdallah/phpgraph/blob/main/.github/workflows/release.yml) construit le PHAR et l'image Docker `ghcr.io/hbenabdallah/phpgraph`.
+Les versions se publient en poussant un tag : le [workflow de release](https://github.com/hbenabdallah/phpgraph/blob/main/.github/workflows/release.yml) construit le PHAR, les exécutables pour Linux, macOS et Windows (`tools/build-binary.sh`) et l'image Docker `ghcr.io/hbenabdallah/phpgraph`.
 
 ## Licence
 

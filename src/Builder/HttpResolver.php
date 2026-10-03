@@ -58,9 +58,16 @@ final class HttpResolver
 
             $class = $this->controllerClass($route, $service);
             $handler = $class === null ? null : $this->handler($class, $route->action);
+            // The classes the declaration names besides its handler: an API Platform resource, its input and output.
+            foreach ($route->references as $reference) {
+                $this->graph->addEdge(new Edge($id, $this->names->canonical($reference, $service), Relation::References, Confidence::Extracted));
+            }
             if ($handler !== null) {
                 $this->graph->addEdge(new Edge($id, $handler, Relation::HandledBy, Confidence::Extracted));
                 $withHandler[$id] = true;
+            } elseif ($class === null && $route->byFramework) {
+                // API Platform's own state provider and processor (Doctrine): outside the project.
+                $inDependencies[$id] = true;
             } elseif ($class !== null && $this->types->knows($class)) {
                 // A controller class of a dependency (a generic CRUD controller, for example): outside the project.
                 $inDependencies[$id] = true;

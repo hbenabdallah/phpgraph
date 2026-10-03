@@ -205,6 +205,7 @@ function measureOne(array $project): array
         'testCalls' => $result->testCalls->toArray(),
         'bus' => $result->bus->toArray(),
         'http' => $result->http->toArray(),
+        'injections' => $result->injections->toArray(),
         'services' => count($result->services),
         'architecture' => (static function () use ($graph): array {
             $architecture = (new GraphQuery($graph))->architecture();
@@ -358,6 +359,26 @@ function render(array $results, array $baseline): string
             $h['requestsToProject'] ?? 0,
             $h['requestsToServices'] ?? 0,
             $h['methodMismatchCount'] ?? 0,
+        );
+    }
+    $lines[] = '';
+    $lines[] = '## Container injections';
+    $lines[] = '';
+    $lines[] = 'What the container configuration injects by tag or by id (`receives`), and what could not be linked.';
+    $lines[] = '';
+    $lines[] = '| Project | Injections | Linked | Receives edges | Not linked |';
+    $lines[] = '|---|---:|---:|---:|---:|';
+    foreach ($results as $r) {
+        $i = $r['injections'] ?? [];
+        $b = $baseline[$r['name']]['injections'] ?? null;
+        $lines[] = sprintf(
+            '| %s | %d | %d%s | %d | %d |',
+            $r['name'],
+            $i['injections'] ?? 0,
+            $i['linked'] ?? 0,
+            delta($i['linked'] ?? 0, $b['linked'] ?? null),
+            $i['edges'] ?? 0,
+            $i['unlinkedCount'] ?? 0,
         );
     }
     $lines[] = '';

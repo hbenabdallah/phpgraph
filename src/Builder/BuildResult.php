@@ -36,6 +36,7 @@ final readonly class BuildResult
         public HttpStats $http = new HttpStats(),
         public ?BuildState $state = null,
         public int $phpFilesNotRead = 0,
+        public InjectionStats $injections = new InjectionStats(),
     ) {
     }
 

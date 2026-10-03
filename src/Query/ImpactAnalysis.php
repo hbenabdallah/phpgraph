@@ -32,6 +32,7 @@ final class ImpactAnalysis
         Relation::UsesTrait,
         Relation::Overrides,
         Relation::Dispatches,
+        Relation::Receives,
     ];
 
     public function __construct(private readonly Graph $graph)

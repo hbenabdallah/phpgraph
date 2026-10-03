@@ -34,8 +34,6 @@ final class CheckCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        BuildCommand::raiseMemoryLimit();
-
         $root = realpath((string) $input->getArgument('path'));
         if ($root === false || !is_dir($root)) {
             $output->writeln('<error>Project path not found.</error>');

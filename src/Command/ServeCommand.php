@@ -36,8 +36,6 @@ final class ServeCommand extends Command
     {
         // stdout carries the JSON-RPC stream: a PHP warning printed there would corrupt it.
         ini_set('display_errors', 'stderr');
-        BuildCommand::raiseMemoryLimit();
-
         $graph = $input->getOption('graph');
         if (\is_string($graph)) {
             (new McpServer(new GraphQueryProvider($graph), Version::get()))->run();

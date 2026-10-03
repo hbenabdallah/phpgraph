@@ -596,7 +596,7 @@ final class GraphQuery
     {
         return match ($relation) {
             Relation::Dispatches, Relation::HandledBy, Relation::Calls => 3,
-            Relation::Implements, Relation::Extends, Relation::Overrides, Relation::UsesTrait, Relation::HasMethod => 2,
+            Relation::Implements, Relation::Extends, Relation::Overrides, Relation::UsesTrait, Relation::HasMethod, Relation::Receives => 2,
             Relation::Instantiates => 1,
             default => 0,
         };

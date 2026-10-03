@@ -28,4 +28,10 @@ enum Relation: string
      * An HTTP call to a route of the project, possibly of another service.
      */
     case Requests = 'requests';
+
+    /**
+     * A service the container injects, named by the configuration rather than by a type: every service of a tag
+     * (`tagged_iterator('app.rule')`), or one service by id (`service('app.mailer')`).
+     */
+    case Receives = 'receives';
 }

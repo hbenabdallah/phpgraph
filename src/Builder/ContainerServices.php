@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpGraph\Builder;
 
 use Symfony\Component\Yaml\Exception\ParseException;
+use Symfony\Component\Yaml\Tag\TaggedValue;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -27,6 +28,9 @@ final class ContainerServices
     /** @var list<array{service: string, id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}> */
     private array $tags = [];
 
+    /** @var list<array{service: string, id: string, tag: ?string, target: ?string}> */
+    private array $arguments = [];
+
     /** @var array<string, array{int, int, array<mixed>}> file => [modification time, size, what it declares] */
     private array $cache = [];
 
@@ -39,15 +43,25 @@ final class ContainerServices
     /** @var list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}> */
     private array $fileTags = [];
 
+    /** @var list<array{id: string, tag: ?string, service: ?string}> */
+    private array $fileArguments = [];
+
     /**
      * @param list<string>                            $files   YAML and XML files of config directories, relative to the root
      * @param array<string, array<string, string>>    $declared definitions collected from PHP, by application service
      * @param array<string, list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>> $declaredTags
      *                                                         tags collected from PHP, by application service
      * @param array<string, array{int, int, array<mixed>}> $cache files read by the last build of this process
+     * @param array<string, list<array{id: string, tag: ?string, service: ?string}>> $declaredArguments
+     *                                                         injections collected from PHP, by application service
      */
-    public function __construct(string $root, array $files, ServiceMap $services, array $declared = [], array $declaredTags = [], array $cache = [])
+    public function __construct(string $root, array $files, ServiceMap $services, array $declared = [], array $declaredTags = [], array $cache = [], array $declaredArguments = [])
     {
+        foreach ($declaredArguments as $service => $arguments) {
+            foreach ($arguments as $argument) {
+                $this->arguments[] = ['service' => (string) $service, 'id' => $argument['id'], 'tag' => $argument['tag'], 'target' => $argument['service']];
+            }
+        }
         foreach ($declared as $service => $definitions) {
             foreach ($definitions as $id => $target) {
                 $this->definitions[$service][$id] ??= $target;
@@ -87,14 +101,14 @@ final class ContainerServices
      */
     private function read(string $file, string $content): array
     {
-        $this->fileDefinitions = $this->fileParameters = $this->fileTags = [];
+        $this->fileDefinitions = $this->fileParameters = $this->fileTags = $this->fileArguments = [];
         if (SourceFiles::isYaml($file)) {
             $this->readYaml($content);
         } elseif (str_contains(substr($content, 0, 2000), '<container')) {
             $this->readXml($content);
         }
 
-        return ['definitions' => $this->fileDefinitions, 'parameters' => $this->fileParameters, 'tags' => $this->fileTags];
+        return ['definitions' => $this->fileDefinitions, 'parameters' => $this->fileParameters, 'tags' => $this->fileTags, 'arguments' => $this->fileArguments];
     }
 
     /**
@@ -112,6 +126,41 @@ final class ContainerServices
             /** @var array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>} $tag */
             $this->tags[] = ['service' => $service] + $tag;
         }
+        foreach (\is_array($declared['arguments'] ?? null) ? $declared['arguments'] : [] as $argument) {
+            /** @var array{id: string, tag: ?string, service: ?string} $argument */
+            $this->arguments[] = ['service' => $service, 'id' => $argument['id'], 'tag' => $argument['tag'], 'target' => $argument['service']];
+        }
+    }
+
+    /**
+     * What services receive by configuration: the services of a tag, or one service named by id.
+     *
+     * @return list<array{service: string, id: string, tag: ?string, target: ?string}>
+     */
+    public function arguments(): array
+    {
+        return $this->arguments;
+    }
+
+    /**
+     * The first segment of the service ids the project defines (`sales_order` for `sales_order.price_list.loader`):
+     * an id with one of them is likely the project's own.
+     *
+     * @return array<string, true>
+     */
+    public function idPrefixes(): array
+    {
+        $prefixes = [];
+        foreach ($this->definitions as $definitions) {
+            foreach (array_keys($definitions) as $id) {
+                $id = (string) $id;
+                if (!str_contains($id, '\\') && str_contains($id, '.')) {
+                    $prefixes[strtolower(explode('.', $id)[0])] = true;
+                }
+            }
+        }
+
+        return $prefixes;
     }
 
     /**
@@ -180,11 +229,21 @@ final class ContainerServices
 
         foreach ($definitions as $id => $definition) {
             $id = (string) $id;
-            if (str_starts_with($id, '_') || str_ends_with($id, '\\')) {
+            if (str_starts_with($id, '_')) {
                 continue;
             }
+            // A resource, `App\Rule\: { resource: '../src/Rule/', tags: [app.rule] }`, tags every class of its namespace.
             foreach ($this->yamlTags($definition) as $tag) {
                 $this->fileTags[] = ['id' => $id, 'instanceof' => null] + $tag;
+            }
+            if (str_ends_with($id, '\\')) {
+                continue;
+            }
+            // Method names of `calls` are plain strings: only the injected values are read.
+            foreach (\is_array($definition) ? [$definition['arguments'] ?? [], $definition['calls'] ?? [], $definition['properties'] ?? []] : [] as $values) {
+                foreach ($this->yamlInjections($values) as $injected) {
+                    $this->fileArguments[] = ['id' => $id] + $this->undecorated($injected, $id, \is_array($definition) && \is_string($definition['decorates'] ?? null) ? $definition['decorates'] : null);
+                }
             }
 
             $target = match (true) {
@@ -231,6 +290,15 @@ final class ContainerServices
             foreach ($this->xmlTags($definition) as $tag) {
                 $this->fileTags[] = ['id' => $id, 'instanceof' => null] + $tag;
             }
+            foreach ($definition->getElementsByTagName('argument') as $argument) {
+                $type = $argument->getAttribute('type');
+                if (\in_array($type, ['tagged_iterator', 'tagged_locator', 'tagged'], true) && $argument->getAttribute('tag') !== '') {
+                    $this->fileArguments[] = ['id' => $id, 'tag' => $argument->getAttribute('tag'), 'service' => null];
+                } elseif ($type === 'service' && $argument->getAttribute('id') !== '') {
+                    $decorates = $definition->getAttribute('decorates');
+                    $this->fileArguments[] = ['id' => $id] + $this->undecorated(['tag' => null, 'service' => $argument->getAttribute('id')], $id, $decorates === '' ? null : $decorates);
+                }
+            }
             $target = match (true) {
                 $definition->getAttribute('class') !== '' => $definition->getAttribute('class'),
                 $definition->getAttribute('alias') !== '' => '@' . $definition->getAttribute('alias'),
@@ -260,6 +328,47 @@ final class ContainerServices
         }
 
         return $tags;
+    }
+
+    /**
+     * `!tagged_iterator app.rule`, `!tagged_iterator { tag: app.rule }`, `!tagged_locator ...`, and `'@app.mailer'`
+     * (not `'@?optional'` nor the escaped `'@@'`), in a list or by parameter name.
+     *
+     * @return list<array{tag: ?string, service: ?string}>
+     */
+    private function yamlInjections(mixed $values): array
+    {
+        $injected = [];
+        foreach (\is_array($values) ? $values : [$values] as $value) {
+            if ($value instanceof TaggedValue && \in_array($value->getTag(), ['tagged_iterator', 'tagged_locator', 'tagged'], true)) {
+                $tag = \is_array($value->getValue()) ? ($value->getValue()['tag'] ?? null) : $value->getValue();
+                if (\is_string($tag) && $tag !== '') {
+                    $injected[] = ['tag' => $tag, 'service' => null];
+                }
+            } elseif (\is_string($value) && preg_match('/^@([^@?=].*)$/', $value, $match) === 1) {
+                $injected[] = ['tag' => null, 'service' => $match[1]];
+            } elseif (\is_array($value)) {
+                array_push($injected, ...$this->yamlInjections($value));
+            }
+        }
+
+        return $injected;
+    }
+
+    /**
+     * A decorator receives the service it decorates: `.inner` (or `<id>.inner`) is that service.
+     *
+     * @param array{tag: ?string, service: ?string} $injected
+     *
+     * @return array{tag: ?string, service: ?string}
+     */
+    private function undecorated(array $injected, string $id, ?string $decorates): array
+    {
+        if ($decorates !== null && ($injected['service'] === '.inner' || $injected['service'] === $id . '.inner')) {
+            $injected['service'] = $decorates;
+        }
+
+        return $injected;
     }
 
     /**

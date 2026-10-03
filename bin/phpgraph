@@ -21,6 +21,8 @@ foreach ([__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php
     }
 }
 
+PhpGraph\MemoryLimit::raise();
+
 $application = new Application('phpgraph', PhpGraph\Version::get());
 $application->addCommands([
     new BuildCommand(),
