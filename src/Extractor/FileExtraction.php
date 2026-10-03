@@ -29,6 +29,8 @@ final readonly class FileExtraction
      *                                             what a service receives from the container: the services of a tag
      *                                             (`tagged_iterator('app.rule')`) or one service (`service('app.mailer')`)
      * @param array<string, list<string>> $routePrefixes route loader (`api_platform`) => prefixes its import adds
+     * @param array<string, array{reads: list<string>, writes: list<string>}> $stateAccess
+     *                                             method id => the properties of `$this` it reads and changes
      */
     public function __construct(
         public array $nodes,
@@ -46,6 +48,7 @@ final readonly class FileExtraction
         public array $parameterTypes = [],
         public array $serviceArguments = [],
         public array $routePrefixes = [],
+        public array $stateAccess = [],
     ) {
     }
 }

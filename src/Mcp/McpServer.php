@@ -184,8 +184,13 @@ final class McpServer
                 'description' => 'What may break when a class or a method changes: every class that depends on it, directly or '
                     . 'through others (callers, subclasses, implementations, code that instantiates or references it, senders '
                     . 'and handlers of a message), nearest first, each with the relation that reaches it and the weakest '
-                    . 'confidence on the way. Lists the test classes to run apart. Follows methods, not whole classes: a class '
-                    . 'is reached only through the methods that use the change.',
+                    . 'confidence on the way, with the source lines of the calls. Follows methods, not whole classes: a class '
+                    . 'is reached only through the methods that use the change. Also reaches the callers of the interface or '
+                    . 'parent method a method implements (INFERRED), and, in a separate list, the code depending on the state '
+                    . 'the method writes (callers of methods reading the same properties, such as all() or hasErrors() for '
+                    . 'add()). Lists the tests to run apart, found through test helpers (fakers) without the depth limit. '
+                    . 'Stops at a service receiving the change among others (a tagged collection) and at inherited code '
+                    . 'shared with other subclasses, which are listed but not followed.',
                 'inputSchema' => [
                     'type' => 'object',
                     'properties' => [

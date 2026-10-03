@@ -11,6 +11,7 @@ final readonly class PendingCall
         public ?TypeExpr $receiver,
         public string $method,
         public bool $referenceOnMiss,
+        public ?int $line = null,
     ) {
     }
 }

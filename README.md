@@ -104,7 +104,7 @@ claude mcp add phpgraph -- /home/you/.local/bin/phpgraph serve /path/to/project
 | `query_graph` | Find the code about a topic when you do not know the class names. A question about routes (*"mooc courses routes"*, *"GET /courses"*) returns the matching routes and their controllers. |
 | `get_node` | Read one class, method, route or channel with all its relations. |
 | `get_neighbors` | See what uses a node (`in`) or what it depends on (`out`). |
-| `impact_of` | Before a change: every class that depends on a class or method, nearest first, and the tests to run. |
+| `impact_of` | Before a change: every class that depends on a class or method, nearest first, with the lines of the calls; callers through the interface it implements; code depending on the state it writes; and the tests to run, found through test helpers. |
 | `shortest_path` | See how two pieces of code are connected. |
 | `god_nodes` | Find the hubs most of the code depends on. |
 
@@ -141,11 +141,12 @@ phpgraph mcp-config claude|codex|cursor|json [--docker image]
 | `extends`, `implements`, `uses_trait` | class → parent, interface, trait |
 | `has_method`, `overrides` | class → method, method → the method it overrides |
 | `instantiates`, `references` | `new Foo()`; parameter, return and property types, `catch`, `instanceof`, constants, attributes |
-| `calls` | method → resolved method |
+| `calls` | method → resolved method, with the lines of the call sites |
 | `dispatches`, `handled_by` | sender → message or channel → handler; route → controller |
 | `contract` | a message class sent by one service → the same class handled by another |
 | `requests` | HTTP call → the route it reaches, in the same service or another |
 | `receives` | service → each service the container configuration injects into it (a tag, an id, the decorated service) |
+| `reads_state_of` | method → a method of the same class changing a property it reads, outside the constructor (`hasErrors()` → `add()`), INFERRED |
 
 Every relation carries a confidence level:
 

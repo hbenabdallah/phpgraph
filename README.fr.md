@@ -104,7 +104,7 @@ claude mcp add phpgraph -- /home/vous/.local/bin/phpgraph serve /chemin/du/proje
 | `query_graph` | Trouver le code d'un sujet sans connaître les noms de classes. Une question sur les routes (*« mooc courses routes »*, *« GET /courses »*) renvoie les routes correspondantes et leurs contrôleurs. |
 | `get_node` | Lire une classe, une méthode, une route ou un canal avec toutes ses relations. |
 | `get_neighbors` | Voir ce qui utilise un nœud (`in`) ou ce dont il dépend (`out`). |
-| `impact_of` | Avant une modification : toutes les classes qui dépendent d'une classe ou d'une méthode, les plus proches d'abord, et les tests à lancer. |
+| `impact_of` | Avant une modification : toutes les classes qui dépendent d'une classe ou d'une méthode, les plus proches d'abord, avec les lignes des appels ; les appelants via l'interface qu'elle implémente ; le code qui dépend de l'état qu'elle écrit ; et les tests à lancer, trouvés à travers les helpers de test. |
 | `shortest_path` | Voir comment deux morceaux de code sont reliés. |
 | `god_nodes` | Trouver les nœuds dont dépend le plus de code. |
 
@@ -141,11 +141,12 @@ Options de `build` : `-e` pour exclure des chemins (répétable), `--no-vendor` 
 | `extends`, `implements`, `uses_trait` | classe → parent, interface, trait |
 | `has_method`, `overrides` | classe → méthode, méthode → la méthode qu'elle redéfinit |
 | `instantiates`, `references` | `new Foo()` ; types de paramètres, de retour et de propriétés, `catch`, `instanceof`, constantes, attributs |
-| `calls` | méthode → méthode résolue |
+| `calls` | méthode → méthode résolue, avec les lignes des appels |
 | `dispatches`, `handled_by` | envoi → message ou canal → handler ; route → contrôleur |
 | `contract` | une classe de message envoyée par un service → la même classe traitée par un autre |
 | `requests` | appel HTTP → la route qu'il atteint, du même service ou d'un autre |
 | `receives` | service → chaque service que la configuration du conteneur lui injecte (un tag, un identifiant, le service décoré) |
+| `reads_state_of` | méthode → une méthode de la même classe qui modifie, hors constructeur, une propriété qu'elle lit (`hasErrors()` → `add()`), INFERRED |
 
 Chaque relation porte un niveau de confiance :
 

@@ -152,6 +152,8 @@ final class HttpTest extends TestCase
                 . ' new Post(uriTemplate: "/retrieve-supplier.{_format}", input: Payload::class, processor: RetrieveProcessor::class, extraProperties: ["use_case" => \App\UseCase\RetrieveSupplier::class]),'
                 . ' new Get(uriTemplate: "/suppliers/{id}", provider: SupplierProvider::class)])] final class SupplierResource {}',
             'src/Resource/PurchaseOrder.php' => 'namespace App\Resource; use ApiPlatform\Metadata\ApiResource; #[ApiResource] class PurchaseOrder {}',
+            'src/Resource/Archive.php' => 'namespace App\Resource; use ApiPlatform\Metadata\ApiResource; use ApiPlatform\Metadata\HttpOperation; use Symfony\Component\HttpFoundation\Request;'
+                . ' #[ApiResource(operations: [new HttpOperation(method: Request::METHOD_PUT, uriTemplate: "/archives/{id}")])] class Archive {}',
             'src/Resource/Category.php' => 'namespace App\Resource; use ApiPlatform\Metadata\GetCollection; #[GetCollection(controller: \App\Controller\ListCategories::class)] class Category {}',
             'src/State/RetrieveProcessor.php' => 'namespace App\State; class RetrieveProcessor { public function process(): void {} }',
             'src/State/SupplierProvider.php' => 'namespace App\State; class SupplierProvider { public function provide(): void {} }',
@@ -172,8 +174,9 @@ final class HttpTest extends TestCase
         foreach (['GET /api/purchase_orders/{id}', 'GET /api/purchase_orders', 'POST /api/purchase_orders', 'PATCH /api/purchase_orders/{id}', 'DELETE /api/purchase_orders/{id}'] as $default) {
             self::assertContains($default, $this->routes($graph), 'default operations, snake_case and plural');
         }
+        self::assertContains('PUT /api/archives/{id}', $this->routes($graph), 'a method named by a constant');
         self::assertTrue($this->hasEdge($graph, 'route:src/Resource/Category.php#GET /api/categories', 'App\Controller\ListCategories::__invoke', Relation::HandledBy), 'an operation attribute alone, with a controller');
-        self::assertSame(5, $result->http->routesToDependencies, 'PurchaseOrder: API Platform itself handles them');
+        self::assertSame(6, $result->http->routesToDependencies, 'PurchaseOrder and Archive: API Platform itself handles them');
 
         unlink($this->root . '/config/routes/api_platform.php');
         $this->write(['config/routes/api_platform.yaml' => "api_platform:\n    resource: .\n    type: api_platform\n    prefix: /v2\n"]);

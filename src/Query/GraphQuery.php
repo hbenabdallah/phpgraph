@@ -350,6 +350,35 @@ final class GraphQuery
     }
 
     /**
+     * The callers of the methods a method implements or overrides, up the hierarchy: a call to
+     * `OrderRepository::save()` may run `DbalOrderRepository::save()`.
+     *
+     * @return array<string, list<Connection>> implemented method => its callers
+     */
+    public function callersThroughParents(Node $method): array
+    {
+        $callers = [];
+        $seen = [$method->id => true];
+        for ($queue = [$method->id]; $queue !== [];) {
+            foreach ($this->graph->incident((string) array_shift($queue)) as $item) {
+                if (!$item['forward'] || $item['edge']->relation !== Relation::Overrides || isset($seen[$item['other']])) {
+                    continue;
+                }
+                $parent = $item['other'];
+                $seen[$parent] = true;
+                $queue[] = $parent;
+                foreach ($this->graph->incident($parent) as $call) {
+                    if (!$call['forward'] && $call['edge']->relation === Relation::Calls) {
+                        $callers[$parent][] = new Connection($call['edge'], $call['other'], false);
+                    }
+                }
+            }
+        }
+
+        return $callers;
+    }
+
+    /**
      * Tries the most meaningful mode first and falls back to looser ones.
      */
     public function shortestPath(Node $from, Node $to): ?Path

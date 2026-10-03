@@ -7,8 +7,10 @@ namespace PhpGraph\Presentation;
 use PhpGraph\Builder\CallStats;
 use PhpGraph\Graph\Edge;
 use PhpGraph\Graph\Node;
+use PhpGraph\Graph\NodeKind;
 use PhpGraph\Query\Direction;
 use PhpGraph\Query\GraphQuery;
+use PhpGraph\Query\Result\Connection;
 use PhpGraph\Query\Result\LayerViolation;
 use PhpGraph\Query\Result\NamespaceGroup;
 use PhpGraph\Query\Result\PathMode;
@@ -52,17 +54,20 @@ final class TextPresenter
         $lines[] = \sprintf('Connections (%d):', \count($connections));
         foreach (\array_slice($connections, 0, $limit) as $connection) {
             $other = $graph->node($connection->other);
-            $lines[] = rtrim(\sprintf(
-                '  %s %s [%s] [%s]  %s',
-                $connection->forward ? '-->' : '<--',
-                $this->query->label($connection->other),
-                $connection->edge->relation->value,
-                $connection->edge->confidence->value,
-                $other?->file === null ? '' : $this->location($other),
-            ));
+            $lines[] = $this->connectionLine($connection, $other);
         }
         if (\count($connections) > $limit) {
             $lines[] = \sprintf('  ... %d more', \count($connections) - $limit);
+        }
+
+        if ($direction !== Direction::Out && $node->kind === NodeKind::Method) {
+            foreach ($this->query->callersThroughParents($node) as $parent => $callers) {
+                $lines[] = '';
+                $lines[] = \sprintf('Called through %s, which it implements (%d, INFERRED: the implementation run is chosen at runtime):', $this->query->label($parent), \count($callers));
+                foreach (\array_slice($callers, 0, $limit) as $connection) {
+                    $lines[] = $this->connectionLine($connection, $graph->node($connection->other));
+                }
+            }
         }
 
         $others = array_filter(
@@ -76,6 +81,25 @@ final class TextPresenter
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * `<-- Caller::run() [calls] [INFERRED]  src/Caller.php L12, called at L20, L31`: where the other end is
+     * declared, and the lines of the relation in the source.
+     */
+    private function connectionLine(Connection $connection, ?Node $other): string
+    {
+        $lines = $connection->edge->lines();
+
+        return rtrim(\sprintf(
+            '  %s %s [%s] [%s]  %s%s',
+            $connection->forward ? '-->' : '<--',
+            $this->query->label($connection->other),
+            $connection->edge->relation->value,
+            $connection->edge->confidence->value,
+            $other?->file === null ? '' : $this->location($other),
+            $lines === [] ? '' : ', at L' . implode(', L', \array_slice($lines, 0, 8)) . (\count($lines) > 8 ? ', ...' : ''),
+        ));
     }
 
     public function path(string $from, string $to): string
@@ -502,19 +526,23 @@ final class TextPresenter
         }
 
         $impact = $this->query->impactOf($node, $depth);
-        $tests = array_values(array_filter($impact->classes, static fn ($class): bool => $class->isTest));
-        $application = array_values(array_filter($impact->classes, static fn ($class): bool => !$class->isTest));
+        $isTestCase = fn (string $class): bool => preg_match('/(Test|TestCase|Cest|Spec|Context|Feature)$/', $this->query->label($class)) === 1;
+        $tests = array_values(array_filter($impact->classes, static fn ($class): bool => $class->isTest && $isTestCase($class->class)));
+        $helpers = array_values(array_filter($impact->classes, static fn ($class): bool => $class->isTest && !$isTestCase($class->class)));
+        $application = array_values(array_filter($impact->classes, static fn ($class): bool => !$class->isTest && !$class->throughState));
+        $throughState = array_values(array_filter($impact->classes, static fn ($class): bool => !$class->isTest && $class->throughState));
 
         $lines = [
             \sprintf('Impact of changing %s [%s], %s', $node->label, $node->kind->value, $this->location($node)),
             \sprintf(
                 '%d application classes and %d test classes depend on it, up to %d relations away%s.',
-                \count($application),
+                \count($application) + \count($throughState),
                 \count($tests),
                 $impact->maxDepth,
                 $impact->truncated ? ' (stopped at the limit: more exist)' : '',
             ),
-            'Each class is shown with the first relation that reaches it and the weakest confidence on the way.',
+            'Each class is shown with the first relation that reaches it (with its lines in the source) and the weakest '
+            . 'confidence on the way. Tests are followed further, through test helpers.',
         ];
 
         for ($depth = 1; $depth <= $impact->maxDepth; ++$depth) {
@@ -525,10 +553,35 @@ final class TextPresenter
             $lines[] = '';
             $lines[] = $depth === 1 ? 'Direct dependents:' : \sprintf('%d relations away:', $depth);
             foreach (\array_slice($atDepth, 0, 40) as $class) {
-                $lines[] = \sprintf('  - %s [%s]  via %s  %s', $this->query->label($class->class), $class->confidence->value, $this->formatEdge($class->edge), $this->classLocation($class->class));
+                $lines[] = \sprintf(
+                    '  - %s [%s]  via %s%s%s  %s',
+                    $this->query->label($class->class),
+                    $class->confidence->value,
+                    $this->formatEdge($class->edge),
+                    $class->through === null ? '' : ' (calls it through ' . $this->query->label($class->through) . ')',
+                    $class->followed ? '' : ($class->edge->relation === \PhpGraph\Graph\Relation::Receives
+                        ? ' (receives it among others: its users are not followed)'
+                        : ' (inherited code shared with other subclasses: its callers are not followed)'),
+                    $this->classLocation($class->class),
+                );
             }
             if (\count($atDepth) > 40) {
                 $lines[] = \sprintf('  - ... %d more', \count($atDepth) - 40);
+            }
+        }
+
+        if ($throughState !== []) {
+            $lines[] = '';
+            $lines[] = \sprintf(
+                'Through the state it changes (%d, INFERRED): they use a method reading what it writes, so a change of what '
+                . 'it records (order, duplicates, count) reaches them:',
+                \count($throughState),
+            );
+            foreach (\array_slice($throughState, 0, 40) as $class) {
+                $lines[] = \sprintf('  - %s  via %s  %s', $this->query->label($class->class), $this->formatEdge($class->edge), $this->classLocation($class->class));
+            }
+            if (\count($throughState) > 40) {
+                $lines[] = \sprintf('  - ... %d more', \count($throughState) - 40);
             }
         }
 
@@ -540,6 +593,16 @@ final class TextPresenter
             }
             if (\count($tests) > 40) {
                 $lines[] = \sprintf('  - ... %d more', \count($tests) - 40);
+            }
+        }
+        if ($helpers !== []) {
+            $lines[] = '';
+            $lines[] = 'Test helpers on the way (fakers, fixtures, base classes):';
+            foreach (\array_slice($helpers, 0, 20) as $class) {
+                $lines[] = \sprintf('  - %s  %s', $this->query->label($class->class), $this->classLocation($class->class));
+            }
+            if (\count($helpers) > 20) {
+                $lines[] = \sprintf('  - ... %d more', \count($helpers) - 20);
             }
         }
 
@@ -619,12 +682,15 @@ final class TextPresenter
 
     private function formatEdge(Edge $edge): string
     {
+        $lines = $edge->lines();
+
         return \sprintf(
-            '%s --%s--> %s [%s]',
+            '%s --%s--> %s [%s]%s',
             $this->query->label($edge->source),
             $edge->relation->value,
             $this->query->label($edge->target),
             $edge->confidence->value,
+            $lines === [] ? '' : ' at L' . implode(', L', \array_slice($lines, 0, 8)) . (\count($lines) > 8 ? ', ...' : ''),
         );
     }
 

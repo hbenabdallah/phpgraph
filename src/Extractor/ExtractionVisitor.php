@@ -86,6 +86,12 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var list<array{id: string, tag: ?string, service: ?string}> */
     private array $serviceArguments = [];
 
+    /** @var array<string, array{reads: array<string, true>, writes: array<string, true>}> method id => properties of $this */
+    private array $stateAccess = [];
+
+    /** @var array<int, true> property fetches being written, not read: `$this->items[] = $item` */
+    private array $writtenFetches = [];
+
     public function __construct(private readonly string $path)
     {
         $this->fileId = 'file:' . $path;
@@ -113,6 +119,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->parameterTypes,
             $this->serviceArguments,
             $this->http->loaderPrefixes(),
+            array_map(static fn (array $access): array => [
+                'reads' => array_map('strval', array_keys($access['reads'])),
+                'writes' => array_map('strval', array_keys($access['writes'])),
+            ], $this->stateAccess),
         );
     }
 
@@ -121,6 +131,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
      */
     public function enterNode(AstNode $node)
     {
+        if ($this->currentCallable !== null && $this->currentClass !== null && str_contains($this->currentCallable, '::')) {
+            $this->onStateAccess($node, $this->currentCallable);
+        }
+
         // Inside a function, or in a script outside any class.
         if ($node instanceof Stmt && ($this->currentCallable !== null || $this->currentClass === null)) {
             $this->pinInlineVarTypes($node);
@@ -541,7 +555,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                 $this->onPossibleSend($node->name->toString(), $node->args, null, false, $class);
             }
             if ($node->name instanceof Identifier && $this->currentCallable !== null) {
-                $this->pending[] = new PendingCall($this->currentCallable, TypeExpr::named($class), $node->name->toString(), true);
+                $this->pending[] = new PendingCall($this->currentCallable, TypeExpr::named($class), $node->name->toString(), true, $node->getStartLine());
             } else {
                 $this->reference($this->owner(), $class);
             }
@@ -556,6 +570,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                     $this->typeOf($node->var),
                     $node->name->toString(),
                     false,
+                    $node->getStartLine(),
                 );
             }
             $this->onPossibleSend(
@@ -573,7 +588,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         if ($node instanceof Expr\FuncCall && $node->name instanceof Expr && $this->currentCallable !== null) {
             $invoked = $this->typeOf($node->name);
             if ($invoked !== null) {
-                $this->pending[] = new PendingCall($this->currentCallable, $invoked, '__invoke', false);
+                $this->pending[] = new PendingCall($this->currentCallable, $invoked, '__invoke', false, $node->getStartLine());
             }
 
             return;
@@ -919,6 +934,52 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         return [null, null];
+    }
+
+    /**
+     * The properties of `$this` a method reads and changes, for the methods that depend on the state another one
+     * writes: `$this->violations[] = $v` in add(), `count($this->violations)` in hasErrors().
+     */
+    private function onStateAccess(AstNode $node, string $method): void
+    {
+        $written = [];
+        if ($node instanceof Expr\Assign || $node instanceof Expr\AssignRef || $node instanceof Expr\AssignOp) {
+            $written[] = $node->var;
+        } elseif ($node instanceof Stmt\Unset_) {
+            $written = $node->vars;
+        } elseif ($node instanceof Expr\FuncCall && $node->name instanceof Name
+            && \in_array(strtolower($node->name->toString()), ['array_push', 'array_unshift', 'array_splice', 'array_pop', 'array_shift', 'sort', 'usort', 'ksort', 'uasort', 'uksort', 'asort', 'arsort', 'krsort', 'rsort', 'shuffle'], true)) {
+            $written[] = $this->argumentNode($node->args, 0)?->value;
+        } elseif ($node instanceof Expr\MethodCall && $node->name instanceof Identifier
+            && \in_array(strtolower($node->name->toString()), ['add', 'set', 'remove', 'removeelement', 'clear', 'push', 'append', 'attach', 'detach', 'offsetset', 'offsetunset'], true)) {
+            // A collection held in a property: `$this->lines->add($line)`.
+            $written[] = $node->var;
+        }
+
+        foreach ($written as $target) {
+            while ($target instanceof Expr\ArrayDimFetch) {
+                $target = $target->var;
+            }
+            $property = $target instanceof Expr ? $this->thisProperty($target) : null;
+            if ($property !== null) {
+                $this->stateAccess[$method]['writes'][$property] = true;
+                $this->stateAccess[$method]['reads'] ??= [];
+                $this->writtenFetches[spl_object_id($target)] = true;
+            }
+        }
+
+        $property = $node instanceof Expr ? $this->thisProperty($node) : null;
+        if ($property !== null && !isset($this->writtenFetches[spl_object_id($node)])) {
+            $this->stateAccess[$method]['reads'][$property] = true;
+            $this->stateAccess[$method]['writes'] ??= [];
+        }
+    }
+
+    private function thisProperty(Expr $expr): ?string
+    {
+        return $expr instanceof Expr\PropertyFetch && $expr->var instanceof Expr\Variable && $expr->var->name === 'this' && $expr->name instanceof Identifier
+            ? $expr->name->toString()
+            : null;
     }
 
     /**

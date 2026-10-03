@@ -34,4 +34,10 @@ enum Relation: string
      * (`tagged_iterator('app.rule')`), or one service by id (`service('app.mailer')`).
      */
     case Receives = 'receives';
+
+    /**
+     * A method reading a property of its class that another method changes (outside the constructor): it depends on
+     * the state that method writes. `hasErrors()` reads what `addViolation()` appends. INFERRED.
+     */
+    case ReadsStateOf = 'reads_state_of';
 }

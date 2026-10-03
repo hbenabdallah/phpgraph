@@ -9,11 +9,11 @@
         "classLike": 295,
         "methods": 770,
         "external": 123,
-        "edges": 4117,
+        "edges": 4179,
         "vendorFilesRead": 104,
         "edgesByConfidence": {
-            "EXTRACTED": 3182,
-            "INFERRED": 922,
+            "EXTRACTED": 3212,
+            "INFERRED": 954,
             "AMBIGUOUS": 13
         },
         "calls": {
@@ -79,14 +79,23 @@
                 "GET /api/courses -> CodelyTv\\Apps\\Backoffice\\Frontend\\Controller\\Courses\\ApiCoursesGetController (apps/backoffice/frontend/config/routes/api_courses.yaml:1)"
             ]
         },
+        "injections": {
+            "injections": 13,
+            "linked": 12,
+            "edges": 30,
+            "unlinkedCount": 1,
+            "unlinked": [
+                "tag codely.database_connection into CodelyTv\\Shared\\Infrastructure\\Doctrine\\DatabaseConnections"
+            ]
+        },
         "services": 0,
         "architecture": {
             "layerViolations": 0,
             "contextPairs": 14,
             "layerFirst": false
         },
-        "seconds": 0.43,
-        "peakMemoryMb": 22
+        "seconds": 0.46,
+        "peakMemoryMb": 24
     },
     {
         "name": "sylius",
@@ -98,11 +107,11 @@
         "classLike": 4449,
         "methods": 23781,
         "external": 904,
-        "edges": 131604,
+        "edges": 140152,
         "vendorFilesRead": 580,
         "edgesByConfidence": {
-            "EXTRACTED": 106549,
-            "INFERRED": 24926,
+            "EXTRACTED": 107737,
+            "INFERRED": 32286,
             "AMBIGUOUS": 129
         },
         "calls": {
@@ -180,14 +189,30 @@
             "routesToMissingControllers": 0,
             "missingControllers": []
         },
+        "injections": {
+            "injections": 1737,
+            "linked": 675,
+            "edges": 1188,
+            "unlinkedCount": 1062,
+            "unlinked": [
+                "service sylius.factory.zone into sylius.custom_factory.zone",
+                "service sylius.factory.zone_member into sylius.custom_factory.zone",
+                "service sylius.repository.province into sylius.provider.province_naming",
+                "service sylius.repository.zone into sylius.matcher.zone",
+                "service sylius.repository.country into sylius.validator.valid_province_address",
+                "service sylius.repository.province into sylius.validator.valid_province_address",
+                "service sylius.repository.zone_member into sylius.checker.zone_deletion",
+                "service sylius.repository.zone_member into sylius.checker.country_provinces_deletion"
+            ]
+        },
         "services": 0,
         "architecture": {
             "layerViolations": 0,
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 6.37,
-        "peakMemoryMb": 408
+        "seconds": 6.98,
+        "peakMemoryMb": 438
     },
     {
         "name": "akeneo-pim",
@@ -199,11 +224,11 @@
         "classLike": 8447,
         "methods": 38595,
         "external": 888,
-        "edges": 206766,
-        "vendorFilesRead": 651,
+        "edges": 215259,
+        "vendorFilesRead": 679,
         "edgesByConfidence": {
-            "EXTRACTED": 151470,
-            "INFERRED": 53718,
+            "EXTRACTED": 155411,
+            "INFERRED": 58270,
             "AMBIGUOUS": 1578
         },
         "calls": {
@@ -232,8 +257,8 @@
         },
         "bus": {
             "handlers": {
-                "EXTRACTED": 171,
-                "INFERRED": 67,
+                "EXTRACTED": 184,
+                "INFERRED": 54,
                 "AMBIGUOUS": 5
             },
             "sends": {
@@ -280,14 +305,30 @@
             "routesToMissingControllers": 0,
             "missingControllers": []
         },
+        "injections": {
+            "injections": 6534,
+            "linked": 4949,
+            "edges": 3928,
+            "unlinkedCount": 1585,
+            "unlinked": [
+                "service akeneo_elasticsearch.client.product_and_product_model into Akeneo\\Catalogs\\Infrastructure\\TemporaryEnrichmentBridge\\SearchAfterSizeUuidResultCursorFactory",
+                "service doctrine.orm.entity_manager into acme_app.saver.color",
+                "service doctrine.orm.entity_manager into acme_app.saver.fabric",
+                "service liip_imagine.filter.manager into Akeneo\\Category\\Infrastructure\\FileSystem\\PreviewGenerator\\DefaultImageProviderInterface",
+                "service liip_imagine.cache.manager into Akeneo\\Category\\Infrastructure\\FileSystem\\PreviewGenerator\\DefaultImageProviderInterface",
+                "service liip_imagine.data.manager into Akeneo\\Category\\Infrastructure\\FileSystem\\PreviewGenerator\\BinaryImageGenerator",
+                "service liip_imagine.cache.manager into Akeneo\\Category\\Infrastructure\\FileSystem\\PreviewGenerator\\BinaryImageGenerator",
+                "service liip_imagine.filter.manager into Akeneo\\Category\\Infrastructure\\FileSystem\\PreviewGenerator\\BinaryImageGenerator"
+            ]
+        },
         "services": 0,
         "architecture": {
             "layerViolations": 33,
             "contextPairs": 13,
             "layerFirst": false
         },
-        "seconds": 10.61,
-        "peakMemoryMb": 520
+        "seconds": 11.68,
+        "peakMemoryMb": 564
     },
     {
         "name": "prestashop",
@@ -295,15 +336,15 @@
         "filesParsed": 7850,
         "filesFailed": 0,
         "duplicates": 5,
-        "nodes": 49984,
+        "nodes": 49990,
         "classLike": 7291,
         "methods": 32895,
         "external": 1094,
-        "edges": 175698,
-        "vendorFilesRead": 557,
+        "edges": 184553,
+        "vendorFilesRead": 566,
         "edgesByConfidence": {
-            "EXTRACTED": 124848,
-            "INFERRED": 49119,
+            "EXTRACTED": 126883,
+            "INFERRED": 55939,
             "AMBIGUOUS": 1731
         },
         "calls": {
@@ -363,8 +404,8 @@
             "contracts": 0
         },
         "http": {
-            "routes": 768,
-            "routesWithHandler": 767,
+            "routes": 774,
+            "routesWithHandler": 773,
             "requests": 0,
             "requestsToProject": 0,
             "requestsToServices": 0,
@@ -374,14 +415,30 @@
             "routesToMissingControllers": 0,
             "missingControllers": []
         },
+        "injections": {
+            "injections": 2607,
+            "linked": 2187,
+            "edges": 1998,
+            "unlinkedCount": 420,
+            "unlinked": [
+                "service security.access_map into PrestaShopBundle\\EventListener\\Admin\\TokenizedUrlsListener",
+                "service doctrine.orm.default_entity_manager into PrestaShopBundle\\EventListener\\Admin\\EmployeeSessionSubscriber",
+                "service prestashop.extra_property.catalog.filesystem_cache into PrestaShop\\PrestaShop\\Core\\ExtraProperty\\Catalog\\ApiEndpointCatalog",
+                "service doctrine.dbal.default_connection into PrestaShop\\PrestaShop\\Adapter\\Alias\\Repository\\AliasRepository",
+                "service validator into prestashop.adapter.attachment.command_handler.abstract_attachment_handler",
+                "service doctrine.dbal.default_connection into PrestaShop\\PrestaShop\\Adapter\\Attachment\\AttachmentRepository",
+                "service doctrine.dbal.default_connection into PrestaShop\\PrestaShop\\Adapter\\Attribute\\Repository\\AttributeRepository",
+                "service doctrine.dbal.default_connection into PrestaShop\\PrestaShop\\Adapter\\AttributeGroup\\Repository\\AttributeGroupRepository"
+            ]
+        },
         "services": 0,
         "architecture": {
             "layerViolations": 23,
             "contextPairs": 293,
             "layerFirst": true
         },
-        "seconds": 10.23,
-        "peakMemoryMb": 446
+        "seconds": 11.45,
+        "peakMemoryMb": 488
     },
     {
         "name": "ecotone-quickstart",
@@ -393,11 +450,11 @@
         "classLike": 443,
         "methods": 901,
         "external": 222,
-        "edges": 6710,
+        "edges": 6789,
         "vendorFilesRead": 58,
         "edgesByConfidence": {
             "EXTRACTED": 6147,
-            "INFERRED": 560,
+            "INFERRED": 639,
             "AMBIGUOUS": 3
         },
         "calls": {
@@ -464,13 +521,20 @@
             "routesToMissingControllers": 0,
             "missingControllers": []
         },
+        "injections": {
+            "injections": 0,
+            "linked": 0,
+            "edges": 0,
+            "unlinkedCount": 0,
+            "unlinked": []
+        },
         "services": 47,
         "architecture": {
             "layerViolations": 7,
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.57,
+        "seconds": 0.62,
         "peakMemoryMb": 28
     },
     {
@@ -483,11 +547,11 @@
         "classLike": 698,
         "methods": 4076,
         "external": 325,
-        "edges": 22732,
+        "edges": 23001,
         "vendorFilesRead": 347,
         "edgesByConfidence": {
             "EXTRACTED": 14055,
-            "INFERRED": 7989,
+            "INFERRED": 8258,
             "AMBIGUOUS": 688
         },
         "calls": {
@@ -541,14 +605,21 @@
             "routesToMissingControllers": 0,
             "missingControllers": []
         },
+        "injections": {
+            "injections": 0,
+            "linked": 0,
+            "edges": 0,
+            "unlinkedCount": 0,
+            "unlinked": []
+        },
         "services": 0,
         "architecture": {
             "layerViolations": 0,
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 2.84,
-        "peakMemoryMb": 104
+        "seconds": 3.25,
+        "peakMemoryMb": 108
     },
     {
         "name": "wordpress",
@@ -560,11 +631,11 @@
         "classLike": 840,
         "methods": 7580,
         "external": 117,
-        "edges": 37535,
+        "edges": 42084,
         "vendorFilesRead": 0,
         "edgesByConfidence": {
             "EXTRACTED": 19173,
-            "INFERRED": 16966,
+            "INFERRED": 21515,
             "AMBIGUOUS": 1396
         },
         "calls": {
@@ -640,14 +711,21 @@
             "routesToMissingControllers": 0,
             "missingControllers": []
         },
+        "injections": {
+            "injections": 0,
+            "linked": 0,
+            "edges": 0,
+            "unlinkedCount": 0,
+            "unlinked": []
+        },
         "services": 0,
         "architecture": {
             "layerViolations": 0,
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 5.34,
-        "peakMemoryMb": 97
+        "seconds": 6.58,
+        "peakMemoryMb": 111
     },
     {
         "name": "laravel-rabbitmq-microservices",
@@ -718,13 +796,20 @@
             "routesToMissingControllers": 0,
             "missingControllers": []
         },
+        "injections": {
+            "injections": 0,
+            "linked": 0,
+            "edges": 0,
+            "unlinkedCount": 0,
+            "unlinked": []
+        },
         "services": 3,
         "architecture": {
             "layerViolations": 0,
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.37,
+        "seconds": 0.4,
         "peakMemoryMb": 38
     },
     {
@@ -792,13 +877,20 @@
             "routesToMissingControllers": 0,
             "missingControllers": []
         },
+        "injections": {
+            "injections": 0,
+            "linked": 0,
+            "edges": 0,
+            "unlinkedCount": 0,
+            "unlinked": []
+        },
         "services": 5,
         "architecture": {
             "layerViolations": 0,
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.56,
+        "seconds": 0.55,
         "peakMemoryMb": 44
     }
 ]

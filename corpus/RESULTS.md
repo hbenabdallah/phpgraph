@@ -6,15 +6,15 @@ phpgraph could not type, the main target of type inference work. Arrows compare 
 
 | Project | Files | Failed | Duplicates | Classes | Methods | Edges | Vendor files read | Seconds | Memory MB |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4147 (+30 ▲) | 104 | 0.73 (+0.3 ▼) | 22 |
-| sylius | 4946 | 0 | 1 | 4449 | 23781 | 132792 (+1188 ▲) | 580 | 9.31 (+2.94 ▼) | 412 |
-| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 210694 (+3928 ▲) | 679 | 12.55 | 536 |
-| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 177733 (+2035 ▲) | 566 | 13.25 (+3.02 ▼) | 452 |
-| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6710 | 58 | 1.07 (+0.5 ▼) | 28 |
-| bookstack | 1513 | 0 | 0 | 698 | 4076 | 22732 | 347 | 3.25 | 104 |
-| wordpress | 1899 | 0 | 50 | 840 | 7580 | 37535 | 0 | 7.40 (+2.06 ▼) | 97 |
-| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 96 | 0.51 (+0.14 ▼) | 38 |
-| art-gallery | 266 | 0 | 0 | 140 | 148 | 1692 | 75 | 0.69 (+0.13 ▼) | 44 |
+| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4179 | 104 | 0.46 | 24 |
+| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140152 | 580 | 6.98 | 438 |
+| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 215259 | 679 | 11.68 | 564 |
+| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 184553 | 566 | 11.45 | 488 |
+| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6789 | 58 | 0.62 | 28 |
+| bookstack | 1513 | 0 | 0 | 698 | 4076 | 23001 | 347 | 3.25 | 108 |
+| wordpress | 1899 | 0 | 50 | 840 | 7580 | 42084 | 0 | 6.58 | 111 |
+| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 96 | 0.40 | 38 |
+| art-gallery | 266 | 0 | 0 | 140 | 148 | 1692 | 75 | 0.55 | 44 |
 
 ## Method calls in application code
 
@@ -89,7 +89,7 @@ Routes and the controllers handling them; HTTP calls of application code reachin
 | php-ddd-example | 0 | 13 | 12 | 0 | 1 | 0 | 0 | 0 | 0 |
 | sylius | 0 | 188 | 41 | 13 | 0 | 0 | 0 | 0 | 0 |
 | akeneo-pim | 0 | 464 | 386 | 2 | 0 | 2 | 0 | 0 | 0 |
-| prestashop | 0 | 774 (+6 ▲) | 773 (+6 ▲) | 1 | 0 | 0 | 0 | 0 | 0 |
+| prestashop | 0 | 774 | 773 | 1 | 0 | 0 | 0 | 0 | 0 |
 | ecotone-quickstart | 47 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | bookstack | 0 | 340 | 340 | 0 | 0 | 0 | 0 | 0 | 0 |
 | wordpress | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
@@ -120,7 +120,7 @@ Handlers and sends linked to their message class, by confidence; then what could
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | php-ddd-example | 13 | 1 | 0 | 7 | 0 | 7 | 1 | 7 | 0 |
 | sylius | 139 | 1 | 1 | 61 | 7 | 4 | 13 | 85 | 0 |
-| akeneo-pim | 184 (+13 ▲) | 54 (-13 ▼) | 5 | 192 | 0 | 5 | 35 | 95 | 0 |
+| akeneo-pim | 184 | 54 | 5 | 192 | 0 | 5 | 35 | 95 | 0 |
 | prestashop | 547 | 493 | 25 | 240 | 0 | 9 | 4 | 93 | 0 |
 | ecotone-quickstart | 193 | 0 | 0 | 192 | 0 | 1 | 2 | 68 | 148 |
 | bookstack | 0 | 1 | 0 | 1 | 2 | 0 | 0 | 0 | 0 |

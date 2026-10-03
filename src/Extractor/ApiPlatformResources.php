@@ -103,7 +103,7 @@ final class ApiPlatformResources
             return null;
         }
         [$method, $collection] = self::OPERATIONS[$name];
-        $method ??= isset($operation['method']) ? strtoupper((string) $this->string($operation['method'])) : 'GET';
+        $method ??= isset($operation['method']) ? self::httpMethod((string) $this->string($operation['method'])) : 'GET';
         $option = fn (string $key): ?Expr => $operation[$key] ?? $resource[$key] ?? null;
 
         $template = $option('uriTemplate');
@@ -151,6 +151,18 @@ final class ApiPlatformResources
         $segment = self::pluralize(strtolower(preg_replace('/(?<=\w)([A-Z])/', '_$1', $shortName) ?? $shortName));
 
         return '/' . $segment . ($collection ? '' : '/{id}');
+    }
+
+    /**
+     * `POST`, or a constant naming it: `Request::METHOD_POST` (Symfony's, read by its name).
+     */
+    private static function httpMethod(string $value): string
+    {
+        if (preg_match('/::METHOD_([A-Z]+)\}?$/i', $value, $match) === 1) {
+            return strtoupper($match[1]);
+        }
+
+        return preg_match('/^[A-Za-z]+$/', $value) === 1 ? strtoupper($value) : 'GET';
     }
 
     /**

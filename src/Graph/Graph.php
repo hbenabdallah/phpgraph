@@ -30,6 +30,8 @@ final class Graph
 
         $key = $edge->key();
         if (isset($this->edges[$key])) {
+            $this->edges[$key]->addLines($edge);
+
             return;
         }
 

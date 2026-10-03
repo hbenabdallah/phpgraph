@@ -144,7 +144,7 @@ final class GraphBuilder
                 $graph->addEdge(new Edge($id($edge->source), $id($edge->target), $edge->relation, $edge->confidence));
             }
             foreach ($extraction->pendingCalls as $call) {
-                $pending[$path][] = new PendingCall($id($call->source), $call->receiver?->map($id), $call->method, $call->referenceOnMiss);
+                $pending[$path][] = new PendingCall($id($call->source), $call->receiver?->map($id), $call->method, $call->referenceOnMiss, $call->line);
             }
             foreach ($extraction->returnTypes as $method => $type) {
                 $returnTypes[$id($method)] ??= $type === TypeExpr::STATIC ? $type : $id($type);
@@ -160,6 +160,9 @@ final class GraphBuilder
             }
             foreach ($extraction->serviceTags as $tag) {
                 $containerTags[$service][] = $tag;
+            }
+            foreach ($this->stateReaders($extraction->stateAccess) as [$reader, $writer]) {
+                $graph->addEdge(new Edge($id($reader), $id($writer), Relation::ReadsStateOf, Confidence::Inferred));
             }
             foreach ($extraction->serviceArguments as $argument) {
                 $containerArguments[$service][] = $argument;
@@ -318,6 +321,39 @@ final class GraphBuilder
      * @param \Closure(string): string $id
      */
     /**
+     * Within a class, the methods reading a property that another method changes outside the constructor: the
+     * reader depends on what the writer does. Properties set only by the constructor (injected services) link nothing.
+     *
+     * @param array<string, array{reads: list<string>, writes: list<string>}> $access method id => properties
+     *
+     * @return list<array{string, string}> reader, writer
+     */
+    private function stateReaders(array $access): array
+    {
+        $byClass = [];
+        foreach ($access as $method => $properties) {
+            [$class, $name] = explode('::', $method, 2) + [1 => ''];
+            $byClass[$class][$method] = $properties + ['constructor' => strtolower($name) === '__construct'];
+        }
+
+        $pairs = [];
+        foreach ($byClass as $methods) {
+            foreach ($methods as $writer => $writes) {
+                if ($writes['constructor']) {
+                    continue;
+                }
+                foreach ($methods as $reader => $reads) {
+                    if ($reader !== $writer && !$reads['constructor'] && array_intersect($writes['writes'], $reads['reads']) !== []) {
+                        $pairs[] = [$reader, $writer];
+                    }
+                }
+            }
+        }
+
+        return $pairs;
+    }
+
+    /**
      * Routes made by a loader (API Platform) get the prefix of its import, `->import('.', 'api_platform')->prefix('/api')`:
      * one route per prefix, the path as declared when the import is not found.
      *
@@ -430,7 +466,7 @@ final class GraphBuilder
 
                 // A method found in a dependency is outside the project, like before: no node, no call edge.
                 if ($found !== null && $graph->hasNode($found)) {
-                    $results[] = [new Edge($call->source, $found, Relation::Calls, Confidence::Inferred), 'inferred', $call->method];
+                    $results[] = [new Edge($call->source, $found, Relation::Calls, Confidence::Inferred, (string) $call->line), 'inferred', $call->method];
                 } else {
                     $edge = $call->referenceOnMiss ? new Edge($call->source, $class, Relation::References, Confidence::Extracted) : null;
                     $results[] = [$edge, 'outsideProject', $call->method];
@@ -441,7 +477,7 @@ final class GraphBuilder
 
             $candidates = $methodsByName[$name] ?? [];
             $results[] = \count($candidates) === 1
-                ? [new Edge($call->source, $candidates[0], Relation::Calls, Confidence::Ambiguous), 'ambiguous', $call->method]
+                ? [new Edge($call->source, $candidates[0], Relation::Calls, Confidence::Ambiguous, (string) $call->line), 'ambiguous', $call->method]
                 : [null, $leftProject ? 'chainOutsideProject' : 'unknownReceiver', $call->method];
         }
 
