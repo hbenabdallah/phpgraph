@@ -18,6 +18,7 @@ use PhpGraph\Query\Result\Overview;
 use PhpGraph\Query\Result\Path;
 use PhpGraph\Query\Result\PathMode;
 use PhpGraph\Query\Result\RankedNode;
+use PhpGraph\Query\Result\RouteEntry;
 use PhpGraph\Query\Result\Subgraph;
 
 /**
@@ -29,6 +30,13 @@ final class GraphQuery
         'the', 'and', 'for', 'with', 'what', 'which', 'how', 'does', 'show', 'from', 'into', 'that', 'this',
         'les', 'des', 'une', 'quel', 'quels', 'quelle', 'quelles', 'comment', 'dans', 'pour', 'avec', 'est', 'sont',
     ];
+
+    /**
+     * Words of a question about routes: query_graph then answers with the route nodes.
+     */
+    private const ROUTE_WORDS = ['route', 'routes', 'routing', 'endpoint', 'endpoints', 'http', 'url', 'urls', 'uri'];
+
+    private const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'];
 
     /**
      * Relations that a dependency path may walk backwards: from an abstraction to what implements it,
@@ -130,7 +138,41 @@ final class GraphQuery
             $this->groups($namespaces, \count($root), 3),
             $layers,
             $suffixes,
+            $this->routes(),
         );
+    }
+
+    /**
+     * Every route node with its controller, by path then method.
+     *
+     * @return list<RouteEntry>
+     */
+    public function routes(): array
+    {
+        $routes = [];
+        foreach ($this->graph->nodes() as $node) {
+            if ($node->kind !== NodeKind::Route) {
+                continue;
+            }
+            $handler = null;
+            foreach ($this->graph->incident($node->id) as $item) {
+                if ($item['forward'] && $item['edge']->relation === Relation::HandledBy) {
+                    $handler = $this->graph->node($item['other']);
+                    break;
+                }
+            }
+            // The label reads "GET|POST /orders/{id}".
+            [$methods, $path] = array_pad(explode(' ', $node->label, 2), 2, '');
+            $routes[] = new RouteEntry($node, explode('|', $methods), $path, $handler);
+        }
+        usort($routes, static fn (RouteEntry $a, RouteEntry $b): int => [$a->path, $a->route->label, $a->route->id] <=> [$b->path, $b->route->label, $b->route->id]);
+
+        return $routes;
+    }
+
+    public function summary(): ?ProjectSummary
+    {
+        return $this->summary;
     }
 
     public function graph(): Graph
@@ -325,6 +367,10 @@ final class GraphQuery
     public function subgraph(string $question, int $depth = 2, int $budget = 40): Subgraph
     {
         $terms = $this->terms($question);
+        $routes = $this->routesAsked($question, $terms, max(1, intdiv($budget, 2)));
+        if ($routes !== null) {
+            return $this->expand($terms, $routes, $depth, $budget);
+        }
 
         $scored = [];
         foreach ($this->graph->nodes() as $node) {
@@ -339,8 +385,96 @@ final class GraphQuery
         }
 
         usort($scored, static fn (array $a, array $b): int => [$b[0], $b[1]] <=> [$a[0], $a[1]]);
-        $seeds = array_map(static fn (array $row): Node => $row[2], \array_slice($scored, 0, 3));
 
+        return $this->expand($terms, array_map(static fn (array $row): Node => $row[2], \array_slice($scored, 0, 3)), $depth, $budget);
+    }
+
+    /**
+     * The routes a question asks for, or null when it is not about routes: it names routes, endpoints, HTTP or URLs,
+     * or writes a path (/orders/{id}), with or without a method. The other terms keep the routes whose path or
+     * routing file mentions most of them: "mooc courses routes" gives the /courses routes declared under mooc/.
+     *
+     * @param list<string> $terms
+     *
+     * @return list<Node>|null
+     */
+    private function routesAsked(string $question, array $terms, int $limit): ?array
+    {
+        preg_match_all('~(?<![\w/{}])/[^\s?#,;]+~u', $question, $found);
+        $paths = array_map(fn (string $path): array => $this->segments($path), $found[0]);
+        if ($paths === [] && array_intersect($terms, self::ROUTE_WORDS) === []) {
+            return null;
+        }
+
+        $methods = array_map('strtoupper', array_values(array_intersect($terms, self::HTTP_METHODS)));
+        $pathWords = array_merge(...array_map(fn (array $segments): array => $this->terms(implode(' ', $segments)), [[], ...$paths]));
+        $words = array_values(array_diff($terms, self::ROUTE_WORDS, self::HTTP_METHODS, $pathWords));
+
+        $scored = [];
+        foreach ($this->routes() as $route) {
+            if ($methods !== [] && !\in_array('ANY', $route->methods, true) && array_intersect($methods, $route->methods) === []) {
+                continue;
+            }
+            $segments = $this->segments($route->path);
+            if ($paths !== [] && array_filter($paths, fn (array $path): bool => $this->pathMatches($path, $segments)) === []) {
+                continue;
+            }
+            $id = mb_strtolower($route->route->id);
+            $score = \count(array_filter($words, static fn (string $word): bool => str_contains($id, $word)));
+            if ($words === [] || $score > 0) {
+                $scored[] = [$score, $route->route];
+            }
+        }
+        if ($scored === []) {
+            return null;
+        }
+
+        // The routes matching the most terms, in path order.
+        $best = max(array_column($scored, 0));
+
+        return \array_slice(array_values(array_map(
+            static fn (array $row): Node => $row[1],
+            array_filter($scored, static fn (array $row): bool => $row[0] === $best),
+        )), 0, $limit);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function segments(string $path): array
+    {
+        return array_values(array_filter(explode('/', mb_strtolower($path)), static fn (string $segment): bool => $segment !== ''));
+    }
+
+    /**
+     * A path written in a question matches a route whose path starts with it, a placeholder matching any segment.
+     *
+     * @param list<string> $asked
+     * @param list<string> $route
+     */
+    private function pathMatches(array $asked, array $route): bool
+    {
+        if (\count($asked) > \count($route)) {
+            return false;
+        }
+        foreach ($asked as $index => $segment) {
+            $isPlaceholder = static fn (string $part): bool => str_starts_with($part, '{') || str_starts_with($part, ':');
+            if ($segment !== $route[$index] && !$isPlaceholder($route[$index]) && !$isPlaceholder($segment)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * The seeds and their neighbourhood, up to $depth steps and $budget nodes.
+     *
+     * @param list<string> $terms
+     * @param list<Node>   $seeds
+     */
+    private function expand(array $terms, array $seeds, int $depth, int $budget): Subgraph
+    {
         $selected = [];
         $frontier = [];
         foreach ($seeds as $seed) {

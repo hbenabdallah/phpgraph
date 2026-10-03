@@ -38,7 +38,7 @@ phpgraph parses the whole project once (with [`nikic/php-parser`](https://github
 - **Call graph with type inference**: return types, chained calls (`$a->b()->c()`), local variables, docblocks (`@return`, `@var`), and signatures of your `vendor/` dependencies, so chains go through Doctrine, Symfony or Laravel APIs.
 - **Architecture**: DDD and hexagonal layers, bounded contexts, layer rules checked in CI (`phpgraph check`), and impact analysis (`impact_of`): what depends on a class or method, and which tests to run.
 - **Messages and events**: sender → message → handler for Symfony Messenger, Laravel jobs and events, Ecotone, PrestaShop CQRS, WordPress hooks, domain events and your own buses, from attributes, service configuration (YAML, XML, PHP) or code shape.
-- **HTTP**: routes (Symfony attributes and YAML, Laravel route files, controllers named by container service id) linked to controllers, and HTTP calls linked to the routes they reach.
+- **HTTP**: routes (Symfony attributes and YAML, Laravel route files, controllers named by container service id) linked to controllers, and HTTP calls linked to the routes they reach. A route whose controller class exists neither in the project nor in `vendor/` is reported with its routing file.
 - **Microservices**: one id space per service, and links between services through their contracts: shared message classes, routing keys, HTTP routes.
 - **Zero-configuration MCP server**: built on first use, rebuilt incrementally when the code changes (about 3 s per edit on an 8,400-file project).
 
@@ -84,8 +84,8 @@ claude mcp add phpgraph -- php /path/to/project/vendor/bin/phpgraph serve /path/
 
 | Tool | Use it to |
 |---|---|
-| `overview` | Start here: Composer stack, namespace tree with layers, bounded contexts, layer-rule violations, messages, HTTP routes, services, and what the graph cannot see. |
-| `query_graph` | Find the code about a topic when you do not know the class names. |
+| `overview` | Start here: Composer stack, namespace tree with layers, bounded contexts, layer-rule violations, messages, HTTP routes (each with method, path, controller and file up to 30, else grouped by path prefix), services, and what the graph cannot see. |
+| `query_graph` | Find the code about a topic when you do not know the class names. A question about routes (*"mooc courses routes"*, *"GET /courses"*) returns the matching routes and their controllers. |
 | `get_node` | Read one class, method, route or channel with all its relations. |
 | `get_neighbors` | See what uses a node (`in`) or what it depends on (`out`). |
 | `impact_of` | Before a change: every class that depends on a class or method, nearest first, and the tests to run. |
@@ -115,7 +115,7 @@ phpgraph serve [path]                        # the MCP server, over stdio
 phpgraph mcp-config claude|codex|cursor|json [--docker image]
 ```
 
-`build` options: `-e` to exclude paths (repeatable), `--no-vendor` not to read dependencies, `--no-cache` to parse every file again. `vendor`, `node_modules`, `var`, `.git` and git-ignored files are skipped.
+`build` options: `-e` to exclude paths (repeatable), `--no-vendor` not to read dependencies, `--no-cache` to parse every file again. `vendor`, `node_modules`, `var`, `.git` and the files ignored by the project's own `.gitignore` files are skipped; a git repository above the project never applies its rules, so a project copied into an ignored directory is still read. When the directory holds PHP files but every one is excluded, `build` fails and says so, and every MCP answer starts with that warning instead of serving an empty graph.
 
 ## What the graph contains
 

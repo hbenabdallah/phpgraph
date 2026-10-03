@@ -71,9 +71,13 @@
             "requests": 0,
             "requestsToProject": 0,
             "requestsToServices": 0,
-            "routesToDependencies": 1,
+            "routesToDependencies": 0,
             "methodMismatchCount": 0,
-            "methodMismatches": []
+            "methodMismatches": [],
+            "routesToMissingControllers": 1,
+            "missingControllers": [
+                "GET /api/courses -> CodelyTv\\Apps\\Backoffice\\Frontend\\Controller\\Courses\\ApiCoursesGetController (apps/backoffice/frontend/config/routes/api_courses.yaml:1)"
+            ]
         },
         "services": 0,
         "architecture": {
@@ -81,7 +85,7 @@
             "contextPairs": 14,
             "layerFirst": false
         },
-        "seconds": 0.44,
+        "seconds": 0.43,
         "peakMemoryMb": 22
     },
     {
@@ -172,7 +176,9 @@
             "requestsToServices": 0,
             "routesToDependencies": 13,
             "methodMismatchCount": 0,
-            "methodMismatches": []
+            "methodMismatches": [],
+            "routesToMissingControllers": 0,
+            "missingControllers": []
         },
         "services": 0,
         "architecture": {
@@ -180,8 +186,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 6.53,
-        "peakMemoryMb": 406
+        "seconds": 6.37,
+        "peakMemoryMb": 408
     },
     {
         "name": "akeneo-pim",
@@ -270,7 +276,9 @@
             "requestsToServices": 0,
             "routesToDependencies": 2,
             "methodMismatchCount": 0,
-            "methodMismatches": []
+            "methodMismatches": [],
+            "routesToMissingControllers": 0,
+            "missingControllers": []
         },
         "services": 0,
         "architecture": {
@@ -278,8 +286,8 @@
             "contextPairs": 13,
             "layerFirst": false
         },
-        "seconds": 10.28,
-        "peakMemoryMb": 518
+        "seconds": 10.61,
+        "peakMemoryMb": 520
     },
     {
         "name": "prestashop",
@@ -362,7 +370,9 @@
             "requestsToServices": 0,
             "routesToDependencies": 1,
             "methodMismatchCount": 0,
-            "methodMismatches": []
+            "methodMismatches": [],
+            "routesToMissingControllers": 0,
+            "missingControllers": []
         },
         "services": 0,
         "architecture": {
@@ -370,8 +380,8 @@
             "contextPairs": 293,
             "layerFirst": true
         },
-        "seconds": 10.02,
-        "peakMemoryMb": 442
+        "seconds": 10.23,
+        "peakMemoryMb": 446
     },
     {
         "name": "ecotone-quickstart",
@@ -450,7 +460,9 @@
             "requestsToServices": 0,
             "routesToDependencies": 0,
             "methodMismatchCount": 0,
-            "methodMismatches": []
+            "methodMismatches": [],
+            "routesToMissingControllers": 0,
+            "missingControllers": []
         },
         "services": 47,
         "architecture": {
@@ -458,7 +470,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.56,
+        "seconds": 0.57,
         "peakMemoryMb": 28
     },
     {
@@ -525,7 +537,9 @@
             "requestsToServices": 0,
             "routesToDependencies": 0,
             "methodMismatchCount": 0,
-            "methodMismatches": []
+            "methodMismatches": [],
+            "routesToMissingControllers": 0,
+            "missingControllers": []
         },
         "services": 0,
         "architecture": {
@@ -533,7 +547,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 2.76,
+        "seconds": 2.84,
         "peakMemoryMb": 104
     },
     {
@@ -622,7 +636,9 @@
             "requestsToServices": 0,
             "routesToDependencies": 0,
             "methodMismatchCount": 0,
-            "methodMismatches": []
+            "methodMismatches": [],
+            "routesToMissingControllers": 0,
+            "missingControllers": []
         },
         "services": 0,
         "architecture": {
@@ -630,7 +646,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 5.28,
+        "seconds": 5.34,
         "peakMemoryMb": 97
     },
     {
@@ -698,7 +714,9 @@
             "requestsToServices": 0,
             "routesToDependencies": 0,
             "methodMismatchCount": 0,
-            "methodMismatches": []
+            "methodMismatches": [],
+            "routesToMissingControllers": 0,
+            "missingControllers": []
         },
         "services": 3,
         "architecture": {
@@ -770,7 +788,9 @@
             "methodMismatchCount": 1,
             "methodMismatches": [
                 "POST /api/products/info, declared for GET /api/products/info"
-            ]
+            ],
+            "routesToMissingControllers": 0,
+            "missingControllers": []
         },
         "services": 5,
         "architecture": {
@@ -778,7 +798,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.53,
+        "seconds": 0.56,
         "peakMemoryMb": 44
     }
 ]

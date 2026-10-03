@@ -8,6 +8,10 @@ use PhpGraph\Graph\Confidence;
 use PhpGraph\Graph\Graph;
 use PhpGraph\Graph\NodeKind;
 use PhpGraph\Graph\Relation;
+use PhpGraph\Presentation\TextPresenter;
+use PhpGraph\Project\BuildOptions;
+use PhpGraph\Project\ProjectSummary;
+use PhpGraph\Query\GraphQuery;
 use PhpGraph\Tests\Support\TemporaryProject;
 use PHPUnit\Framework\TestCase;
 
@@ -18,6 +22,13 @@ use PHPUnit\Framework\TestCase;
 final class HttpTest extends TestCase
 {
     use TemporaryProject;
+
+    private const TWO_APPS = [
+        'apps/mooc/src/GetCoursesController.php' => 'namespace App\Mooc; class GetCoursesController { public function __invoke(): void {} }',
+        'apps/mooc/src/PutCourseController.php' => 'namespace App\Mooc; class PutCourseController { public function __invoke(): void {} }',
+        'apps/mooc/config/routes.yaml' => "courses_get:\n    path: /courses\n    methods: [GET]\n    controller: App\\Mooc\\GetCoursesController\ncourse_put:\n    path: /courses/{id}\n    methods: [PUT]\n    controller: App\\Mooc\\PutCourseController\n",
+        'apps/backoffice/config/routes.yaml' => "api_courses_get:\n    path: /courses\n    methods: [GET]\n    controller: App\\Backoffice\\ApiCoursesGetController\nstudents:\n    path: /students\n    methods: [GET]\n    controller: App\\Mooc\\GetCoursesController\n",
+    ];
 
     public function testSymfonyAttributesWithAClassPrefix(): void
     {
@@ -80,7 +91,11 @@ final class HttpTest extends TestCase
                 . "order:\n    path: /orders/{id}\n    defaults: { _controller: 'app.controller.order::show' }\n"
                 . "legacy:\n    path: /legacy\n    controller: app.controller.legacy::index\n"
                 . "home:\n    path: /\n    controller: Symfony\\Bundle\\FrameworkBundle\\Controller\\TemplateController\n"
-                . "generated:\n    path: /generated\n    controller: app.controller.generated_by_a_bundle::indexAction\n",
+                . "generated:\n    path: /generated\n    controller: app.controller.generated_by_a_bundle::indexAction\n"
+                . "deleted:\n    path: /deleted\n    controller: App\\Controller\\DeletedController\n",
+            'composer.json' => '{}',
+            'vendor/composer/installed.json' => '{"packages": [{"name": "symfony/framework-bundle", "install-path": "../symfony/framework-bundle", "autoload": {"psr-4": {"Symfony\\\\Bundle\\\\FrameworkBundle\\\\": ""}}}]}',
+            'vendor/symfony/framework-bundle/Controller/TemplateController.php' => 'namespace Symfony\Bundle\FrameworkBundle\Controller; class TemplateController { public function __invoke(): void {} }',
         ]);
         $graph = $result->graph;
 
@@ -88,9 +103,45 @@ final class HttpTest extends TestCase
         self::assertTrue($this->hasEdge($graph, 'route:config/routes.yaml#ANY /cart', 'App\Controller\CartController::__invoke', Relation::HandledBy), 'YAML alias, invokable');
         self::assertTrue($this->hasEdge($graph, 'route:config/routes.yaml#ANY /orders/{id}', 'App\Controller\OrderController::show', Relation::HandledBy), 'PHP configurator');
         self::assertTrue($this->hasEdge($graph, 'route:config/routes.yaml#ANY /legacy', 'App\Controller\LegacyController::index', Relation::HandledBy), 'XML');
-        self::assertSame(6, $result->http->routes);
+        self::assertSame(7, $result->http->routes);
         self::assertSame(4, $result->http->routesWithHandler);
         self::assertSame(1, $result->http->routesToDependencies, 'TemplateController is a class of a dependency');
+        self::assertSame(1, $result->http->routesToMissingControllers, 'DeletedController is declared nowhere');
+        self::assertSame(['ANY /deleted -> App\Controller\DeletedController (config/routes.yaml:19)'], $result->http->missingControllers);
+    }
+
+    public function testQueryGraphAnswersQuestionsAboutRoutes(): void
+    {
+        $query = new GraphQuery($this->buildProject(self::TWO_APPS)->graph);
+        $seeds = fn (string $question): array => array_map(static fn ($node): string => $node->label, $query->subgraph($question)->seeds);
+
+        self::assertSame(['GET /courses', 'PUT /courses/{id}'], $seeds('mooc courses routes'), 'the other words narrow by routing file and path');
+        self::assertSame(['GET /courses', 'GET /courses', 'PUT /courses/{id}'], $seeds('courses routes HTTP'));
+        self::assertSame(['PUT /courses/{id}'], $seeds('PUT /courses/42'));
+        self::assertSame(['GET /courses', 'GET /courses', 'PUT /courses/{id}', 'GET /students'], $seeds('endpoints'));
+        self::assertContains('App\Mooc\PutCourseController::__invoke', array_map(static fn ($node): string => $node->id, $query->subgraph('mooc courses routes')->nodes));
+        self::assertSame(['PutCourseController', 'PutCourseController::__invoke()'], $seeds('PutCourseController'), 'other questions are unchanged');
+    }
+
+    public function testTheOverviewListsRoutesAndTheControllersFoundNowhere(): void
+    {
+        $result = $this->buildProject(self::TWO_APPS);
+        $text = (new TextPresenter(new GraphQuery($result->graph, ProjectSummary::fromBuild($result, new BuildOptions(), []))))->overview();
+
+        self::assertStringContainsString('- PUT /courses/{id} -> PutCourseController::__invoke() (apps/mooc/config/routes.yaml L5)', $text);
+        self::assertStringContainsString('- GET /courses -> no controller in the graph (apps/backoffice/config/routes.yaml L1)', $text);
+        self::assertStringContainsString('1 routes name a controller class declared nowhere in the project', $text);
+        self::assertStringContainsString('GET /courses -> App\Backoffice\ApiCoursesGetController (apps/backoffice/config/routes.yaml:1)', $text);
+
+        $many = [];
+        for ($i = 0; $i < 40; ++$i) {
+            $many['src/Controller' . $i . '.php'] = sprintf('namespace App; use Symfony\Component\Routing\Attribute\Route; class Controller%d { #[Route("/%s/%d", methods: "GET")] public function show(): void {} }', $i, $i % 2 === 0 ? 'orders' : 'invoices', $i);
+        }
+        $result = $this->buildProject($many);
+        $text = (new TextPresenter(new GraphQuery($result->graph, ProjectSummary::fromBuild($result, new BuildOptions(), []))))->overview();
+
+        self::assertStringContainsString('44 routes, by path prefix', $text);
+        self::assertStringContainsString('- /orders: 20 (src/Controller0.php, src/Controller10.php, src/Controller12.php, ...)', $text);
     }
 
     public function testHttpCallsReachTheRoutesOfAnotherService(): void

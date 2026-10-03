@@ -129,7 +129,8 @@ final class McpServer
                     . 'the method names most often unresolved, missing vendor/, parse failures, duplicate class names, and what is '
                     . 'not modelled at all; the dependencies breaking the layer rules (domain must not depend on '
                     . 'infrastructure...) and between bounded contexts; the services of a multi-service repository; HTTP '
-                    . 'routes (entry points) and calls; messages, their handlers and what is left unlinked. Test code is '
+                    . 'routes (entry points): each route with method, path, controller and routing file when there are up to '
+                    . '30, else counts by path prefix; routes whose controller class exists nowhere; HTTP calls; messages, their handlers and what is left unlinked. Test code is '
                     . 'counted apart.',
                 'inputSchema' => ['type' => 'object', 'properties' => new \stdClass()],
             ],
@@ -138,11 +139,14 @@ final class McpServer
                 'description' => 'Find the code about a topic when you do not know the class names. Matches the words of the '
                     . 'question against class, method and function names (keywords, not semantic search: use words likely to '
                     . 'appear in names, such as "stock availability" or "invoice payment"), then returns the matched nodes and '
-                    . 'their neighbourhood as relations (calls, implements, instantiates, references...) with confidence.',
+                    . 'their neighbourhood as relations (calls, implements, instantiates, references...) with confidence. A question '
+                    . 'about routes (the words routes, endpoints, HTTP or URL, or a path such as /orders/{id}, with or without a '
+                    . 'method such as GET) returns the matching route nodes and their controllers; its other words narrow them '
+                    . 'by path or routing file: "mooc courses routes", "GET /courses".',
                 'inputSchema' => [
                     'type' => 'object',
                     'properties' => [
-                        'question' => $text('Question or keywords, for example "how is stock availability computed".'),
+                        'question' => $text('Question or keywords, for example "how is stock availability computed" or "order routes".'),
                         'depth' => $integer('How many relations away from the matched nodes to go (default 2).'),
                         'limit' => $integer('Maximum number of nodes returned (default 40).'),
                     ],
@@ -251,6 +255,10 @@ final class McpServer
                 'impact_of' => $presenter->impact($this->requireString($arguments, 'name'), max(1, (int) ($arguments['depth'] ?? 3))),
                 default => $presenter->godNodes(max(1, (int) ($arguments['limit'] ?? 15))),
             };
+            $warning = $presenter->warning();
+            if ($warning !== null && $name !== 'overview') {
+                $text = $warning . "\n\n" . $text;
+            }
         } catch (\InvalidArgumentException $exception) {
             throw $exception;
         } catch (\Throwable $exception) {

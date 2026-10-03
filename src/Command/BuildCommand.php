@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpGraph\Command;
 
+use PhpGraph\Presentation\TextPresenter;
 use PhpGraph\Project\BuildOptions;
 use PhpGraph\Project\ProjectGraph;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -64,6 +65,13 @@ final class BuildCommand extends Command
             $result->graph->edgeCount(),
         ));
         $output->writeln('Graph: ' . $project->graphPath());
+
+        $unread = TextPresenter::unreadSources($result->phpFilesNotRead, $root);
+        if ($unread !== null) {
+            $output->writeln('<error>' . $unread . '</error>');
+
+            return Command::FAILURE;
+        }
 
         if ($result->duplicates !== []) {
             $output->writeln(sprintf('<comment>%d names are declared more than once, see GRAPH_REPORT.md.</comment>', \count($result->duplicates)));

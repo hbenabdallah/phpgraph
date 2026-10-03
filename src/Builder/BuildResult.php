@@ -18,6 +18,7 @@ final readonly class BuildResult
      * @param int                         $vendorDirectories installed vendor/ directories found next to them
      * @param array<string, int>          $mostUnresolvedMethods method names most often called on an unknown receiver in application code
      * @param list<string>                $services        services of a multi-service repository, empty otherwise
+     * @param int                         $phpFilesNotRead PHP files of the directory, when the build read none of them
      */
     public function __construct(
         public Graph $graph,
@@ -34,6 +35,7 @@ final readonly class BuildResult
         public array $services = [],
         public HttpStats $http = new HttpStats(),
         public ?BuildState $state = null,
+        public int $phpFilesNotRead = 0,
     ) {
     }
 

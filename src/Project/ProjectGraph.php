@@ -10,6 +10,7 @@ use PhpGraph\Builder\GraphBuilder;
 use PhpGraph\Builder\SourceFiles;
 use PhpGraph\Extractor\CachingExtractor;
 use PhpGraph\Extractor\PhpFileExtractor;
+use PhpGraph\Presentation\TextPresenter;
 use PhpGraph\Query\GraphQuery;
 use PhpGraph\Query\ReportGenerator;
 use PhpGraph\Storage\JsonGraphStorage;
@@ -146,6 +147,10 @@ final class ProjectGraph
             $result->graph->edgeCount(),
             (hrtime(true) - $start) / 1e9,
         ));
+        $unread = TextPresenter::unreadSources($result->phpFilesNotRead, $this->root);
+        if ($unread !== null) {
+            $this->say($unread);
+        }
 
         return $result;
     }

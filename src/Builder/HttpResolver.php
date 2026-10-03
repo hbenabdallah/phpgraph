@@ -48,6 +48,7 @@ final class HttpResolver
     {
         $withHandler = [];
         $inDependencies = [];
+        $missing = [];
         foreach ($routes as [$route, $service]) {
             $id = NameCanonicalizer::qualify($route->id(), $service);
             if (!$this->graph->hasNode($id)) {
@@ -60,9 +61,12 @@ final class HttpResolver
             if ($handler !== null) {
                 $this->graph->addEdge(new Edge($id, $handler, Relation::HandledBy, Confidence::Extracted));
                 $withHandler[$id] = true;
-            } elseif ($class !== null && $this->graph->node($class) === null) {
+            } elseif ($class !== null && $this->types->knows($class)) {
                 // A controller class of a dependency (a generic CRUD controller, for example): outside the project.
                 $inDependencies[$id] = true;
+            } elseif ($class !== null) {
+                // Declared nowhere: a stale route, or a controller in code the build did not read.
+                $missing[$id] = \sprintf('%s -> %s (%s:%d)', $route->label(), ltrim($class, '\\'), $route->file, $route->line);
             }
         }
 
@@ -111,6 +115,8 @@ final class HttpResolver
             \count($inDependencies),
             \count($mismatches),
             \array_slice($mismatches, 0, 5),
+            \count($missing),
+            \array_slice(array_values($missing), 0, 10),
         );
     }
 

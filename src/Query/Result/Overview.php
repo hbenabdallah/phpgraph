@@ -17,6 +17,7 @@ final readonly class Overview
      * @param list<NamespaceGroup>            $namespaces         below the root, largest first
      * @param array<string, array<string, int>> $layers           role => layer-like segment => application classes
      * @param array<string, int>              $suffixes           class name suffix (Handler, Repository...) => application classes
+     * @param list<RouteEntry>                $routes             every route, by path
      */
     public function __construct(
         public ?ProjectSummary $summary,
@@ -28,6 +29,7 @@ final readonly class Overview
         public array $namespaces,
         public array $layers,
         public array $suffixes,
+        public array $routes = [],
     ) {
     }
 }

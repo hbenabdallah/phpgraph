@@ -339,13 +339,13 @@ function render(array $results, array $baseline): string
     $lines[] = '';
     $lines[] = 'Routes and the controllers handling them; HTTP calls of application code reaching a route; services found.';
     $lines[] = '';
-    $lines[] = '| Project | Services | Routes | With controller | Controller in dependencies | HTTP calls | To a route | To another service | Wrong method |';
-    $lines[] = '|---|---:|---:|---:|---:|---:|---:|---:|---:|';
+    $lines[] = '| Project | Services | Routes | With controller | Controller in dependencies | Controller not found | HTTP calls | To a route | To another service | Wrong method |';
+    $lines[] = '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|';
     foreach ($results as $r) {
         $h = $r['http'] ?? [];
         $b = $baseline[$r['name']]['http'] ?? null;
         $lines[] = sprintf(
-            '| %s | %d | %d%s | %d%s | %d | %d | %d | %d | %d |',
+            '| %s | %d | %d%s | %d%s | %d | %d | %d | %d | %d | %d |',
             $r['name'],
             $r['services'] ?? 0,
             $h['routes'] ?? 0,
@@ -353,6 +353,7 @@ function render(array $results, array $baseline): string
             $h['routesWithHandler'] ?? 0,
             delta($h['routesWithHandler'] ?? 0, $b['routesWithHandler'] ?? null),
             $h['routesToDependencies'] ?? 0,
+            $h['routesToMissingControllers'] ?? 0,
             $h['requests'] ?? 0,
             $h['requestsToProject'] ?? 0,
             $h['requestsToServices'] ?? 0,

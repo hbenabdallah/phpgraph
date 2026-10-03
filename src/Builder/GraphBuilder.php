@@ -267,6 +267,8 @@ final class GraphBuilder
             $serviceMap->names(),
             $http,
             new BuildState($options, $files, $environment, $namesFingerprint, $overrides, $calls, $vendor, $container->cache()),
+            // An empty graph of a directory holding PHP code: every file was excluded, say so instead of serving it.
+            $extractions === [] && $failures === [] ? SourceFiles::countPhpFiles($root) : 0,
         );
     }
 

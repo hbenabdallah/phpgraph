@@ -38,7 +38,7 @@ phpgraph analyse tout le projet une fois (avec [`nikic/php-parser`](https://gith
 - **Graphe d'appels avec inférence de types** : types de retour, appels enchaînés (`$a->b()->c()`), variables locales, docblocks (`@return`, `@var`), et signatures des dépendances de `vendor/`, pour que les chaînes traversent les API de Doctrine, Symfony ou Laravel.
 - **Architecture** : couches DDD et hexagonales, bounded contexts, règles de couches vérifiées en CI (`phpgraph check`) et analyse d'impact (`impact_of`) : ce qui dépend d'une classe ou d'une méthode, et les tests à lancer.
 - **Messages et événements** : envoi → message → handler pour Symfony Messenger, les jobs et événements Laravel, Ecotone, le CQRS de PrestaShop, les hooks WordPress, les événements de domaine et vos propres bus, à partir des attributs, de la configuration des services (YAML, XML, PHP) ou de la forme du code.
-- **HTTP** : routes (attributs et YAML Symfony, fichiers de routes Laravel, contrôleurs nommés par identifiant de service) reliées à leurs contrôleurs, et appels HTTP reliés aux routes qu'ils atteignent.
+- **HTTP** : routes (attributs et YAML Symfony, fichiers de routes Laravel, contrôleurs nommés par identifiant de service) reliées à leurs contrôleurs, et appels HTTP reliés aux routes qu'ils atteignent. Une route dont la classe contrôleur n'existe ni dans le projet ni dans `vendor/` est signalée avec son fichier de routage.
 - **Microservices** : un espace d'identifiants par service, et des liens entre services par leurs contrats : classes de messages partagées, clés de routage, routes HTTP.
 - **Serveur MCP sans configuration** : construit au premier usage, reconstruit de façon incrémentale quand le code change (environ 3 s par modification sur un projet de 8 400 fichiers).
 
@@ -84,8 +84,8 @@ claude mcp add phpgraph -- php /chemin/du/projet/vendor/bin/phpgraph serve /chem
 
 | Outil | Pour |
 |---|---|
-| `overview` | Commencer ici : stack Composer, arbre des namespaces avec les couches, bounded contexts, violations des règles de couches, messages, routes HTTP, services, et ce que le graphe ne voit pas. |
-| `query_graph` | Trouver le code d'un sujet sans connaître les noms de classes. |
+| `overview` | Commencer ici : stack Composer, arbre des namespaces avec les couches, bounded contexts, violations des règles de couches, messages, routes HTTP (chacune avec méthode, chemin, contrôleur et fichier jusqu'à 30, sinon regroupées par préfixe de chemin), services, et ce que le graphe ne voit pas. |
+| `query_graph` | Trouver le code d'un sujet sans connaître les noms de classes. Une question sur les routes (*« mooc courses routes »*, *« GET /courses »*) renvoie les routes correspondantes et leurs contrôleurs. |
 | `get_node` | Lire une classe, une méthode, une route ou un canal avec toutes ses relations. |
 | `get_neighbors` | Voir ce qui utilise un nœud (`in`) ou ce dont il dépend (`out`). |
 | `impact_of` | Avant une modification : toutes les classes qui dépendent d'une classe ou d'une méthode, les plus proches d'abord, et les tests à lancer. |
@@ -115,7 +115,7 @@ phpgraph serve [chemin]                      # le serveur MCP, sur stdio
 phpgraph mcp-config claude|codex|cursor|json [--docker image]
 ```
 
-Options de `build` : `-e` pour exclure des chemins (répétable), `--no-vendor` pour ne pas lire les dépendances, `--no-cache` pour tout analyser à nouveau. `vendor`, `node_modules`, `var`, `.git` et les fichiers ignorés par git ne sont pas analysés.
+Options de `build` : `-e` pour exclure des chemins (répétable), `--no-vendor` pour ne pas lire les dépendances, `--no-cache` pour tout analyser à nouveau. `vendor`, `node_modules`, `var`, `.git` et les fichiers ignorés par les `.gitignore` du projet lui-même ne sont pas analysés ; un dépôt git au-dessus du projet n'applique jamais ses règles, si bien qu'un projet copié dans un dossier ignoré est quand même lu. Quand le dossier contient des fichiers PHP mais qu'ils sont tous exclus, `build` échoue en le disant, et chaque réponse MCP commence par cet avertissement au lieu de servir un graphe vide.
 
 ## Ce que contient le graphe
 

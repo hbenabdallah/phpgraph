@@ -25,6 +25,7 @@ final class SourceFiles
      */
     public static function finder(string $root, array $excludePatterns = []): Finder
     {
+        $gitignore = new ProjectGitignore($root);
         $finder = Finder::create()
             ->files()
             ->in($root)
@@ -35,7 +36,8 @@ final class SourceFiles
             ->name('*.xml')
             ->notName('*.blade.php')
             ->exclude(self::DEFAULT_EXCLUDES)
-            ->ignoreVCSIgnored(true)
+            // The project's own .gitignore rules, not those of a repository above it (see ProjectGitignore).
+            ->filter(static fn (SplFileInfo $file): bool => !$gitignore->isIgnored($file->getPathname()))
             ->filter(static fn (SplFileInfo $file): bool => !self::isConfiguration($file->getFilename())
                 || self::isRouting($file->getRelativePathname())
                 || self::isInConfigDirectory($file->getRelativePathname()))
@@ -46,6 +48,15 @@ final class SourceFiles
         }
 
         return $finder;
+    }
+
+    /**
+     * PHP files of the directory, outside the default exclusions, whatever .gitignore and the exclude patterns say:
+     * when a build reads none of them, the graph is empty because of those rules, not because there is no code.
+     */
+    public static function countPhpFiles(string $root): int
+    {
+        return Finder::create()->files()->in($root)->name('*.php')->exclude(self::DEFAULT_EXCLUDES)->ignoreDotFiles(false)->count();
     }
 
     public static function isYaml(string $name): bool

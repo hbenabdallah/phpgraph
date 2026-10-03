@@ -12,12 +12,18 @@ use PhpGraph\Query\GraphQuery;
 use PhpGraph\Query\Result\LayerViolation;
 use PhpGraph\Query\Result\NamespaceGroup;
 use PhpGraph\Query\Result\PathMode;
+use PhpGraph\Query\Result\RouteEntry;
 
 /**
  * Plain-text answers shared by the CLI and the MCP server. Kept compact: the main reader is an AI assistant.
  */
 final class TextPresenter
 {
+    /**
+     * Up to this many routes, the overview lists them all; beyond, it groups them by path prefix.
+     */
+    private const ROUTES_LISTED = 30;
+
     public function __construct(private readonly GraphQuery $query)
     {
     }
@@ -161,11 +167,41 @@ final class TextPresenter
     /**
      * The first answer an agent needs on an unknown project: stack, structure and the limits of the graph.
      */
+    /**
+     * Why the graph is empty although the directory holds PHP code, or null.
+     */
+    public static function unreadSources(int $phpFiles, string $root = 'the directory'): ?string
+    {
+        if ($phpFiles === 0) {
+            return null;
+        }
+
+        return \sprintf(
+            'Empty graph: no PHP file was read, yet %s holds %d PHP files (outside vendor/, var/, node_modules/). Every '
+            . 'one was excluded, by the project\'s .gitignore or by the exclude patterns (--exclude, phpgraph.yaml). '
+            . 'Check those rules and rebuild: until then, the graph knows nothing about this code.',
+            $root,
+            $phpFiles,
+        );
+    }
+
+    /**
+     * A warning every answer starts with, when the graph cannot be trusted at all.
+     */
+    public function warning(): ?string
+    {
+        return self::unreadSources($this->query->summary()->phpFilesNotRead ?? 0);
+    }
+
     public function overview(): string
     {
         $overview = $this->query->overview();
         $summary = $overview->summary;
         $lines = ['# Project overview', ''];
+        $warning = $this->warning();
+        if ($warning !== null) {
+            array_push($lines, '**' . $warning . '**', '');
+        }
 
         $lines[] = '## Stack';
         if ($summary === null) {
@@ -316,7 +352,7 @@ final class TextPresenter
             $lines[] = '';
             $lines[] = '## HTTP';
             $lines[] = 'Route nodes (route:GET /orders/{id}) are the entry points: route --handled_by--> controller; caller --requests--> route.';
-            $unresolved = $http->routes - $http->routesWithHandler - $http->routesToDependencies;
+            $unresolved = $http->routes - $http->routesWithHandler - $http->routesToDependencies - $http->routesToMissingControllers;
             $lines[] = \sprintf(
                 '- %d routes (attributes, Laravel route files, YAML routing files): %d handled by a controller of the project%s%s.',
                 $http->routes,
@@ -324,6 +360,17 @@ final class TextPresenter
                 $http->routesToDependencies > 0 ? \sprintf(', %d by a controller of a dependency', $http->routesToDependencies) : '',
                 $unresolved > 0 ? \sprintf(', %d without one: no controller (a route only the front end uses), a closure, or a controller service no configuration of the project declares (generated at runtime by a bundle)', $unresolved) : '',
             );
+            if ($http->routesToMissingControllers > 0) {
+                $lines[] = \sprintf(
+                    '- %d routes name a controller class declared %s: a stale route, or code the build did not read. %s%s.',
+                    $http->routesToMissingControllers,
+                    $summary->options->readVendor && $summary->vendorDirectories > 0
+                        ? 'neither in the project nor in its dependencies'
+                        : 'nowhere in the project (dependencies were not read: it may come from one)',
+                    implode('; ', $http->missingControllers),
+                    $http->routesToMissingControllers > \count($http->missingControllers) ? '; ...' : '',
+                );
+            }
             if ($http->requests > 0) {
                 $lines[] = \sprintf(
                     '- %d HTTP calls in application code: %d reach a route of the project%s, %d go elsewhere (external APIs, or a path computed at runtime).',
@@ -341,6 +388,10 @@ final class TextPresenter
                     $http->methodMismatchCount > \count($http->methodMismatches) ? '; ...' : '',
                 );
             }
+        }
+
+        if ($overview->routes !== []) {
+            array_push($lines, '', ...$this->routeList($overview->routes));
         }
 
         $lines[] = '';
@@ -554,6 +605,64 @@ final class TextPresenter
             $this->query->label($edge->target),
             $edge->confidence->value,
         );
+    }
+
+    /**
+     * Every route when there are few, otherwise the routes grouped by service and path prefix.
+     *
+     * @param list<RouteEntry> $routes
+     *
+     * @return list<string>
+     */
+    private function routeList(array $routes): array
+    {
+        if (\count($routes) <= self::ROUTES_LISTED) {
+            $lines = ['## Routes', 'Method, path, controller, routing file. query_graph("routes /path") or get_node on a route gives its neighbours.'];
+            foreach ($routes as $route) {
+                $lines[] = \sprintf(
+                    '- %s%s -> %s (%s)',
+                    $route->route->service === null ? '' : $route->route->service . ': ',
+                    $route->route->label,
+                    $route->handler === null ? 'no controller in the graph' : $route->handler->label,
+                    $this->location($route->route),
+                );
+            }
+
+            return $lines;
+        }
+
+        $groups = [];
+        foreach ($routes as $route) {
+            // The first segments up to a literal one: /{_locale}/account, /api, /orders.
+            $prefix = '';
+            foreach (explode('/', trim($route->path, '/')) as $segment) {
+                $prefix .= '/' . $segment;
+                if (!str_starts_with($segment, '{') && !str_starts_with($segment, ':')) {
+                    break;
+                }
+            }
+            $key = ($route->route->service === null ? '' : $route->route->service . ': ') . $prefix;
+            $groups[$key]['count'] = ($groups[$key]['count'] ?? 0) + 1;
+            $groups[$key]['files'][(string) $route->route->file] = true;
+        }
+        uasort($groups, static fn (array $a, array $b): int => $b['count'] <=> $a['count']);
+
+        $lines = [
+            '## Routes',
+            \sprintf(
+                '%d routes, by path prefix (count, routing files). query_graph("routes /prefix") lists those of a prefix with their controllers.',
+                \count($routes),
+            ),
+        ];
+        foreach (\array_slice($groups, 0, self::ROUTES_LISTED, true) as $key => $group) {
+            $files = array_keys($group['files']);
+            $lines[] = \sprintf('- %s: %d (%s%s)', $key, $group['count'], implode(', ', \array_slice($files, 0, 3)), \count($files) > 3 ? ', ...' : '');
+        }
+        if (\count($groups) > self::ROUTES_LISTED) {
+            $lines[] = \sprintf('- ... %d more prefixes', \count($groups) - self::ROUTES_LISTED);
+        }
+
+        return $lines;
     }
 
     private function location(Node $node): string

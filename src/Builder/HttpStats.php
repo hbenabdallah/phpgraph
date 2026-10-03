@@ -17,6 +17,8 @@ final readonly class HttpStats
      * @param int $requestsToServices calls linked to a route of another service
      * @param int $routesToDependencies routes whose controller is a class of a dependency
      * @param list<string> $methodMismatches calls whose path matches a route declared for other methods only (first ones)
+     * @param int $routesToMissingControllers routes whose controller class is declared neither in the project nor in a dependency
+     * @param list<string> $missingControllers those routes, controllers and routing files (first ones)
      */
     public function __construct(
         public int $routes = 0,
@@ -27,6 +29,8 @@ final readonly class HttpStats
         public int $routesToDependencies = 0,
         public int $methodMismatchCount = 0,
         public array $methodMismatches = [],
+        public int $routesToMissingControllers = 0,
+        public array $missingControllers = [],
     ) {
     }
 
@@ -37,7 +41,7 @@ final readonly class HttpStats
     {
         $int = static fn (string $key): int => \is_int($data[$key] ?? null) ? $data[$key] : 0;
 
-        $mismatches = array_values(array_filter(\is_array($data['methodMismatches'] ?? null) ? $data['methodMismatches'] : [], 'is_string'));
+        $strings = static fn (string $key): array => array_values(array_filter(\is_array($data[$key] ?? null) ? $data[$key] : [], 'is_string'));
 
         return new self(
             $int('routes'),
@@ -47,7 +51,9 @@ final readonly class HttpStats
             $int('requestsToServices'),
             $int('routesToDependencies'),
             $int('methodMismatchCount'),
-            $mismatches,
+            $strings('methodMismatches'),
+            $int('routesToMissingControllers'),
+            $strings('missingControllers'),
         );
     }
 
@@ -65,6 +71,8 @@ final readonly class HttpStats
             'routesToDependencies' => $this->routesToDependencies,
             'methodMismatchCount' => $this->methodMismatchCount,
             'methodMismatches' => $this->methodMismatches,
+            'routesToMissingControllers' => $this->routesToMissingControllers,
+            'missingControllers' => $this->missingControllers,
         ];
     }
 }

@@ -19,6 +19,7 @@ final readonly class ProjectSummary
      * @param list<string>       $duplicates            names declared more than once (first ones)
      * @param array<string, int> $mostUnresolvedMethods
      * @param list<string>       $services              services of a multi-service repository, empty otherwise
+     * @param int                $phpFilesNotRead       PHP files of the directory, when the build read none of them
      */
     public function __construct(
         public string $generatedAt,
@@ -36,6 +37,7 @@ final readonly class ProjectSummary
         public BusStats $bus = new BusStats(),
         public array $services = [],
         public HttpStats $http = new HttpStats(),
+        public int $phpFilesNotRead = 0,
     ) {
     }
 
@@ -60,6 +62,7 @@ final readonly class ProjectSummary
             $result->bus,
             $result->services,
             $result->http,
+            $result->phpFilesNotRead,
         );
     }
 
@@ -98,6 +101,7 @@ final readonly class ProjectSummary
             BusStats::fromArray($list('bus')),
             array_values(array_filter($list('services'), 'is_string')),
             HttpStats::fromArray($list('http')),
+            $int('phpFilesNotRead'),
         );
     }
 
@@ -122,6 +126,7 @@ final readonly class ProjectSummary
             'bus' => $this->bus->toArray(),
             'services' => $this->services,
             'http' => $this->http->toArray(),
+            'phpFilesNotRead' => $this->phpFilesNotRead,
         ];
     }
 }
