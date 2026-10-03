@@ -47,7 +47,7 @@ final class McpConfigCommand extends Command
         $user = \function_exists('posix_getuid') && \function_exists('posix_getgid') ? ['-u', posix_getuid() . ':' . posix_getgid()] : [];
         [$command, $arguments] = \is_string($image)
             ? ['docker', ['run', '--rm', '-i', ...$user, '-v', $project . ':/project', $image, 'serve', '/project']]
-            : ['php', $everyProject ? [$this->executable(), 'serve'] : [$this->executable(), 'serve', $project]];
+            : [$this->runner()[0], [...$this->runner()[1], 'serve', ...($everyProject ? [] : [$project])]];
 
         $server = ($agent === 'cursor' ? ['type' => 'stdio'] : []) + ['command' => $command, 'args' => $arguments];
         $json = json_encode(['mcpServers' => ['phpgraph' => $server]], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
@@ -97,12 +97,18 @@ final class McpConfigCommand extends Command
     }
 
     /**
-     * The file to run: the PHAR when running from it, else bin/phpgraph of this checkout.
+     * The command and its first arguments: the standalone executable itself (a static PHP runtime with the PHAR
+     * appended, needing no PHP), else php with the PHAR, or with bin/phpgraph of this checkout.
+     *
+     * @return array{string, list<string>}
      */
-    private function executable(): string
+    private function runner(): array
     {
         $phar = \Phar::running(false);
+        if (\PHP_SAPI === 'micro' && $phar !== '') {
+            return [$phar, []];
+        }
 
-        return $phar !== '' ? $phar : (string) realpath(__DIR__ . '/../../bin/phpgraph');
+        return ['php', [$phar !== '' ? $phar : (string) realpath(__DIR__ . '/../../bin/phpgraph')]];
     }
 }

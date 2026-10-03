@@ -44,7 +44,22 @@ phpgraph analyse tout le projet une fois (avec [`nikic/php-parser`](https://gith
 
 ## Démarrage rapide
 
-**1. Installer** (PHP 8.2 ou plus), au choix :
+**1. Installer.** Un seul exécutable, sans PHP (Linux et macOS en x86_64 et ARM, Windows en x86_64) :
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.sh | sh                  # dernière version
+curl -fsSL https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.sh | sh -s -- 0.2.0     # une version donnée
+curl -fsSL https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.sh | sh -s -- dev-main  # la branche main
+```
+
+```powershell
+irm https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.ps1 | iex                       # Windows
+$env:PHPGRAPH_VERSION = "dev-main"; irm https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.ps1 | iex
+```
+
+Le script télécharge le binaire, vérifie son SHA-256 et le place dans `~/.local/bin` (Windows : `%LOCALAPPDATA%\Programs\phpgraph`, ajouté au PATH) ; `PHPGRAPH_INSTALL_DIR` change le dossier. Le relancer met à jour. `dev-main` est reconstruit à chaque push sur `main` (la pré-version `edge`). Le binaire est un runtime PHP statique qui contient phpgraph, construit avec [static-php-cli](https://github.com/crazywhalecc/static-php-cli).
+
+Avec PHP 8.2 ou plus, ou avec Docker :
 
 ```bash
 composer require --dev hbenabdallah/phpgraph       # ou : composer global require hbenabdallah/phpgraph
@@ -52,14 +67,14 @@ curl -LO https://github.com/hbenabdallah/phpgraph/releases/latest/download/phpgr
 docker pull ghcr.io/hbenabdallah/phpgraph          # rien d'autre à installer
 ```
 
-**2. Brancher votre agent.** `mcp-config` affiche une configuration prête à coller, avec les chemins remplis :
+**2. Brancher votre agent.** `mcp-config` affiche une configuration prête à coller, avec les chemins remplis (`vendor/bin/phpgraph` après une installation par Composer) :
 
 ```bash
-vendor/bin/phpgraph mcp-config sherpa    # Sherpa : ~/.config/sherpa/mcp.json, une déclaration pour tous les projets
-vendor/bin/phpgraph mcp-config claude    # Claude Code : une commande `claude mcp add`, ou .mcp.json
-vendor/bin/phpgraph mcp-config codex     # Codex : ~/.codex/config.toml
-vendor/bin/phpgraph mcp-config cursor    # Cursor : .cursor/mcp.json, à partager avec l'équipe
-vendor/bin/phpgraph mcp-config json      # tout autre client MCP sur stdio
+phpgraph mcp-config sherpa    # Sherpa : ~/.config/sherpa/mcp.json, une déclaration pour tous les projets
+phpgraph mcp-config claude    # Claude Code : une commande `claude mcp add`, ou .mcp.json
+phpgraph mcp-config codex     # Codex : ~/.codex/config.toml
+phpgraph mcp-config cursor    # Cursor : .cursor/mcp.json, à partager avec l'équipe
+phpgraph mcp-config json      # tout autre client MCP sur stdio
 ```
 
 Avec [Sherpa](https://github.com/hbenabdallah/sherpa), un agent de code pour le terminal, une seule déclaration dans `~/.config/sherpa/mcp.json` sert tous les projets : Sherpa lance ses serveurs MCP depuis le projet où il tourne.
@@ -67,7 +82,7 @@ Avec [Sherpa](https://github.com/hbenabdallah/sherpa), un agent de code pour le 
 ```json
 {
   "mcpServers": {
-    "phpgraph": { "command": "php", "args": ["/chemin/vers/phpgraph.phar", "serve"] }
+    "phpgraph": { "command": "/home/vous/.local/bin/phpgraph", "args": ["serve"] }
   }
 }
 ```
@@ -75,7 +90,7 @@ Avec [Sherpa](https://github.com/hbenabdallah/sherpa), un agent de code pour le 
 Avec Claude Code (chemins absolus, comme les affiche `mcp-config`) :
 
 ```bash
-claude mcp add phpgraph -- php /chemin/du/projet/vendor/bin/phpgraph serve /chemin/du/projet
+claude mcp add phpgraph -- /home/vous/.local/bin/phpgraph serve /chemin/du/projet
 ```
 
 **3. Interroger votre agent**, par exemple : *« Donne-moi une vue d'ensemble de ce projet »*, *« Comment une commande est-elle passée ? »* ou *« Qu'est-ce qui casse si je modifie `OrderRepository::save` ? »*. Le graphe est construit au premier appel, puis tenu à jour.
@@ -237,7 +252,7 @@ Deux petits projets microservices complètent le corpus : [deux services Laravel
 
 Les issues et les pull requests sont les bienvenues. Voir [CONTRIBUTING.md](https://github.com/hbenabdallah/phpgraph/blob/main/CONTRIBUTING.md) : `composer check` doit passer (php-cs-fixer, PHPStan niveau 8, PHPUnit), et les évolutions de l'analyse se jugent sur le corpus. Sans PHP installé, `bin/dev composer check` lance tout dans Docker.
 
-Les versions se publient en poussant un tag : le [workflow de release](https://github.com/hbenabdallah/phpgraph/blob/main/.github/workflows/release.yml) construit le PHAR et l'image Docker `ghcr.io/hbenabdallah/phpgraph`.
+Les versions se publient en poussant un tag : le [workflow de release](https://github.com/hbenabdallah/phpgraph/blob/main/.github/workflows/release.yml) construit le PHAR, les exécutables pour Linux, macOS et Windows (`tools/build-binary.sh`) et l'image Docker `ghcr.io/hbenabdallah/phpgraph`.
 
 ## Licence
 
