@@ -100,4 +100,80 @@ final class GraphQueryTest extends TestCase
 
         return $path;
     }
+
+    public function testQueryFindsTheCodeAboutTheQuestionNotItsHubs(): void
+    {
+        $root = sys_get_temp_dir() . '/phpgraph-query-' . bin2hex(random_bytes(4));
+        $files = [
+            'src/Order.php' => 'namespace App; class Order { public function id(): int { return 1; } public function total(): int { return 1; } public function lines(): array { return []; } public function customer(): string { return ""; } }',
+            'src/OrderRepository.php' => 'namespace App; class OrderRepository { public function find(): Order { return new Order(); } public function save(Order $o): void {} }',
+            'src/OrderController.php' => 'namespace App; class OrderController { public function show(Order $o): void {} }',
+            'src/Validation/OrderValidator.php' => 'namespace App\Validation; class OrderValidator { public function __construct(private iterable $rules) {} public function validate(\App\Order $o): void {} }',
+            'src/Validation/StockAvailabilityRule.php' => 'namespace App\Validation; class StockAvailabilityRule { public function supports(object $input): bool { return $input instanceof \App\PlaceOrder; } }',
+            'src/PlaceOrder.php' => 'namespace App; class PlaceOrder { public function __construct(private Validation\OrderValidator $validator) {} public function handle(Order $o): void { $this->validator->validate($o); } }',
+            'tests/OrderValidatorTest.php' => 'namespace App\Tests; class OrderValidatorTest { public function testValidates(): void {} }',
+        ];
+        foreach ($files as $path => $code) {
+            @mkdir(\dirname($root . '/' . $path), 0777, true);
+            file_put_contents($root . '/' . $path, "<?php\n" . $code . "\n");
+        }
+        $query = new GraphQuery((new \PhpGraph\Builder\GraphBuilder())->build($root)->graph);
+        $subgraph = $query->subgraph('how is an order validated before placing it');
+        $labels = array_map(static fn ($node): string => $node->label, $subgraph->nodes);
+
+        $seeds = array_map(static fn ($node): string => $node->label, $subgraph->seeds);
+        self::assertContains('OrderValidator', $seeds, 'validated meets Validator; order alone names every class');
+        self::assertContains('PlaceOrder', $seeds, 'placing meets PlaceOrder');
+        self::assertNotContains('Order', $seeds);
+        self::assertNotContains('Order::customer()', $labels, 'the getters of a hub say nothing of the question');
+        self::assertNotContains('OrderValidatorTest', $labels, 'tests only when the question is about tests');
+
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS), \RecursiveIteratorIterator::CHILD_FIRST);
+        foreach ($files as $file) {
+            \assert($file instanceof \SplFileInfo);
+            $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
+        }
+        rmdir($root);
+    }
+
+    public function testStemsMakeTheFormsOfAWordMeet(): void
+    {
+        foreach ([['validated', 'validation', 'validator', 'validate'], ['create', 'creation', 'created'], ['prices', 'price'], ['resolver', 'resolve']] as $forms) {
+            self::assertCount(1, array_unique(array_map([\PhpGraph\Query\Relevance::class, 'stem'], $forms)), implode(', ', $forms));
+        }
+        self::assertSame(['stock', 'eligibil', 'resolv'], \PhpGraph\Query\Relevance::stems('StockEligibilityResolver'));
+    }
+
+    public function testAQuestionAboutASystemGetsItsModule(): void
+    {
+        $root = sys_get_temp_dir() . '/phpgraph-module-' . bin2hex(random_bytes(4));
+        $files = [
+            'src/Validation/Notification.php' => 'namespace App\Validation; class Notification { public function add(): void {} public function all(): array { return []; } public function count(): int { return 0; } }',
+            'src/Validation/Violation.php' => 'namespace App\Validation; class Violation {}',
+            'src/Validation/InvariantValidator.php' => 'namespace App\Validation; class InvariantValidator { public function validate(Notification $n): void { $n->add(); } }',
+            'src/Validation/PathContext.php' => 'namespace App\Validation; class PathContext {}',
+            'src/Measure/MeasuringSystemRule.php' => 'namespace App\Measure; class MeasuringSystemRule { public function validateSystem(): void {} }',
+            'src/Measure/MeasuringSystem.php' => 'namespace App\Measure; class MeasuringSystem {}',
+        ];
+        foreach ($files as $path => $code) {
+            @mkdir(\dirname($root . '/' . $path), 0777, true);
+            file_put_contents($root . '/' . $path, "<?php\n" . $code . "\n");
+        }
+        $subgraph = (new GraphQuery((new \PhpGraph\Builder\GraphBuilder())->build($root)->graph))->subgraph('explain for me notification validation system');
+        $labels = array_map(static fn ($node): string => $node->label, $subgraph->nodes);
+
+        self::assertSame(['Notification'], array_map(static fn ($node): string => $node->label, $subgraph->seeds), '"explain" and "system" name no code');
+        foreach (['InvariantValidator', 'Violation', 'PathContext'] as $sibling) {
+            self::assertContains($sibling, $labels, 'the module of the seed');
+        }
+        self::assertNotContains('MeasuringSystemRule', $labels);
+        self::assertNotContains('Notification::count()', $labels, 'a method of the seed only by its own name');
+
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS), \RecursiveIteratorIterator::CHILD_FIRST);
+        foreach ($files as $file) {
+            \assert($file instanceof \SplFileInfo);
+            $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
+        }
+        rmdir($root);
+    }
 }

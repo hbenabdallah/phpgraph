@@ -101,7 +101,7 @@ claude mcp add phpgraph -- /home/vous/.local/bin/phpgraph serve /chemin/du/proje
 | Outil | Pour |
 |---|---|
 | `overview` | Commencer ici : stack Composer, arbre des namespaces avec les couches, bounded contexts, violations des règles de couches, messages, routes HTTP (chacune avec méthode, chemin, contrôleur et fichier jusqu'à 30, sinon regroupées par préfixe de chemin), services, et ce que le graphe ne voit pas. |
-| `query_graph` | Trouver le code d'un sujet sans connaître les noms de classes. Une question sur les routes (*« mooc courses routes »*, *« GET /courses »*) renvoie les routes correspondantes et leurs contrôleurs. |
+| `query_graph` | Trouver le code d'un sujet sans connaître les noms de classes, par les mots de leurs noms (validated trouve `Validator`). Une question sur les routes (*« mooc courses routes »*, *« GET /courses »*) renvoie les routes correspondantes et leurs contrôleurs. |
 | `get_node` | Lire une classe, une méthode, une route ou un canal avec toutes ses relations. |
 | `get_neighbors` | Voir ce qui utilise un nœud (`in`) ou ce dont il dépend (`out`). |
 | `impact_of` | Avant une modification : toutes les classes qui dépendent d'une classe ou d'une méthode, les plus proches d'abord, avec les lignes des appels ; les appelants via l'interface qu'elle implémente ; le code qui dépend de l'état qu'elle écrit ; et les tests à lancer, trouvés à travers les helpers de test. |

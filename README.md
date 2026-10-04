@@ -101,7 +101,7 @@ claude mcp add phpgraph -- /home/you/.local/bin/phpgraph serve /path/to/project
 | Tool | Use it to |
 |---|---|
 | `overview` | Start here: Composer stack, namespace tree with layers, bounded contexts, layer-rule violations, messages, HTTP routes (each with method, path, controller and file up to 30, else grouped by path prefix), services, and what the graph cannot see. |
-| `query_graph` | Find the code about a topic when you do not know the class names. A question about routes (*"mooc courses routes"*, *"GET /courses"*) returns the matching routes and their controllers. |
+| `query_graph` | Find the code about a topic when you do not know the class names, by the words of their names (validated finds `Validator`). A question about routes (*"mooc courses routes"*, *"GET /courses"*) returns the matching routes and their controllers. |
 | `get_node` | Read one class, method, route or channel with all its relations. |
 | `get_neighbors` | See what uses a node (`in`) or what it depends on (`out`). |
 | `impact_of` | Before a change: every class that depends on a class or method, nearest first, with the lines of the calls; callers through the interface it implements; code depending on the state it writes; and the tests to run, found through test helpers. |

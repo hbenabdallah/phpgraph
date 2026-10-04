@@ -15,7 +15,7 @@ rely on what this page lists: it changes only in a major version (2.0.0), announ
 | `query <question>` | `--depth`, `--budget`, `-g, --graph` |
 | `explain <name>` | `-d, --direction` (`in`, `out`, `both`), `-g, --graph` |
 | `path <from> <to>` | `-g, --graph` |
-| `impact <name>` | `-d, --depth`, `-l, --limit`, `-a, --all`, `-s, --section` (`direct`, `state`, `tests`, `helpers`), `-g, --graph` |
+| `impact <name>` | `-d, --depth`, `-l, --limit`, `-a, --all`, `-s, --section` (`direct`, `routes`, `state`, `tests`, `helpers`), `-g, --graph` |
 | `check [path]` | `-o, --output`, `-b, --baseline`, `--generate-baseline` |
 | `mcp-config [agent]` | agent `sherpa`, `claude`, `codex`, `cursor` or `json`; `-p, --project`, `--docker` |
 

@@ -6,15 +6,15 @@ phpgraph could not type, the main target of type inference work. Arrows compare 
 
 | Project | Files | Failed | Duplicates | Classes | Methods | Edges | Vendor files read | Seconds | Memory MB |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4179 | 104 | 0.50 | 24 |
-| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140094 | 580 | 7.53 | 446 |
-| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 215442 | 679 | 12.53 | 578 |
-| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 184550 | 566 | 11.96 | 500 |
-| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6789 | 58 | 0.67 | 30 |
-| bookstack | 1513 | 0 | 0 | 698 | 4076 | 23001 | 347 | 3.13 | 114 |
-| wordpress | 1899 | 0 | 50 | 840 | 7580 | 41915 | 0 | 6.00 | 113 |
-| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 96 | 0.40 | 38 |
-| art-gallery | 266 | 0 | 0 | 140 | 148 | 1692 | 75 | 0.55 | 46 |
+| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4179 | 105 | 0.71 | 24 |
+| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140094 | 583 | 9.07 | 446 |
+| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 215442 | 680 | 15.20 | 578 |
+| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 184543 | 568 | 17.69 | 500 |
+| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6789 | 59 | 0.89 | 30 |
+| bookstack | 1513 | 0 | 0 | 698 | 4076 | 23001 | 347 | 3.91 | 114 |
+| wordpress | 1899 | 0 | 50 | 840 | 7580 | 41926 | 0 | 7.11 | 113 |
+| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 97 | 0.63 | 38 |
+| art-gallery | 266 | 0 | 0 | 140 | 148 | 1692 | 80 | 0.82 | 46 |
 
 ## Method calls in application code
 
@@ -22,15 +22,15 @@ The main indicator: test code (see `TestFiles`) is left out.
 
 | Project | Call sites | Inferred | Ambiguous | Outside project | Unknown receiver | of which chain left project |
 |---|---:|---:|---:|---:|---:|---:|
-| php-ddd-example | 653 | 68.3% | 0.5% | 29.6% | 1.7% | 0.6% |
-| sylius | 19668 | 22.4% | 0.1% | 57.2% | 20.4% | 17.5% |
-| akeneo-pim | 33850 | 50.4% | 0.9% | 35.7% | 13.0% | 4.4% |
-| prestashop | 75698 | 52.0% | 2.6% | 35.8% | 9.5% | 2.5% |
-| ecotone-quickstart | 730 | 31.9% | 0.3% | 59.6% | 8.2% | 7.5% |
-| bookstack | 7111 | 46.1% | 4.4% | 36.9% | 12.6% | 6.8% |
-| wordpress | 26382 | 79.1% | 9.4% | 2.4% | 9.1% | 0.7% |
-| laravel-rabbitmq-microservices | 113 | 1.8% | 4.4% | 69.9% | 23.9% | 8.8% |
-| art-gallery | 511 | 4.7% | 0.2% | 64.2% | 30.9% | 11.0% |
+| php-ddd-example | 665 | 67.1% | 0.5% | 30.8% | 1.7% | 0.6% |
+| sylius | 19686 | 22.3% | 0.1% | 57.2% | 20.3% | 17.4% |
+| akeneo-pim | 33853 | 50.4% | 0.9% | 35.7% | 13.0% | 4.4% |
+| prestashop | 75968 | 52.1% | 2.6% | 35.9% | 9.5% | 2.5% |
+| ecotone-quickstart | 948 | 25.1% | 0.2% | 68.4% | 6.3% | 5.8% |
+| bookstack | 7461 | 43.9% | 4.2% | 39.9% | 12.0% | 6.5% |
+| wordpress | 26448 | 79.2% | 9.3% | 2.4% | 9.1% | 0.7% |
+| laravel-rabbitmq-microservices | 136 | 1.5% | 3.7% | 75.0% | 19.9% | 7.4% |
+| art-gallery | 586 | 4.1% | 0.2% | 68.8% | 27.0% | 9.6% |
 
 ## Method calls in test code
 
@@ -39,14 +39,14 @@ Mocks and specs make test code harder to type; read it apart.
 | Project | Call sites | Inferred | Ambiguous | Outside project | Unknown receiver | of which chain left project |
 |---|---:|---:|---:|---:|---:|---:|
 | php-ddd-example | 680 | 69.0% | 1.5% | 24.3% | 5.3% | 0.6% |
-| sylius | 82901 | 22.2% | 0.1% | 51.3% | 26.4% | 25.9% |
+| sylius | 82913 | 22.2% | 0.1% | 51.4% | 26.4% | 25.9% |
 | akeneo-pim | 125181 | 35.0% | 1.2% | 34.6% | 29.2% | 11.5% |
-| prestashop | 40920 | 47.2% | 0.5% | 45.3% | 7.0% | 3.7% |
+| prestashop | 40938 | 47.2% | 0.5% | 45.3% | 7.0% | 3.7% |
 | ecotone-quickstart | 415 | 13.5% | 0.2% | 85.3% | 1.0% | 1.0% |
 | bookstack | 18033 | 31.6% | 3.0% | 49.7% | 15.8% | 8.7% |
 | wordpress | 0 | - | - | - | - | - |
 | laravel-rabbitmq-microservices | 10 | 0.0% | 0.0% | 60.0% | 40.0% | 0.0% |
-| art-gallery | 8 | 0.0% | 0.0% | 0.0% | 100.0% | 0.0% |
+| art-gallery | 75 | 0.0% | 0.0% | 89.3% | 10.7% | 0.0% |
 
 ## Method calls in all code
 
@@ -54,15 +54,15 @@ Application and test code together.
 
 | Project | Call sites | Inferred | Ambiguous | Outside project | Unknown receiver | of which chain left project |
 |---|---:|---:|---:|---:|---:|---:|
-| php-ddd-example | 1333 | 68.6% | 1.0% | 26.9% | 3.5% | 0.6% |
-| sylius | 102569 | 22.2% | 0.1% | 52.5% | 25.2% | 24.3% |
-| akeneo-pim | 159031 | 38.3% | 1.1% | 34.8% | 25.7% | 10.0% |
-| prestashop | 116618 | 50.3% | 1.9% | 39.2% | 8.6% | 2.9% |
-| ecotone-quickstart | 1145 | 25.2% | 0.3% | 68.9% | 5.6% | 5.2% |
-| bookstack | 25144 | 35.7% | 3.4% | 46.1% | 14.9% | 8.1% |
-| wordpress | 26382 | 79.1% | 9.4% | 2.4% | 9.1% | 0.7% |
-| laravel-rabbitmq-microservices | 123 | 1.6% | 4.1% | 69.1% | 25.2% | 8.1% |
-| art-gallery | 519 | 4.6% | 0.2% | 63.2% | 32.0% | 10.8% |
+| php-ddd-example | 1345 | 68.0% | 1.0% | 27.5% | 3.5% | 0.6% |
+| sylius | 102599 | 22.2% | 0.1% | 52.5% | 25.2% | 24.3% |
+| akeneo-pim | 159034 | 38.3% | 1.1% | 34.8% | 25.7% | 10.0% |
+| prestashop | 116906 | 50.3% | 1.9% | 39.2% | 8.6% | 2.9% |
+| ecotone-quickstart | 1363 | 21.6% | 0.2% | 73.5% | 4.7% | 4.3% |
+| bookstack | 25494 | 35.2% | 3.4% | 46.8% | 14.7% | 8.0% |
+| wordpress | 26448 | 79.2% | 9.3% | 2.4% | 9.1% | 0.7% |
+| laravel-rabbitmq-microservices | 146 | 1.4% | 3.4% | 74.0% | 21.2% | 6.8% |
+| art-gallery | 661 | 3.6% | 0.2% | 71.1% | 25.1% | 8.5% |
 
 ## Architecture of application code
 

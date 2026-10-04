@@ -60,6 +60,44 @@ final class GraphQuery
 
     private ?Architecture $architecture = null;
 
+    private ?Relevance $relevance = null;
+
+    private const SEEDS = 6;
+
+    /**
+     * A namespace with more classes than this is a layer, not a module: its classes are not added as siblings.
+     */
+    private const MODULE = 60;
+
+    /**
+     * Above this many relations, a neighbour unrelated to the question is a hub (Notification, Request): left out.
+     */
+    private const HUB = 150;
+
+    /**
+     * How telling a relation is when expanding around the seeds.
+     */
+    private const EXPAND_WEIGHTS = [
+        'handled_by' => 3, 'calls' => 3, 'dispatches' => 3, 'receives' => 3, 'requests' => 3, 'reads_state_of' => 2,
+        'implements' => 2, 'extends' => 2, 'overrides' => 2, 'has_method' => 2, 'instantiates' => 1, 'references' => 1,
+    ];
+
+    /**
+     * Methods shown with their class even when their name says nothing of the question: they run it.
+     */
+    private const ENTRY_POINTS = ['__invoke', 'handle', 'execute', 'process', 'provide', 'run', 'apply', 'resolve', 'validate', 'supports'];
+
+    /**
+     * Words of a question that name no code: how, why, work...
+     */
+    private const QUESTION_WORDS = [
+        'how', 'why', 'where', 'when', 'who', 'what', 'which', 'does', 'doe', 'work', 'works', 'working', 'happen',
+        'before', 'after', 'during', 'about', 'there', 'their', 'between', 'into', 'are', 'can', 'should', 'would',
+        'could', 'get', 'used', 'use', 'explain', 'describe', 'tell', 'show', 'give', 'please', 'help', 'understand',
+        'overview', 'system', 'systems', 'flow', 'flows', 'logic', 'mechanism', 'architecture', 'part', 'parts',
+        'feature', 'features', 'module', 'modules', 'code', 'project', 'this', 'that', 'these', 'those', 'you', 'our',
+    ];
+
     public function __construct(
         private readonly Graph $graph,
         private readonly ?ProjectSummary $summary = null,
@@ -405,25 +443,46 @@ final class GraphQuery
     {
         $terms = $this->terms($question);
         $routes = $this->routesAsked($question, $terms, max(1, intdiv($budget, 2)));
+        $stems = $this->questionStems($question);
         if ($routes !== null) {
-            return $this->expand($terms, $routes, $depth, $budget);
+            return $this->expand($stems, $routes, $depth, $budget);
         }
 
+        $wantsTests = \in_array('test', $stems, true);
         $scored = [];
         foreach ($this->graph->nodes() as $node) {
             if ($node->kind === NodeKind::File || $node->kind === NodeKind::External) {
                 continue;
             }
-
-            $score = $this->score($node, $terms);
-            if ($score > 0) {
-                $scored[] = [$score, $this->graph->degree($node->id), $node];
+            $score = $this->relevance()->score($node, $stems);
+            if ($score <= 0) {
+                continue;
             }
+            // Test code answers questions about tests; otherwise it repeats the names of what it tests.
+            if (!$wantsTests && $node->file !== null && TestFiles::isTest($node->file)) {
+                continue;
+            }
+            $scored[] = [$score, $node->kind->isClassLike() ? 1 : 0, $node];
         }
-
         usort($scored, static fn (array $a, array $b): int => [$b[0], $b[1]] <=> [$a[0], $a[1]]);
 
-        return $this->expand($terms, array_map(static fn (array $row): Node => $row[2], \array_slice($scored, 0, 3)), $depth, $budget);
+        // The nodes closest to the best one, a class rather than its methods.
+        $seeds = [];
+        $classes = [];
+        $best = $scored[0][0] ?? 0.0;
+        foreach ($scored as [$score, , $node]) {
+            if (\count($seeds) >= self::SEEDS || $score < $best * 0.4) {
+                break;
+            }
+            $class = explode('::', $node->id)[0];
+            if (isset($classes[$class])) {
+                continue;
+            }
+            $classes[$class] = true;
+            $seeds[] = $node;
+        }
+
+        return $this->expand($stems, $seeds, $depth, $budget, $wantsTests);
     }
 
     /**
@@ -510,7 +569,7 @@ final class GraphQuery
      * @param list<string> $terms
      * @param list<Node>   $seeds
      */
-    private function expand(array $terms, array $seeds, int $depth, int $budget): Subgraph
+    private function expand(array $terms, array $seeds, int $depth, int $budget, bool $withTests = true): Subgraph
     {
         $selected = [];
         $frontier = [];
@@ -519,15 +578,72 @@ final class GraphQuery
             $frontier[] = $seed->id;
         }
 
-        for ($level = 1; $level <= $depth && $frontier !== []; ++$level) {
-            $next = [];
+        // A method stands for its class, unless its class is a seed: an answer about a part of the code is a list of
+        // classes, not of their methods.
+        $seedClasses = [];
+        foreach ($seeds as $seed) {
+            $seedClasses[explode('::', $seed->id)[0]] = true;
+        }
+        $asCandidate = function (Node $node) use ($seedClasses): Node {
+            if ($node->kind !== NodeKind::Method) {
+                return $node;
+            }
+            $class = explode('::', $node->id)[0];
+
+            return isset($seedClasses[$class]) ? $node : ($this->graph->node($class) ?? $node);
+        };
+
+        // Each step keeps the neighbours that are about the question, then those linked by a telling relation;
+        // the next step starts only from the first ones, so an unrelated hub never opens the way.
+        for ($level = 1; $level <= $depth && $frontier !== [] && \count($selected) < $budget; ++$level) {
+            $candidates = [];
+            $consider = function (Node $other, int $weight, bool $ownName) use (&$candidates, &$selected, $terms, $withTests): void {
+                if (isset($selected[$other->id]) || $other->kind === NodeKind::File || $other->kind === NodeKind::External
+                    || (!$withTests && $other->file !== null && TestFiles::isTest($other->file))) {
+                    return;
+                }
+                $score = $this->relevance()->score($other, $terms, $ownName);
+                if ($score <= 0 && ($weight < 2 || $this->graph->degree($other->id) > self::HUB)) {
+                    return;
+                }
+                $priority = $score * 10 + $weight;
+                if (($candidates[$other->id][0] ?? -1.0) < $priority) {
+                    $candidates[$other->id] = [$priority, $score];
+                }
+            };
             foreach ($frontier as $id) {
                 foreach ($this->graph->incident($id) as $item) {
-                    if (isset($selected[$item['other']]) || \count($selected) >= $budget) {
+                    $other = $this->graph->node($item['other']);
+                    $relation = $item['edge']->relation;
+                    if ($other === null || $relation === Relation::Imports || $relation === Relation::Defines) {
                         continue;
                     }
-                    $selected[$item['other']] = true;
-                    $next[] = $item['other'];
+                    if ($relation === Relation::HasMethod) {
+                        // A method of a seed: only by its own name, or an entry point.
+                        $name = strtolower(substr($other->id, (int) strrpos($other->id, ':') + 1));
+                        if ($this->relevance()->score($other, $terms, true) <= 0 && !\in_array($name, self::ENTRY_POINTS, true)) {
+                            continue;
+                        }
+                        $consider($other, 2, true);
+                        continue;
+                    }
+                    $consider($asCandidate($other), self::EXPAND_WEIGHTS[$relation->value] ?? 0, false);
+                }
+                // The other classes of a seed's namespace: the module the question is about.
+                if ($level === 1 && isset($seedClasses[$id])) {
+                    foreach ($this->siblings($id) as $sibling) {
+                        $consider($sibling, 2, false);
+                    }
+                }
+            }
+            uasort($candidates, static fn (array $a, array $b): int => $b[0] <=> $a[0]);
+
+            $next = [];
+            $room = $level === $depth ? $budget - \count($selected) : (int) ceil(($budget - \count($selected)) * 2 / 3);
+            foreach (\array_slice($candidates, 0, max(0, $room), true) as $id => [, $score]) {
+                $selected[$id] = true;
+                if ($score > 0) {
+                    $next[] = (string) $id;
                 }
             }
             $frontier = $next;
@@ -542,13 +658,58 @@ final class GraphQuery
         }
 
         $edges = [];
-        foreach ($this->graph->edges() as $edge) {
-            if (isset($selected[$edge->source], $selected[$edge->target])) {
-                $edges[] = $edge;
+        foreach ($nodes as $node) {
+            foreach ($this->graph->incident($node->id) as $item) {
+                if ($item['forward'] && isset($selected[$item['other']])) {
+                    $edges[] = $item['edge'];
+                }
             }
         }
 
         return new Subgraph($terms, $seeds, $nodes, $edges);
+    }
+
+    /** @var array<string, list<Node>>|null namespace => its classes */
+    private ?array $byNamespace = null;
+
+    /**
+     * The classes, interfaces, traits and enums declared in the same namespace as a class.
+     *
+     * @return list<Node>
+     */
+    private function siblings(string $class): array
+    {
+        if ($this->byNamespace === null) {
+            $this->byNamespace = [];
+            foreach ($this->graph->nodes() as $node) {
+                if ($node->kind->isClassLike() && $node->kind !== NodeKind::External) {
+                    $this->byNamespace[(string) substr($node->id, 0, (int) strrpos('\\' . $node->id, '\\'))][] = $node;
+                }
+            }
+        }
+        $namespace = (string) substr($class, 0, (int) strrpos('\\' . $class, '\\'));
+        $siblings = $this->byNamespace[$namespace] ?? [];
+
+        // A namespace holding everything (App) is no module.
+        return \count($siblings) <= self::MODULE ? array_values(array_filter($siblings, static fn (Node $node): bool => $node->id !== $class)) : [];
+    }
+
+    private function relevance(): Relevance
+    {
+        return $this->relevance ??= new Relevance($this->graph);
+    }
+
+    /**
+     * @return list<string> the stems of the question's words, without the stop words
+     */
+    private function questionStems(string $question): array
+    {
+        // The stop words go before stemming: "before" would else become "befor" and match getNumberOfDaysBefore().
+        // The case stays: a name written in the question (PutCourseController) is split into its words.
+        $words = preg_split('/[^\p{L}\p{N}]+/u', $question, -1, \PREG_SPLIT_NO_EMPTY) ?: [];
+        $kept = array_filter($words, static fn (string $word): bool => !\in_array(mb_strtolower($word), self::STOPWORDS, true) && !\in_array(mb_strtolower($word), self::QUESTION_WORDS, true));
+
+        return Relevance::stems(implode(' ', $kept));
     }
 
     /**
@@ -674,27 +835,5 @@ final class GraphQuery
             $parts,
             static fn (string $part): bool => mb_strlen($part) >= 3 && !\in_array($part, self::STOPWORDS, true),
         )));
-    }
-
-    /**
-     * @param list<string> $terms
-     */
-    private function score(Node $node, array $terms): int
-    {
-        $label = mb_strtolower($node->label);
-        $id = mb_strtolower($node->id);
-        $score = 0;
-
-        foreach ($terms as $term) {
-            if ($label === $term || rtrim($label, '()') === $term) {
-                $score += 5;
-            } elseif (str_contains($label, $term)) {
-                $score += 2;
-            } elseif (str_contains($id, $term)) {
-                ++$score;
-            }
-        }
-
-        return $score;
     }
 }

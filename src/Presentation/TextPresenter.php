@@ -540,7 +540,7 @@ final class TextPresenter
     /**
      * What depends on a class or a method, directly or not: what a change may break.
      */
-    public const IMPACT_SECTIONS = ['direct', 'state', 'tests', 'helpers'];
+    public const IMPACT_SECTIONS = ['direct', 'routes', 'state', 'tests', 'helpers'];
 
     /**
      * The relations of a node, the most telling first.
@@ -556,6 +556,11 @@ final class TextPresenter
     private const IMPACT_SITES = 3;
 
     /**
+     * Tests listed by default, unless every one is asked for.
+     */
+    private const IMPACT_TESTS = 100;
+
+    /**
      * @param int     $limit   entries per section, 0 for all
      * @param ?string $section one of IMPACT_SECTIONS, null for all of them
      */
@@ -569,9 +574,10 @@ final class TextPresenter
         // Complete lists: the search itself goes further than its usual 200 classes.
         $impact = $this->query->impactOf($node, $depth, $limit === 0 ? 5000 : 200);
         $isTestCase = fn (string $class): bool => preg_match('/(Test|TestCase|Cest|Spec|Context|Feature)$/', $this->query->label($class)) === 1;
-        $groups = ['direct' => [], 'state' => [], 'tests' => [], 'stateTests' => [], 'helpers' => []];
+        $groups = ['direct' => [], 'routes' => [], 'state' => [], 'tests' => [], 'stateTests' => [], 'helpers' => []];
         foreach ($impact->classes as $class) {
             $key = match (true) {
+                str_starts_with($class->class, 'route:') || str_contains($class->class, '@route:') => 'routes',
                 $class->isTest && !$isTestCase($class->class) => 'helpers',
                 $class->isTest => $class->throughState ? 'stateTests' : 'tests',
                 default => $class->throughState ? 'state' : 'direct',
@@ -592,10 +598,11 @@ final class TextPresenter
         $lines = [
             \sprintf('Impact of changing %s [%s], %s', $node->label, $node->kind->value, $this->location($node)),
             \sprintf(
-                '%d application classes depend on it up to %d relations away, %d more possibly through the state it changes; '
-                . '%d tests to run, %d possibly affected through the state; %d test helpers%s.',
+                '%d application classes depend on it up to %d relations away, %d routes reach it, %d more classes possibly '
+                . 'through the state it changes; %d tests to run, %d possibly affected through the state; %d test helpers%s.',
                 \count($groups['direct']),
                 $impact->maxDepth,
+                \count($groups['routes']),
                 \count($groups['state']),
                 \count($groups['tests']),
                 \count($groups['stateTests']),
@@ -604,13 +611,13 @@ final class TextPresenter
             ),
             'Each class comes with the weakest confidence on the way, then its methods reaching the change and their source lines. '
             . \sprintf(
-                'Lists show %s: impact_of with limit 0 (CLI: --all) gives every class and every call site, section (direct, state, tests, helpers) one list.',
+                'Lists show %s: impact_of with limit 0 (CLI: --all) gives every class and every call site, section (direct, routes, state, tests, helpers) one list.',
                 $limit === 0 ? 'everything' : \sprintf('the first %d classes and %d call sites per class', $limit, self::IMPACT_SITES),
             ),
         ];
-        $sites = function ($class) use ($limit): array {
+        $sites = function ($class, int $perClass = self::IMPACT_SITES) use ($limit): array {
             $lines = [];
-            $shown = $limit === 0 ? $class->sites : \array_slice($class->sites, 0, self::IMPACT_SITES);
+            $shown = $limit === 0 ? $class->sites : \array_slice($class->sites, 0, $perClass);
             foreach ($shown as $edge) {
                 $lines[] = '      ' . $this->formatEdge($edge);
             }
@@ -653,6 +660,15 @@ final class TextPresenter
             }
         }
 
+        if ($wanted('routes') && $groups['routes'] !== []) {
+            $lines[] = '';
+            $lines[] = 'Routes reaching it (the entry points to check):';
+            foreach ($slice($groups['routes']) as $route) {
+                $lines[] = \sprintf('  - %s  via %s  %s', $this->query->label($route->class), $this->formatEdge($route->edge), $this->classLocation($route->class));
+            }
+            $more($groups['routes']);
+        }
+
         if ($wanted('state') && $groups['state'] !== []) {
             $lines[] = '';
             $lines[] = 'Possibly affected through the state it changes: they call a method reading what it writes. Those '
@@ -673,15 +689,19 @@ final class TextPresenter
             if (!$wanted($name) || $groups[$key] === []) {
                 continue;
             }
+            // Tests are listed further by default, one call site each: an agent runs them all.
+            $shown = $key === 'helpers' || $limit === 0 ? $slice($groups[$key]) : \array_slice($groups[$key], 0, max($limit, self::IMPACT_TESTS));
             $lines[] = '';
             $lines[] = $title;
-            foreach ($slice($groups[$key]) as $class) {
+            foreach ($shown as $class) {
                 $lines[] = \sprintf('  - %s%s  %s', $this->query->label($class->class), $key === 'stateTests' ? ' [' . $class->confidence->value . ']' : '', $this->classLocation($class->class));
                 if ($key !== 'helpers') {
-                    array_push($lines, ...$sites($class));
+                    array_push($lines, ...$sites($class, 1));
                 }
             }
-            $more($groups[$key]);
+            if (\count($groups[$key]) > \count($shown)) {
+                $lines[] = \sprintf('  - ... %d more', \count($groups[$key]) - \count($shown));
+            }
         }
 
         return implode("\n", $lines);

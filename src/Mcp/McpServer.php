@@ -141,9 +141,11 @@ final class McpServer
             [
                 'name' => 'query_graph',
                 'description' => 'Find the code about a topic when you do not know the class names. Matches the words of the '
-                    . 'question against class, method and function names (keywords, not semantic search: use words likely to '
-                    . 'appear in names, such as "stock availability" or "invoice payment"), then returns the matched nodes and '
-                    . 'their neighbourhood as relations (calls, implements, instantiates, references...) with confidence. A question '
+                    . 'question against the words of class, method and function names (validated finds Validator, prices finds '
+                    . 'PriceCalculator; rare words weigh more than common ones; not semantic search: use words likely to appear '
+                    . 'in names, such as "stock availability" or "invoice payment"), then returns up to 6 best matches, the other '
+                    . 'classes of their namespace (the module asked about) and the neighbours that are about the question too, as relations (calls, handled_by, receives...) with confidence. '
+                    . 'Test code only when the question mentions tests. A question '
                     . 'about routes (the words routes, endpoints, HTTP or URL, or a path such as /orders/{id}, with or without a '
                     . 'method such as GET) returns the matching route nodes and their controllers; its other words narrow them '
                     . 'by path or routing file: "mooc courses routes", "GET /courses".',

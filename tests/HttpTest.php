@@ -120,7 +120,7 @@ final class HttpTest extends TestCase
         self::assertSame(['PUT /courses/{id}'], $seeds('PUT /courses/42'));
         self::assertSame(['GET /courses', 'GET /courses', 'PUT /courses/{id}', 'GET /students'], $seeds('endpoints'));
         self::assertContains('App\Mooc\PutCourseController::__invoke', array_map(static fn ($node): string => $node->id, $query->subgraph('mooc courses routes')->nodes));
-        self::assertSame(['PutCourseController', 'PutCourseController::__invoke()'], $seeds('PutCourseController'), 'other questions are unchanged');
+        self::assertSame(['PutCourseController'], $seeds('PutCourseController'), 'other questions find the class, not also its methods');
     }
 
     public function testTheOverviewListsRoutesAndTheControllersFoundNowhere(): void
@@ -171,6 +171,7 @@ final class HttpTest extends TestCase
         foreach (['App\Resource\SupplierResource', 'App\Dto\Payload', 'App\UseCase\RetrieveSupplier'] as $class) {
             self::assertTrue($this->hasEdge($graph, $post, $class, Relation::References, Confidence::Extracted), $class);
         }
+        self::assertFalse($this->hasEdge($graph, $post, 'App\State\SupplierProvider', Relation::References), 'not the classes of the other operations');
         foreach (['GET /api/purchase_orders/{id}', 'GET /api/purchase_orders', 'POST /api/purchase_orders', 'PATCH /api/purchase_orders/{id}', 'DELETE /api/purchase_orders/{id}'] as $default) {
             self::assertContains($default, $this->routes($graph), 'default operations, snake_case and plural');
         }

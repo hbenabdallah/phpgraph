@@ -164,6 +164,22 @@ final class ImpactTest extends TestCase
         self::assertStringContainsString('Validator depends on StockRule', $path);
     }
 
+    public function testRoutesReachingAChangedHandlerAndConstructorInjection(): void
+    {
+        $graph = $this->buildProject([
+            'src/CreateOrder.php' => 'namespace App; class CreateOrder { public function handle(): void {} }',
+            'src/CreateOrderProcessor.php' => 'namespace App; class CreateOrderProcessor { public function __construct(private CreateOrder $useCase) {} public function process(): void {} }',
+            'src/OrderResource.php' => 'namespace App; use ApiPlatform\Metadata\ApiResource; use ApiPlatform\Metadata\Post;'
+                . ' #[ApiResource(operations: [new Post(uriTemplate: "/orders", processor: CreateOrderProcessor::class)])] class OrderResource {}',
+            'config/services.php' => 'return static function ($container): void { App\Wiring::wire($container->services(), "orders"); };',
+            'src/Wiring.php' => 'namespace App; class Wiring { public static function wire($services, string $prefix): void {} }',
+        ])->graph;
+        $impact = $this->impact($graph, 'App\CreateOrder');
+
+        self::assertArrayHasKey('route:src/OrderResource.php#POST /orders', $impact, 'the processor holding it in its constructor serves the route');
+        self::assertTrue($this->hasEdge($graph, 'file:config/services.php', 'App\Wiring::wire', Relation::Calls), 'a static call outside any method: the file calls it');
+    }
+
     public function testCallEdgesCarryTheLinesOfTheirCallSites(): void
     {
         $graph = $this->buildProject([

@@ -6,6 +6,15 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 ## Unreleased
 
 ### Added
+- `query` and `query_graph` match words, not substrings: names are split into words and reduced to a stem
+  (validated finds Validator, prices finds PricesCalculator), rare words weigh more, and the nodes naming more of the
+  question come first. Words naming the question, not code (explain, system, flow, how), are left out. Up to 6
+  seeds; around them the classes of their namespace (the module asked about) and the neighbours about the question, a
+  method standing for its class; test code only when it is asked for.
+- `impact` lists the routes reaching the change through their controller or processor (`--section routes`), follows
+  a service injected into a constructor through the whole class, and lists up to 100 tests by default.
+- A static call outside any method (a configuration file's closure, a script) is a call from the file:
+  `Wiring::wire()` called by `config/services.php`.
 - `impact` lists, under each class, every method reaching the change with the lines of its calls (3 per class by
   default, all with `--all` or `limit: 0`).
 - A strategy declaring what it handles, `supports(object $input): bool { return $input instanceof LineQuery; }`
@@ -33,6 +42,8 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 - `impact` with an unknown section exits with code 2, as other invalid input.
 
 ### Fixed
+- An API Platform route references the classes of its own operation only, not those of the resource's other
+  operations.
 - A graph built by another version of phpgraph is rebuilt by `serve`, even when the sources did not change: an upgrade
   no longer serves a graph without what the new version finds.
 - A `graph.json` in another format is refused with a message asking to rebuild it, instead of being read wrongly.

@@ -580,8 +580,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             if ($node->name instanceof Identifier) {
                 $this->onPossibleSend($node->name->toString(), $node->args, null, false, $class);
             }
-            if ($node->name instanceof Identifier && $this->currentCallable !== null) {
-                $this->pending[] = new PendingCall($this->currentCallable, TypeExpr::named($class), $node->name->toString(), true, $node->getStartLine());
+            // Outside any method (a configuration file's closure, a script), the file calls it: Wiring::wire($services, ...).
+            $caller = $this->currentCallable ?? ($this->currentClass === null ? $this->fileId : null);
+            if ($node->name instanceof Identifier && $caller !== null) {
+                $this->pending[] = new PendingCall($caller, TypeExpr::named($class), $node->name->toString(), true, $node->getStartLine());
             } else {
                 $this->reference($this->owner(), $class);
             }

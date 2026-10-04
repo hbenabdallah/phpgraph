@@ -122,7 +122,8 @@ final class ApiPlatformResources
         // The classes the operation names: the resource, its input and output, and any other `X::class`.
         $references = [$class];
         foreach ([...$resource, ...$operation] as $key => $value) {
-            if (!\in_array($key, ['controller', 'provider', 'processor'], true)) {
+            // Not `operations`: the other operations of the resource are other routes.
+            if (!\in_array($key, ['controller', 'provider', 'processor', 'operations'], true)) {
                 array_push($references, ...$this->classes($value));
             }
         }

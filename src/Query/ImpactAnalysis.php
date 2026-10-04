@@ -125,7 +125,10 @@ final class ImpactAnalysis
                     // Through the state: the callers of a method reading it (hasErrors()) are listed as possibly affected,
                     // not followed, since most of them never see what the change records. Their tests are still looked for.
                     if ($followed && !(isset($viaState[$dependent]) && $this->classOf($dependent) !== $root)) {
-                        $methods = $this->wholeClass($dependent, $reached, $confidence);
+                        // Injected into the constructor, the change is used by the whole class: a processor holding a
+                        // use case calls it from process().
+                        $whole = str_ends_with(strtolower($dependent), '::__construct') ? $this->classOf($dependent) : $dependent;
+                        $methods = $this->wholeClass($whole, $reached, $confidence);
                         foreach (isset($viaState[$dependent]) ? $methods : [] as $method) {
                             $viaState[$method] = true;
                         }
@@ -232,6 +235,9 @@ final class ImpactAnalysis
             } elseif ($item['forward'] && $relation === Relation::HandledBy && !$isRoute) {
                 // The handlers of a changed message are affected too; the controller of a route is not affected by it.
                 $dependents[] = [$item['other'], $item['edge'], $item['edge']->confidence, true, null];
+            } elseif (!$item['forward'] && $relation === Relation::HandledBy && $this->graph->node($item['other'])?->kind === NodeKind::Route) {
+                // The routes a changed controller serves: the entry points affected. Listed, nothing depends on them.
+                $dependents[] = [$item['other'], $item['edge'], $item['edge']->confidence, false, null];
             }
         }
 
