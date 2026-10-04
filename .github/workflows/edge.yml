@@ -38,7 +38,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+        # GitHub's API fails now and then (503): each step is tried again, and nothing is created while the old one stays.
         run: |
-          gh release delete edge --cleanup-tag --yes || true
-          gh release create edge dist/* --prerelease --target "$GITHUB_SHA" --title "dev-main" \
-            --notes "Built from main at $GITHUB_SHA. Not a release: install a version for production use."
+          for attempt in 1 2 3 4 5; do
+            if gh release view edge >/dev/null 2>&1; then
+              gh release delete edge --cleanup-tag --yes || { sleep 20; continue; }
+            fi
+            if gh release create edge dist/* --prerelease --target "$GITHUB_SHA" --title "dev-main" \
+              --notes "Built from main at $GITHUB_SHA. Not a release: install a version for production use."; then
+              exit 0
+            fi
+            sleep 20
+          done
+          exit 1
