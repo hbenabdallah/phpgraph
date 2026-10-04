@@ -125,7 +125,7 @@ phpgraph build [chemin]                      # phpgraph-out/graph.json et GRAPH_
 phpgraph overview                            # stack, structure et trous
 phpgraph impact "OrderRepository::save"      # ce qui en dépend, et les tests à lancer (--all, --section tests, --format json)
 phpgraph check                               # règles de couches, pour la CI : code 1 sur une nouvelle violation
-phpgraph explain "PlaceOrderHandler"         # un nœud et ses relations (--direction in|out)
+phpgraph explain "PlaceOrderHandler"         # un nœud et ses relations (-d in|out)
 phpgraph path "StockChecker" "DbalOrderRepository"
 phpgraph query "comment le stock est vérifié"
 phpgraph outline "notification validation"   # le plan d'une fonctionnalité (--format full|json)
@@ -231,6 +231,17 @@ phpgraph est développé sur un corpus de projets open source figés à un commi
 | [WordPress](https://github.com/WordPress/WordPress) | sans framework, hooks | 1 899 | 5,3 s | 90,9 % |
 
 Deux petits projets microservices complètent le corpus : [deux services Laravel reliés par RabbitMQ](https://github.com/mostafaaminflakes/Using-RabbitMQ-in-Microservices), avec 4 contrats de messages, et [quatre services Laravel reliés par HTTP](https://github.com/omarihab99/Art-Gallery), où phpgraph a trouvé un `POST` envoyé vers une route `GET` seulement. Aucun échec d'analyse sur environ 26 000 fichiers. Le détail par projet, messages, routes et services compris, est dans [`corpus/RESULTS.md`](https://github.com/hbenabdallah/phpgraph/blob/main/corpus/RESULTS.md).
+
+### Avec un agent
+
+Mesuré sur un projet Symfony/DDD privé de 4 800 fichiers, 3 exécutions par configuration, le même agent ([Sherpa](https://github.com/hbenabdallah/sherpa)) avec et sans phpgraph 1.0.0 :
+
+| Type de question | Avec phpgraph | Qualité |
+|---|---|---|
+| Impact ou refactoring (`impact_of`) | −35 % de tokens, −41 % de temps, −51 % d'appels d'outils | meilleure |
+| Expliquer une fonctionnalité (`outline`) | −20 % de tokens, −21 % de temps, −39 % d'appels d'outils | identique |
+
+Les plages des exécutions avec et sans phpgraph ne se chevauchent pas.
 
 ## FAQ
 

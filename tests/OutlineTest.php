@@ -64,7 +64,7 @@ final class OutlineTest extends TestCase
         self::assertStringContainsString('compares count($notification->all()) before and after', $text);
         self::assertStringContainsString('PipelineRunner::run L17: returns Outcome::halted() if $notification->hasErrors()', $text);
         self::assertStringContainsString('Order::create L13: returns null if $notification->hasErrors()', $text, 'what the code running into the feature checks of it');
-        self::assertStringContainsString('$status = self::UNPROCESSABLE (422) if $notification->hasErrors(), else self::OK (200)', $text);
+        self::assertMatchesRegularExpression('/^At a glance:\n  Outcome: ProblemDetails::\w+ L\d+: \$status = self::UNPROCESSABLE \(422\) if \$notification->hasErrors\(\), else self::OK \(200\)$/m', $text, 'an outcome first');
     }
 
     public function testTheOutlineShowsTheWiringWithTheServiceIdsItBuilds(): void
@@ -82,7 +82,7 @@ final class OutlineTest extends TestCase
 
         self::assertStringContainsString('Tests touching the core: 2 files in 2 modules', $text);
         self::assertStringNotContainsString('tests/Validation/NotificationTest.php', $text, 'tests are counted by module, not listed');
-        self::assertMatchesRegularExpression('/^No test touches: .*ContextValidator.*PipelineRunner/m', $text);
+        self::assertMatchesRegularExpression('/^At a glance:\n(  .*\n)*  No test touches: .*ContextValidator.*PipelineRunner/m', $text, 'the gaps come first');
         self::assertStringContainsString('Nothing in the application uses: ViolationPrinter.', $text);
 
         $json = json_decode($presenter->outline('notification validation', 'json'), true);

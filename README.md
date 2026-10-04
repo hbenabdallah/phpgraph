@@ -125,7 +125,7 @@ phpgraph build [path]                        # phpgraph-out/graph.json and GRAPH
 phpgraph overview                            # stack, structure and gaps
 phpgraph impact "OrderRepository::save"      # what depends on it, and the tests to run (--all, --section tests, --format json)
 phpgraph check                               # layer rules, for CI: exit code 1 on a new violation
-phpgraph explain "PlaceOrderHandler"         # a node and its relations (--direction in|out)
+phpgraph explain "PlaceOrderHandler"         # a node and its relations (-d in|out)
 phpgraph path "StockChecker" "DbalOrderRepository"
 phpgraph query "how is stock checked"
 phpgraph outline "notification validation"   # the outline of a feature (--format full|json)
@@ -231,6 +231,17 @@ phpgraph is developed against a corpus of open-source projects pinned to a commi
 | [WordPress](https://github.com/WordPress/WordPress) | no framework, hooks | 1,899 | 5.3 s | 90.9 % |
 
 Two small microservices projects complete the corpus: [two Laravel services over RabbitMQ](https://github.com/mostafaaminflakes/Using-RabbitMQ-in-Microservices), linked by 4 message contracts, and [four Laravel services over HTTP](https://github.com/omarihab99/Art-Gallery), where phpgraph found a `POST` sent to a `GET`-only route. Zero parse failures on about 26,000 files. The details per project, including messages, routes and services, are in [`corpus/RESULTS.md`](https://github.com/hbenabdallah/phpgraph/blob/main/corpus/RESULTS.md).
+
+### With an agent
+
+Measured on a private 4,800-file Symfony/DDD project, 3 runs per setup, the same agent ([Sherpa](https://github.com/hbenabdallah/sherpa)) with and without phpgraph 1.0.0:
+
+| Kind of question | With phpgraph | Quality |
+|---|---|---|
+| Impact or refactoring (`impact_of`) | −35 % tokens, −41 % time, −51 % tool calls | better |
+| Explaining a feature (`outline`) | −20 % tokens, −21 % time, −39 % tool calls | same |
+
+The ranges of the runs with and without phpgraph do not overlap.
 
 ## FAQ
 

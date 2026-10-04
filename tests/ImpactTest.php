@@ -247,7 +247,9 @@ final class ImpactTest extends TestCase
                 . ' #[ApiResource(operations: [new Post(uriTemplate: "/orders", processor: OrderProcessor::class)])] class OrderResource {}',
         ])->graph));
 
-        self::assertStringContainsString('(+1 other chain: limit 0)', $presenter->impact('App\Ledger::record', 3, 40, 'routes'));
+        $routes = $presenter->impact('App\Ledger::record', 3, 40, 'routes');
+        self::assertStringContainsString('    also ← OrderProcessor::process() ← ', $routes, 'shown by default, up to 2');
+        self::assertStringNotContainsString('other chain', $routes);
         self::assertStringContainsString('    also ← ', $presenter->impact('App\Ledger::record', 3, 0, 'routes'));
     }
 

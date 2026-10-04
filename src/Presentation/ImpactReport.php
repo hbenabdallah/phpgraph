@@ -21,7 +21,10 @@ use PhpGraph\Query\Usage;
  */
 final class ImpactReport
 {
-    private const SITES = 3;
+    private const SITES = 8;
+
+    /** Other chains of a route shown by default. */
+    private const CHAINS = 2;
 
     private const TESTS = 100;
 
@@ -114,7 +117,8 @@ final class ImpactReport
             $lines[] = 'Routes reaching it, ← from their handler:';
             foreach ($shown = $slice($g['routes'], 0) as $route) {
                 $marked = $route->confidence === Confidence::Inferred ? '' : ' [' . $route->confidence->value . ']';
-                $others = \count($route->otherChains);
+                $also = \array_slice($route->otherChains, 0, $limit === 0 ? 5 : self::CHAINS);
+                $others = \count($route->otherChains) - \count($also);
                 $lines[] = \sprintf(
                     '  %s%s ← %s%s',
                     $this->query->label($route->class),
@@ -122,7 +126,7 @@ final class ImpactReport
                     $this->chain($route->chain),
                     $others === 0 || $limit === 0 ? '' : \sprintf(' (+%d other chain%s: limit 0)', $others, $others > 1 ? 's' : ''),
                 );
-                foreach ($limit === 0 ? \array_slice($route->otherChains, 0, 5) : [] as $chain) {
+                foreach ($also as $chain) {
                     $lines[] = '    also ← ' . $this->chain($chain);
                 }
             }

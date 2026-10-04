@@ -13,7 +13,7 @@ rely on what this page lists: it changes only in a major version (2.0.0), announ
 | `serve [path]` | `-o, --output`, `-g, --graph`, `-e, --exclude`, `--no-vendor` |
 | `overview` | `-g, --graph` |
 | `query <question>` | `--depth`, `-l, --limit`, `-g, --graph` |
-| `explain <name>` | `--direction` (`in`, `out`, `both`), `-g, --graph` |
+| `explain <name>` | `-d, --direction` (`in`, `out`, `both`), `-g, --graph` |
 | `path <from> <to>` | `-g, --graph` |
 | `outline <topic>` | `-f, --format` (`text`, `full`, `json`), `-g, --graph` |
 | `impact <name>` | `-d, --depth`, `-l, --limit`, `-a, --all`, `-s, --section` (`direct`, `routes`, `state`, `tests`, `state-tests`, `helpers`), `-f, --format` (`text`, `full`, `json`), `-g, --graph` |

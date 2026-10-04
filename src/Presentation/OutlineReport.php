@@ -58,6 +58,32 @@ final class OutlineReport
             ),
         ];
 
+        // At a glance: what an agent explaining the feature must not miss, before the details.
+        $hints = $outline->hints;
+        $glance = [];
+        foreach ($hints as $index => [$class, $hint]) {
+            if (str_contains($hint->text, ', else ') && \count($glance) < 3) {
+                $glance[] = \sprintf('  Outcome: %s::%s L%d: %s', $this->query->label($class), $hint->method, $hint->line, $hint->text);
+                unset($hints[$index]);
+            }
+        }
+        if ($outline->unused !== []) {
+            $glance[] = '  Nothing in the application uses: ' . implode(', ', array_map(
+                fn (string $class, bool $tested): string => $this->query->label($class) . ($tested ? ' (tests only)' : ''),
+                array_keys($outline->unused),
+                $outline->unused,
+            )) . '.';
+        }
+        if ($outline->uncovered !== []) {
+            $glance[] = '  No test touches: ' . implode(', ', array_map(fn (string $class): string => $this->query->label($class), $outline->uncovered)) . '.';
+        }
+        if ($glance !== []) {
+            $lines[] = '';
+            $lines[] = 'At a glance:';
+            array_push($lines, ...$glance);
+        }
+        $hints = array_values($hints);
+
         // Core, by namespace.
         $byNamespace = [];
         foreach ($outline->core as $class) {
@@ -159,14 +185,14 @@ final class OutlineReport
         }
 
         // Behaviour.
-        if ($outline->hints !== []) {
+        if ($hints !== []) {
             $lines[] = '';
-            $lines[] = 'Behaviour (read in the method bodies):';
-            foreach ($limit($outline->hints, self::HINTS) as [$class, $hint]) {
+            $lines[] = 'Behaviour (read in the method bodies)' . ($hints === $outline->hints ? '' : ', besides the outcomes above') . ':';
+            foreach ($limit($hints, self::HINTS) as [$class, $hint]) {
                 $lines[] = \sprintf('  %s::%s L%d: %s', $this->query->label($class), $hint->method, $hint->line, $hint->text);
             }
-            if (!$full && \count($outline->hints) > self::HINTS) {
-                $lines[] = \sprintf('  +%d more: format full', \count($outline->hints) - self::HINTS);
+            if (!$full && \count($hints) > self::HINTS) {
+                $lines[] = \sprintf('  +%d more: format full', \count($hints) - self::HINTS);
             }
         }
 
@@ -219,17 +245,6 @@ final class OutlineReport
                 implode(', ', $outline->topTests),
             );
         }
-        if ($outline->uncovered !== []) {
-            $lines[] = 'No test touches: ' . implode(', ', array_map(fn (string $class): string => $this->query->label($class), $outline->uncovered)) . '.';
-        }
-        if ($outline->unused !== []) {
-            $lines[] = 'Nothing in the application uses: ' . implode(', ', array_map(
-                fn (string $class, bool $tested): string => $this->query->label($class) . ($tested ? ' (tests only)' : ''),
-                array_keys($outline->unused),
-                $outline->unused,
-            )) . '.';
-        }
-
         return implode("\n", $lines);
     }
 
