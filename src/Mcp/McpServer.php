@@ -206,7 +206,8 @@ final class McpServer
                         'name' => $name,
                         'depth' => $integer('How many relations away to follow (default 3).'),
                         'limit' => $integer('Entries per list (default 40); 0 for complete lists, instead of reading the cut ones node by node.'),
-                        'section' => ['type' => 'string', 'enum' => TextPresenter::IMPACT_SECTIONS, 'description' => 'Only one list: direct (the call chain), state (possibly affected through the state it changes), tests (to run, and possibly affected), helpers.'],
+                        'section' => ['type' => 'string', 'enum' => TextPresenter::IMPACT_SECTIONS, 'description' => 'Only one list: direct (the call chain), routes, state (possibly affected through the state it changes), tests (to run), state-tests (reaching what reads the state), helpers.'],
+                        'format' => ['type' => 'string', 'enum' => TextPresenter::IMPACT_FORMATS, 'description' => 'text (default, compact: one line per class with its call sites), full (every relation spelled out) or json.'],
                     ],
                     'required' => ['name'],
                 ],
@@ -273,6 +274,7 @@ final class McpServer
                     max(1, (int) ($arguments['depth'] ?? 3)),
                     max(0, (int) ($arguments['limit'] ?? 40)),
                     \is_string($arguments['section'] ?? null) && \in_array($arguments['section'], TextPresenter::IMPACT_SECTIONS, true) ? $arguments['section'] : null,
+                    \is_string($arguments['format'] ?? null) && \in_array($arguments['format'], TextPresenter::IMPACT_FORMATS, true) ? $arguments['format'] : 'text',
                 ),
                 default => $presenter->godNodes(max(1, (int) ($arguments['limit'] ?? 15))),
             };

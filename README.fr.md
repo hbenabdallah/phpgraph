@@ -122,7 +122,7 @@ Shortest path (4 hops):
 ```bash
 phpgraph build [chemin]                      # phpgraph-out/graph.json et GRAPH_REPORT.md
 phpgraph overview                            # stack, structure et trous
-phpgraph impact "OrderRepository::save"      # ce qui en dépend, et les tests à lancer (--all, --section tests)
+phpgraph impact "OrderRepository::save"      # ce qui en dépend, et les tests à lancer (--all, --section tests, --format json)
 phpgraph check                               # règles de couches, pour la CI : code 1 sur une nouvelle violation
 phpgraph explain "PlaceOrderHandler" [-d in] # un nœud et ses relations
 phpgraph path "StockChecker" "DbalOrderRepository"

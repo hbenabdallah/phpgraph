@@ -6,6 +6,15 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 ## Unreleased
 
 ### Added
+- `impact` answers in a compact text by default: one line per class with its methods reaching the change and their
+  lines, paths shortened, one line per route, tests grouped by module (about a third of the size: 10 KB instead of
+  31 KB for a change reaching 90 classes). `--format full` gives every relation spelled out, `--format json` the data.
+- `impact` flags the application classes no test touches, the test helper methods nothing calls any more, the calls
+  written with named arguments (`named: severity`: renaming the parameter breaks them), and a method comparing the
+  state before and after a call (`count($n->all())` twice), ranked INFERRED.
+- `impact` lists one step further the callers of a method reading the state and filtering on what the change writes
+  (a tree walker's validators); the tests reaching only a method reading all of the state are counted, listed with
+  `--section state-tests`.
 - `impact` finds the routes reaching a change without the depth limit, each with its chain from the route's handler
   down to the change (`CreateEstimateProcessor::process() ← CreateEstimate::handle() ← ValidationPipelineRunner::run()
   ← ContextValidator::executeRules() (tagged_iterator sales_order.estimate_quotation.context_rule) ← Rule::apply()`).

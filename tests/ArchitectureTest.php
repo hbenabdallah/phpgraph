@@ -148,8 +148,11 @@ final class ArchitectureTest extends TestCase
 
         self::assertIsString($text);
         self::assertStringContainsString('Impact of changing TaxApi', $text);
-        self::assertStringContainsString('Pricing [EXTRACTED]', $text);
-        self::assertStringContainsString("Tests to run:\n  - PricingTest", $text);
+        self::assertMatchesRegularExpression('/\n  Pricing \([^)]*\) \[EXTRACTED\]/', $text);
+        self::assertMatchesRegularExpression('/Tests to run[^\n]*\n  [^\n]*PricingTest/', $text);
+
+        $full = $server->handle(['jsonrpc' => '2.0', 'id' => 2, 'method' => 'tools/call', 'params' => ['name' => 'impact_of', 'arguments' => ['name' => 'TaxApi', 'format' => 'full']]]);
+        self::assertStringContainsString("Tests to run:\n  - PricingTest", (string) ($full['result']['content'][0]['text'] ?? ''), 'every relation spelled out');
     }
 
     private function graph(): Graph

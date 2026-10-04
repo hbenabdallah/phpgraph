@@ -60,7 +60,7 @@ final class ImpactTest extends TestCase
         $impact = $this->impact($graph, 'App\Validation\Notification::add');
         self::assertTrue($impact['App\Validation\PromiseCheck']->throughState, 'it reads what add() records, through all()');
         self::assertFalse($impact['App\Validation\StockRule']->throughState);
-        self::assertArrayNotHasKey('App\Validation\Report', $impact, 'the callers of a reader are not followed further');
+        self::assertTrue($impact['App\Validation\Report']->throughState, 'one step further for a reader filtering on what it writes (INFERRED)');
     }
 
     public function testListsCanBeCompleteOrAlone(): void
@@ -72,7 +72,7 @@ final class ImpactTest extends TestCase
         self::assertStringNotContainsString('  - ... ', $presenter->impact('App\Validation\Notification::add', 3, 0));
 
         $state = $presenter->impact('App\Validation\Notification::add', 3, 0, 'state');
-        self::assertStringContainsString('Possibly affected through the state', $state);
+        self::assertStringContainsString('Through the state it changes', $state);
         self::assertStringNotContainsString('Direct dependents', $state);
     }
 
@@ -178,6 +178,37 @@ final class ImpactTest extends TestCase
 
         self::assertArrayHasKey('route:src/OrderResource.php#POST /orders', $impact, 'the processor holding it in its constructor serves the route');
         self::assertTrue($this->hasEdge($graph, 'file:config/services.php', 'App\Wiring::wire', Relation::Calls), 'a static call outside any method: the file calls it');
+    }
+
+    public function testTheCompactReport(): void
+    {
+        $presenter = new TextPresenter(new GraphQuery($this->buildProject([
+            'src/Notification.php' => 'namespace App; final class Notification { private const CONTEXT = "c"; private const SURFACE = "s"; private array $items = [];'
+                . ' public function add(string $code, string $message = ""): void { $this->items[] = [self::CONTEXT, $code]; }'
+                . ' public function addSurface(string $code): void { $this->items[] = [self::SURFACE, $code]; }'
+                . ' public function all(): array { return $this->items; } }',
+            'src/Rule.php' => 'namespace App; final class Rule { public function apply(Notification $n): void { $n->add(code: "x", message: "y"); } }',
+            'src/Untested.php' => 'namespace App; final class Untested { public function run(Notification $n): void { $n->add("z"); } }',
+            'src/Runner.php' => 'namespace App; final class Runner { public function run(Rule $rule, Notification $n): bool {'
+                . "\n \$before = count(\$n->all());\n \$rule->apply(\$n);\n return count(\$n->all()) > \$before; } }",
+            'tests/RuleTest.php' => 'namespace App\Tests; use App\Rule; use App\Notification; final class RuleTest { public function testIt(): void { (new Rule())->apply(new Notification()); } }',
+            'tests/Faker/FakeNotification.php' => 'namespace App\Tests\Faker; use App\Notification; final class FakeNotification { public static function unused(): Notification { $n = new Notification(); $n->add("a"); return $n; } }',
+            'tests/ReadsAllTest.php' => 'namespace App\Tests; use App\Notification; final class ReadsAllTest { public function testIt(): void { (new Notification())->all(); } }',
+        ])->graph));
+
+        $text = $presenter->impact('App\Notification::add');
+        self::assertStringContainsString('Rule (', $text);
+        self::assertStringContainsString('apply L2 (named: code, message)', $text, 'a call with named arguments breaks on a rename');
+        self::assertStringContainsString('compares all() before and after', $text);
+        self::assertStringContainsString('No test touches: Untested', $text);
+        self::assertStringContainsString('Unused (no caller): FakeNotification::unused()', $text);
+        self::assertStringNotContainsString('ReadsAllTest', $text, 'a test reading all of the state: counted, not listed');
+        self::assertStringContainsString('ReadsAllTest', $presenter->impact('App\Notification::add', 3, 40, 'state-tests'));
+
+        $json = json_decode($presenter->impact('App\Notification::add', 3, 40, null, 'json'), true);
+        self::assertIsArray($json);
+        self::assertSame('App\Notification::add', $json['changed']['id'] ?? null);
+        self::assertContains('Untested', $json['uncovered'] ?? []);
     }
 
     public function testCallEdgesCarryTheLinesOfTheirCallSites(): void

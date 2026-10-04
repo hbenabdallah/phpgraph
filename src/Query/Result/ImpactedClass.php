@@ -23,7 +23,10 @@ final readonly class ImpactedClass
      *                                 changed one writes (`hasErrors()` for `addError()`), not the change itself
      * @param list<Edge> $sites        every relation from this class to what the change reaches: its calling methods,
      *                                 with their source lines
-     * @param list<string> $chain      for a route, the nodes from its handler down to the change
+     * @param list<string> $chain      the nodes from the one reaching this class (a route's handler) down to the change
+     * @param bool       $comparesState it reads the state the change writes before and after a call, `count($n->all())`
+     *                                  twice: it depends on what the change appends (INFERRED)
+     * @param ?string    $node          the node of this class the walk reached first
      */
     public function __construct(
         public string $class,
@@ -36,6 +39,8 @@ final readonly class ImpactedClass
         public bool $throughState = false,
         public array $sites = [],
         public array $chain = [],
+        public bool $comparesState = false,
+        public ?string $node = null,
     ) {
     }
 }

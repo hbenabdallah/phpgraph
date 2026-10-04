@@ -22,7 +22,8 @@ final class ImpactCommand extends AbstractGraphCommand
             ->addOption('depth', 'd', InputOption::VALUE_REQUIRED, 'Relations away from the change', '3')
             ->addOption('limit', 'l', InputOption::VALUE_REQUIRED, 'Entries per list, 0 for all', '40')
             ->addOption('all', 'a', InputOption::VALUE_NONE, 'Complete lists (same as --limit 0)')
-            ->addOption('section', 's', InputOption::VALUE_REQUIRED, 'Only one list: ' . implode(', ', TextPresenter::IMPACT_SECTIONS));
+            ->addOption('section', 's', InputOption::VALUE_REQUIRED, 'Only one list: ' . implode(', ', TextPresenter::IMPACT_SECTIONS))
+            ->addOption('format', 'f', InputOption::VALUE_REQUIRED, 'text (compact), full (every relation spelled out) or json', 'text');
         $this->addGraphOption();
     }
 
@@ -35,12 +36,20 @@ final class ImpactCommand extends AbstractGraphCommand
             return Command::INVALID;
         }
 
+        $format = $input->getOption('format');
+        if (!\in_array($format, TextPresenter::IMPACT_FORMATS, true)) {
+            $output->writeln(\sprintf('<error>Unknown format "%s": %s.</error>', \is_string($format) ? $format : '', implode(', ', TextPresenter::IMPACT_FORMATS)));
+
+            return Command::INVALID;
+        }
+
         $output->writeln(
             $this->loadPresenter($input)->impact(
                 (string) $input->getArgument('name'),
                 max(1, (int) $input->getOption('depth')),
                 $input->getOption('all') ? 0 : max(0, (int) $input->getOption('limit')),
                 \is_string($section) ? $section : null,
+                $format,
             ),
             OutputInterface::OUTPUT_RAW,
         );

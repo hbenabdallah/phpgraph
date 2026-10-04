@@ -201,7 +201,7 @@ final class GraphQueryTest extends TestCase
 
         $text = (new \PhpGraph\Presentation\TextPresenter($query))->impact('App\Sales\Rules\StockRule::apply', 3, 0, 'routes');
         self::assertStringContainsString('PlaceOrderProcessor::process() ← PlaceOrder::handle() ← PipelineRunner::run() ← ContextValidator::validate()', $text);
-        self::assertStringContainsString('ContextValidator::executeRules() (tagged_iterator sales.context_rule) ← StockRule::apply()', $text);
+        self::assertStringContainsString('ContextValidator::executeRules() (tagged_iterator sales.context_rule)', $text);
     }
 
     public function testForeachOverADocumentedCollectionTypesItsElements(): void

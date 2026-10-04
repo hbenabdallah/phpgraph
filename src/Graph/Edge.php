@@ -18,9 +18,14 @@ final class Edge
         public readonly Relation $relation,
         public readonly Confidence $confidence = Confidence::Extracted,
         private string $lines = '',
-        public readonly string $via = '',
+        private string $via = '',
     ) {
         $this->lines = $lines === '0' ? '' : $lines;
+    }
+
+    public function via(): string
+    {
+        return $this->via;
     }
 
     public function key(): string
@@ -42,6 +47,11 @@ final class Edge
      */
     public function addLines(self $other): void
     {
+        // The named arguments of every call site: `named: severity, path`.
+        if (str_starts_with($other->via, 'named: ') && $other->via !== $this->via) {
+            $names = array_unique([...explode(', ', substr($this->via, 7)), ...explode(', ', substr($other->via, 7))]);
+            $this->via = 'named: ' . implode(', ', array_filter($names, static fn (string $name): bool => $name !== ''));
+        }
         if ($other->lines === '' || $other->lines === $this->lines) {
             return;
         }

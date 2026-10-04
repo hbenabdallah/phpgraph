@@ -598,7 +598,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             // Outside any method (a configuration file's closure, a script), the file calls it: Wiring::wire($services, ...).
             $caller = $this->currentCallable ?? ($this->currentClass === null ? $this->fileId : null);
             if ($node->name instanceof Identifier && $caller !== null) {
-                $this->pending[] = new PendingCall($caller, TypeExpr::named($class), $node->name->toString(), true, $node->getStartLine());
+                $this->pending[] = new PendingCall($caller, TypeExpr::named($class), $node->name->toString(), true, $node->getStartLine(), $this->namedArguments($node->args));
             } else {
                 $this->reference($this->owner(), $class);
             }
@@ -614,6 +614,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                     $node->name->toString(),
                     false,
                     $node->getStartLine(),
+                    $this->namedArguments($node->args),
                 );
             }
             $this->onPossibleSend(
@@ -1002,6 +1003,23 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         return [null, null];
+    }
+
+    /**
+     * @param array<AstNode\Arg|AstNode\ArgPlaceholder|AstNode\VariadicPlaceholder> $args
+     *
+     * @return list<string>
+     */
+    private function namedArguments(array $args): array
+    {
+        $names = [];
+        foreach ($args as $argument) {
+            if ($argument instanceof AstNode\Arg && $argument->name !== null) {
+                $names[] = $argument->name->toString();
+            }
+        }
+
+        return $names;
     }
 
     /**

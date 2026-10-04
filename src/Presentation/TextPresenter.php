@@ -540,7 +540,9 @@ final class TextPresenter
     /**
      * What depends on a class or a method, directly or not: what a change may break.
      */
-    public const IMPACT_SECTIONS = ['direct', 'routes', 'state', 'tests', 'helpers'];
+    public const IMPACT_SECTIONS = ['direct', 'routes', 'state', 'tests', 'state-tests', 'helpers'];
+
+    public const IMPACT_FORMATS = ['text', 'full', 'json'];
 
     /**
      * The relations of a node, the most telling first.
@@ -563,8 +565,23 @@ final class TextPresenter
     /**
      * @param int     $limit   entries per section, 0 for all
      * @param ?string $section one of IMPACT_SECTIONS, null for all of them
+     * @param string  $format  text (compact, one line per class), full (every relation spelled out) or json
      */
-    public function impact(string $name, int $depth = 3, int $limit = 40, ?string $section = null): string
+    public function impact(string $name, int $depth = 3, int $limit = 40, ?string $section = null, string $format = 'text'): string
+    {
+        if ($format === 'full') {
+            return $this->impactFull($name, $depth, $limit, $section === 'state-tests' ? 'tests' : $section);
+        }
+        $node = $this->query->candidates($name, 1)[0] ?? null;
+        if ($node === null) {
+            return $format === 'json' ? (string) json_encode(['error' => \sprintf('No node matching "%s".', $name)]) : \sprintf('No node matching "%s".', $name);
+        }
+
+        return (new ImpactReport($this->query, $node, $this->query->impactOf($node, $depth, $limit === 0 ? 5000 : 200)))
+            ->render($format, $limit, $section);
+    }
+
+    private function impactFull(string $name, int $depth = 3, int $limit = 40, ?string $section = null): string
     {
         $node = $this->query->candidates($name, 1)[0] ?? null;
         if ($node === null) {
@@ -726,8 +743,8 @@ final class TextPresenter
                 $holder = explode('::', $node)[0];
                 $member = explode('::', $next)[0];
                 foreach ($graph->incident($holder) as $item) {
-                    if ($item['forward'] && $item['other'] === $member && $item['edge']->relation === \PhpGraph\Graph\Relation::Receives && $item['edge']->via !== '') {
-                        $label .= ' (' . $item['edge']->via . ')';
+                    if ($item['forward'] && $item['other'] === $member && $item['edge']->relation === \PhpGraph\Graph\Relation::Receives && $item['edge']->via() !== '') {
+                        $label .= ' (' . $item['edge']->via() . ')';
                         break;
                     }
                 }

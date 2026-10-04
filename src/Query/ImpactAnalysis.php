@@ -99,7 +99,7 @@ final class ImpactAnalysis
         /** @var array<string, array<string, Edge>> $sites class => its edges to what the change reaches */
         $sites = [];
         $truncated = false;
-        $reach = function (string $dependent, Edge $edge, Confidence $reached, int $depth, bool $followed, ?string $through) use (&$classes, &$viaState, $root): ?bool {
+        $reach = function (string $dependent, Edge $edge, Confidence $reached, int $depth, bool $followed, ?string $through, bool $compares = false) use (&$classes, &$viaState, $root): ?bool {
             $class = $this->classOf($dependent);
             // Reached through the state first, then by a call: it is a caller (UpdateEstimate::handle() calling
             // notifyContextViolation()), whatever the order of the walk.
@@ -110,12 +110,14 @@ final class ImpactAnalysis
                 return true;
             }
             $file = $this->graph->node($class)?->file;
-            $classes[$class] = new ImpactedClass($class, $depth, $edge, $reached, $file !== null && TestFiles::isTest($file), $followed, $through, isset($viaState[$dependent]));
+            $classes[$class] = new ImpactedClass($class, $depth, $edge, $reached, $file !== null && TestFiles::isTest($file), $followed, $through, isset($viaState[$dependent]), [], [], $compares, $dependent);
 
             return null;
         };
         // What every walk does on a step: the scope of the injected lists on the way, the parent for the route
         // chains, and the routes met, kept for the end.
+        /** @var array<string, int> $stateHops node => steps taken through the state outside the changed class */
+        $stateHops = [];
         /** @var array<string, true> $stateParent nodes whose parent is a step through the state */
         $stateParent = [];
         $step = function (string $id, string $dependent, Edge $edge, ?string $through, bool $state = false) use (&$scope, &$parent, &$stateParent, &$dispatched, &$routes): void {
@@ -170,8 +172,17 @@ final class ImpactAnalysis
                     }
 
                     $reached = $this->weakest($confidence[$id], $this->listHop($id, $dependent, $edgeConfidence));
+                    // Reading the state before and after a call (count($n->all()) twice) depends on what the change
+                    // appends: ranked with the readers filtering on it.
+                    $compares = isset($viaState[$id]) && $edge->relation === Relation::Calls && \count($edge->lines()) >= 2;
+                    if ($compares) {
+                        $reached = Confidence::Inferred;
+                    }
                     $confidence[$dependent] = $reached;
                     $step($id, $dependent, $edge, $through, isset($viaState[$id]) || $edge->relation === Relation::ReadsStateOf);
+                    // Through the state, one step further for the readers filtering on what it writes (INFERRED):
+                    // DomainTreeWalker::descend() reads the frozen paths, its validators are where it shows.
+                    $stateHops[$dependent] = ($stateHops[$id] ?? 0) + (isset($viaState[$id]) && $this->classOf($dependent) !== $root ? 1 : 0);
                     if (isset($routes[$dependent])) {
                         continue;
                     }
@@ -182,14 +193,16 @@ final class ImpactAnalysis
                     // call it on other subclasses, which the graph cannot tell apart.
                     $inherited = $this->isInherited((string) $id, $dependent);
                     $followed = $followed && !$inherited;
-                    $reach($dependent, $edge, $reached, $depth, $followed, $through);
+                    $reach($dependent, $edge, $reached, $depth, $followed, $through, $compares);
                     if (!$followed) {
                         // A service receiving the change among others: its tests. Inherited code: none, they test the other subclasses.
                         $stopped[$dependent] = !$inherited;
                     }
                     // Through the state: the callers of a method reading it (hasErrors()) are listed as possibly affected,
                     // not followed, since most of them never see what the change records. Their tests are still looked for.
-                    if ($followed && !(isset($viaState[$dependent]) && $this->classOf($dependent) !== $root)) {
+                    $stateFollowed = !isset($viaState[$dependent]) || $this->classOf($dependent) === $root
+                        || ($stateHops[$dependent] < 2 && $reached === Confidence::Inferred);
+                    if ($followed && $stateFollowed) {
                         $methods = $this->wholeClass($this->injectedInto($dependent), $reached, $confidence);
                         foreach ($methods as $method) {
                             $step($dependent, $method, $edge, null);
@@ -202,6 +215,30 @@ final class ImpactAnalysis
                 }
             }
             $frontier = $next;
+        }
+
+        // Readers filtering on what it writes (INFERRED): their callers one step further, whatever the depth, since that
+        // is where the state shows (DomainTreeWalker::walk() called by the validators).
+        foreach ($classes as $class => $impacted) {
+            if (!$impacted->throughState || $impacted->confidence !== Confidence::Inferred || ($stateHops[$impacted->node ?? ''] ?? 0) !== 1) {
+                continue;
+            }
+            foreach (array_keys($confidence) as $node) {
+                if ($this->classOf((string) $node) !== $class) {
+                    continue;
+                }
+                foreach ($this->dependents((string) $node) as [$dependent, $edge, $edgeConfidence]) {
+                    if ($edge->relation !== Relation::Calls || isset($confidence[$dependent]) || $this->isTest($dependent)) {
+                        continue;
+                    }
+                    $confidence[$dependent] = $this->weakest(Confidence::Inferred, $edgeConfidence);
+                    $viaState[$dependent] = true;
+                    $stopped[$dependent] = true;
+                    $step((string) $node, $dependent, $edge, null, true);
+                    $sites[$this->classOf($dependent)][$edge->key()] = $edge;
+                    $reach($dependent, $edge, $confidence[$dependent], $impacted->depth + 1, false, null);
+                }
+            }
         }
 
         // The routes reaching the change, without the depth limit: the entry points an agent has to check are often
@@ -284,7 +321,16 @@ final class ImpactAnalysis
         foreach ($classes as $class => $impacted) {
             $edges = array_values($sites[$class] ?? []);
             usort($edges, static fn (Edge $a, Edge $b): int => [$a->source, $a->target] <=> [$b->source, $b->target]);
-            $withSites[] = new ImpactedClass($impacted->class, $impacted->depth, $impacted->edge, $impacted->confidence, $impacted->isTest, $impacted->followed, $impacted->through, $impacted->throughState, $edges, $impacted->chain);
+            $chain = $impacted->chain;
+            if ($chain === [] && $impacted->node !== null) {
+                for ($node = $impacted->node; $node !== null && \count($chain) < 30; $node = $parent[$node] ?? null) {
+                    $chain[] = $node;
+                    if ($node === $changed->id) {
+                        break;
+                    }
+                }
+            }
+            $withSites[] = new ImpactedClass($impacted->class, $impacted->depth, $impacted->edge, $impacted->confidence, $impacted->isTest, $impacted->followed, $impacted->through, $impacted->throughState, $edges, $chain, $impacted->comparesState, $impacted->node);
         }
 
         return new Impact($changed, $maxDepth, $withSites, $truncated);
@@ -408,9 +454,9 @@ final class ImpactAnalysis
         $tagged = false;
         foreach ($this->graph->incident($class) as $item) {
             $edge = $item['edge'];
-            if (!$item['forward'] && $edge->relation === Relation::Receives && !str_starts_with($edge->via, 'tagged_locator')) {
+            if (!$item['forward'] && $edge->relation === Relation::Receives && !str_starts_with($edge->via(), 'tagged_locator')) {
                 $holders[$item['other']] = true;
-                $tagged = $tagged || str_starts_with($edge->via, 'tagged_iterator');
+                $tagged = $tagged || str_starts_with($edge->via(), 'tagged_iterator');
             }
         }
 
@@ -488,7 +534,7 @@ final class ImpactAnalysis
             return true;
         }
         foreach ($this->graph->incident($this->classOf($handler)) as $item) {
-            if ($item['forward'] && $item['edge']->relation === Relation::Receives && str_starts_with($item['edge']->via, 'tagged_locator')) {
+            if ($item['forward'] && $item['edge']->relation === Relation::Receives && str_starts_with($item['edge']->via(), 'tagged_locator')) {
                 return true;
             }
         }

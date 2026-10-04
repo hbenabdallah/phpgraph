@@ -6,12 +6,16 @@ namespace PhpGraph\Extractor;
 
 final readonly class PendingCall
 {
+    /**
+     * @param list<string> $named the named arguments of the call, `apply(severity: ...)`: renaming a parameter breaks it
+     */
     public function __construct(
         public string $source,
         public ?TypeExpr $receiver,
         public string $method,
         public bool $referenceOnMiss,
         public ?int $line = null,
+        public array $named = [],
     ) {
     }
 }
