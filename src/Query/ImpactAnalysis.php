@@ -68,6 +68,8 @@ final class ImpactAnalysis
     /**
      * Chains kept per route, besides the first.
      */
+    private const MAX_CHAIN_STEPS = 20000;
+
     private const MAX_CHAINS = 40;
 
     private string $root = '';
@@ -386,9 +388,11 @@ final class ImpactAnalysis
     {
         /** @var list<list<string>> $chains */
         $chains = [];
+        // Every simple path is exponential on a dense graph: the walk stops after a fixed number of steps.
+        $steps = 0;
         /** @param list<string> $path */
-        $walk = function (string $node, array $path) use (&$walk, &$chains, $changed, $callers, $first): void {
-            if (\count($chains) >= self::MAX_CHAINS || \count($path) > 30) {
+        $walk = function (string $node, array $path) use (&$walk, &$chains, &$steps, $changed, $callers, $first): void {
+            if (\count($chains) >= self::MAX_CHAINS || \count($path) > 30 || ++$steps > self::MAX_CHAIN_STEPS) {
                 return;
             }
             $path[] = $node;
@@ -678,7 +682,10 @@ final class ImpactAnalysis
     private function testServesTheChange(string $test, ?string $node, array $parent, array $reached): bool
     {
         $generic = null;
-        for ($step = $node; $step !== null; $step = $parent[$step] ?? null) {
+        $seen = [];
+        // The parent pointers may loop: a step seen twice ends the walk.
+        for ($step = $node; $step !== null && !isset($seen[$step]); $step = $parent[$step] ?? null) {
+            $seen[$step] = true;
             if ($this->isGeneric($step, false) && !$this->isTest($step)) {
                 $generic = $this->classOf($step);
                 break;
@@ -748,6 +755,11 @@ final class ImpactAnalysis
         $isRoute = $this->graph->node($id)?->kind === NodeKind::Route;
         foreach ($this->graph->incident($id) as $item) {
             $relation = $item['edge']->relation;
+            // A closure run by a method (`$apply(...)`) depends on the code writing it, already its caller: the
+            // method running every closure would else reach every use case passing one.
+            if (str_starts_with($item['edge']->via(), 'closure of ')) {
+                continue;
+            }
             if (!$item['forward'] && \in_array($relation, self::DEPENDENTS, true)) {
                 $dependents[] = [$item['other'], $item['edge'], $item['edge']->confidence, $relation !== Relation::Receives, null];
             } elseif ($item['forward'] && $relation === Relation::HandledBy && !$isRoute) {
@@ -769,10 +781,11 @@ final class ImpactAnalysis
 
         // Called through the interface or parent method it implements: the call may run this one. Not a constructor
         // (parent::__construct() runs the parent's), nor a call from another subclass, which runs its own.
-        foreach (str_ends_with(strtolower($id), '::__construct') ? [] : $this->implemented($id) as $parent) {
+        // Nor from test code: a fake repository implementing the interface is not what the application calls.
+        foreach (str_ends_with(strtolower($id), '::__construct') || $this->isTest($id) ? [] : $this->implemented($id) as $parent) {
             $parentClass = $this->classOf($parent);
             foreach ($this->graph->incident($parent) as $item) {
-                if (!$item['forward'] && $item['edge']->relation === Relation::Calls) {
+                if (!$item['forward'] && $item['edge']->relation === Relation::Calls && !str_starts_with($item['edge']->via(), 'closure of ')) {
                     $caller = $this->classOf($item['other']);
                     if ($caller !== $this->root && $caller !== $parentClass && \in_array($parentClass, $this->ancestorsOf($caller), true) && !\in_array($this->root, $this->ancestorsOf($caller), true)) {
                         continue;

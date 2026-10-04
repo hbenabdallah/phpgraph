@@ -21,7 +21,8 @@ final class McpServer
 
     private const INSTRUCTIONS = 'Knowledge graph of this PHP codebase, built by static analysis: deterministic facts, no guesses beyond '
         . 'what each confidence level says. Call overview first: it gives the stack, the structure and what the graph cannot see. '
-        . 'Then use query_graph to find code by topic, get_node or get_neighbors to read one class or method, and shortest_path '
+        . 'Then use outline before explaining a feature (its classes, families, flow, behaviour, wiring and tests in one answer: '
+        . 'read only the files it points to), query_graph to find code by topic, get_node or get_neighbors to read one class or method, and shortest_path '
         . 'to see how two pieces of code are connected, impact_of before changing a class or a method. Relations are EXTRACTED (read in the code), INFERRED (resolved from '
         . 'declared types) or AMBIGUOUS (guessed from a unique method name). Routes (route:GET /orders) and message '
         . 'channels are nodes too; in a multi-service repository ids read service@Class and services meet through '
@@ -213,6 +214,25 @@ final class McpServer
                 ],
             ],
             [
+                'name' => 'outline',
+                'description' => 'Before reading the code of a feature you are asked to explain: its structural outline, enough to '
+                    . 'read only the few files with non-obvious logic. From the classes the topic names, the cluster they '
+                    . 'form, by namespace and layer, each with its kind, the first sentence of its docblock, its public '
+                    . 'signatures, constants and enum cases; the interfaces and base classes around it with their number of '
+                    . 'implementations by folder (0 stated) and the tags injecting them; the flow from the routes into it, '
+                    . 'the closures it runs and the calls inside it; behaviour read in the bodies (guarded throws, early '
+                    . 'returns, branches on constants, loop caps, state compared before and after); the container wiring '
+                    . 'with service ids; its users (tests counted by module), the classes no test touches and those nothing uses.',
+                'inputSchema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'topic' => $text('The feature, in words or class names: "notification validation", "stock reservation".'),
+                        'format' => ['type' => 'string', 'enum' => TextPresenter::IMPACT_FORMATS, 'description' => 'text (default, compact), full (no list cut) or json.'],
+                    ],
+                    'required' => ['topic'],
+                ],
+            ],
+            [
                 'name' => 'shortest_path',
                 'description' => 'How two pieces of code are connected: the shortest chain of relations from one node to the '
                     . 'other. Follows dependencies first (calls and references in their direction, from an interface to its '
@@ -269,6 +289,10 @@ final class McpServer
                 ),
                 'shortest_path' => $presenter->path($this->requireString($arguments, 'from'), $this->requireString($arguments, 'to')),
                 'overview' => $presenter->overview(),
+                'outline' => $presenter->outline(
+                    $this->requireString($arguments, 'topic'),
+                    \is_string($arguments['format'] ?? null) && \in_array($arguments['format'], TextPresenter::IMPACT_FORMATS, true) ? $arguments['format'] : 'text',
+                ),
                 'impact_of' => $presenter->impact(
                     $this->requireString($arguments, 'name'),
                     max(1, (int) ($arguments['depth'] ?? 3)),

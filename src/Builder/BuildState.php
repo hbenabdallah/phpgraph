@@ -59,6 +59,9 @@ final class BuildState
         foreach ($extraction->propertyTypes as $property => $type) {
             hash_update($hash, 'p' . $property . '=' . $type . "\n");
         }
+        foreach ($extraction->invokedParameters as $method => $parameters) {
+            hash_update($hash, 'i' . $method . '=' . json_encode($parameters) . "\n");
+        }
 
         return hash_final($hash);
     }

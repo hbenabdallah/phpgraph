@@ -36,4 +36,27 @@ final class TestFiles
 
         return false;
     }
+
+    /**
+     * The module a test file belongs to, for counting tests by module: the path before its test directory
+     * (`src/Sales/tests/Unit/OrderTest.php`: `src/Sales`), or the first folder below it (`tests/Unit/Sales/...`:
+     * `tests/Unit/Sales`).
+     */
+    public static function module(string $relativePath): string
+    {
+        $segments = explode('/', str_replace('\\', '/', $relativePath));
+        array_pop($segments);
+        foreach ($segments as $index => $directory) {
+            if (\in_array(strtolower($directory), self::DIRECTORIES, true)) {
+                if ($index > 0) {
+                    return implode('/', \array_slice($segments, 0, $index));
+                }
+                $kind = \in_array(strtolower($segments[1] ?? ''), ['unit', 'integration', 'functional', 'feature', 'e2e', 'acceptance'], true) ? 3 : 2;
+
+                return implode('/', \array_slice($segments, 0, $kind));
+            }
+        }
+
+        return implode('/', $segments) === '' ? '.' : implode('/', $segments);
+    }
 }

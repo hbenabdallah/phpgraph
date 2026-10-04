@@ -51,7 +51,7 @@ final class McpServerTest extends TestCase
         $response = $this->call(['jsonrpc' => '2.0', 'id' => 2, 'method' => 'tools/list']);
 
         self::assertSame(
-            ['overview', 'query_graph', 'get_node', 'get_neighbors', 'impact_of', 'shortest_path', 'god_nodes'],
+            ['overview', 'query_graph', 'get_node', 'get_neighbors', 'impact_of', 'outline', 'shortest_path', 'god_nodes'],
             array_column($response['result']['tools'], 'name'),
         );
     }

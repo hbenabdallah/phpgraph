@@ -13,6 +13,7 @@ use PhpGraph\Graph\Relation;
 use PhpGraph\Query\GraphQuery;
 use PhpGraph\Query\Result\Impact;
 use PhpGraph\Query\Result\ImpactedClass;
+use PhpGraph\Query\Usage;
 
 /**
  * The answer of `impact`, compact: one line per class with its call sites, one per route with its chain, one per test
@@ -423,29 +424,10 @@ final class ImpactReport
      */
     private function uncovered(): array
     {
-        $graph = $this->query->graph();
+        $usage = new Usage($this->query->graph());
         $uncovered = [];
         foreach ($this->groups['direct'] as $class) {
-            if (!$class->followed || $graph->node($class->class)?->kind !== NodeKind::PhpClass) {
-                continue;
-            }
-            $nodes = [$class->class];
-            foreach ($graph->incident($class->class) as $item) {
-                if ($item['forward'] && $item['edge']->relation === Relation::HasMethod) {
-                    $nodes[] = $item['other'];
-                }
-            }
-            $tested = false;
-            foreach ($nodes as $node) {
-                foreach ($graph->incident($node) as $item) {
-                    $file = $graph->node(explode('::', $item['other'])[0])?->file;
-                    if (!$item['forward'] && $item['edge']->relation !== Relation::Imports && $file !== null && TestFiles::isTest($file)) {
-                        $tested = true;
-                        break 2;
-                    }
-                }
-            }
-            if (!$tested) {
+            if ($class->followed && $this->query->graph()->node($class->class)?->kind === NodeKind::PhpClass && !$usage->touchedByTests($class->class)) {
                 $uncovered[] = $this->name($class->class);
             }
         }
@@ -462,39 +444,13 @@ final class ImpactReport
      */
     private function unused(): array
     {
-        $graph = $this->query->graph();
+        $usage = new Usage($this->query->graph());
         $unused = [];
         foreach ([...$this->groups['direct'], ...$this->groups['state'], ...$this->groups['quietState']] as $class) {
-            $node = $graph->node($class->class);
-            if ($node?->kind !== NodeKind::PhpClass || $node->file === null || TestFiles::isTest($node->file)) {
-                continue;
+            [$unusedByApplication, $tested] = $usage->unused($class->class) ?? [false, false];
+            if ($unusedByApplication) {
+                $unused[$this->name($class->class)] = $tested;
             }
-            $nodes = [$class->class];
-            foreach ($graph->incident($class->class) as $item) {
-                if ($item['forward'] && \in_array($item['edge']->relation, [Relation::Extends, Relation::Implements], true)) {
-                    continue 2;
-                }
-                if ($item['forward'] && $item['edge']->relation === Relation::HasMethod) {
-                    $nodes[] = $item['other'];
-                }
-            }
-            $tested = false;
-            foreach ($nodes as $member) {
-                foreach ($graph->incident($member) as $item) {
-                    if ($item['forward'] || \in_array($item['edge']->relation, [Relation::Defines, Relation::Imports, Relation::HasMethod, Relation::ReadsStateOf], true)) {
-                        continue;
-                    }
-                    $owner = $graph->node(explode('::', $item['other'])[0]);
-                    if ($owner?->id === $class->class) {
-                        continue;
-                    }
-                    if ($owner?->file === null || !TestFiles::isTest($owner->file)) {
-                        continue 3;
-                    }
-                    $tested = true;
-                }
-            }
-            $unused[$this->name($class->class)] = $tested;
         }
 
         return $unused;

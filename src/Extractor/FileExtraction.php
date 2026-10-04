@@ -39,6 +39,8 @@ final readonly class FileExtraction
      * @param array<string, string> $returnElements method id => class of the elements of the collection it returns
      * @param list<array{string, TypeExpr}> $propertyReads method id => a property it reads on a typed object,
      *                                             `$violation->type`: an enum read so is linked to the method
+     * @param array<string, list<array{int, string}>> $invokedParameters method id => the parameters it calls,
+     *                                             `$apply(...)`, by position and name: a closure passed there runs in it
      */
     public function __construct(
         public array $nodes,
@@ -61,6 +63,7 @@ final readonly class FileExtraction
         public array $configurationCalls = [],
         public array $propertyReads = [],
         public array $returnElements = [],
+        public array $invokedParameters = [],
     ) {
     }
 }

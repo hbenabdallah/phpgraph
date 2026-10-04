@@ -9,11 +9,11 @@
         "classLike": 295,
         "methods": 770,
         "external": 123,
-        "edges": 4179,
+        "edges": 4184,
         "vendorFilesRead": 105,
         "edgesByConfidence": {
             "EXTRACTED": 3212,
-            "INFERRED": 954,
+            "INFERRED": 959,
             "AMBIGUOUS": 13
         },
         "calls": {
@@ -94,7 +94,7 @@
             "contextPairs": 14,
             "layerFirst": false
         },
-        "seconds": 0.49,
+        "seconds": 0.5,
         "peakMemoryMb": 26
     },
     {
@@ -107,11 +107,11 @@
         "classLike": 4449,
         "methods": 23781,
         "external": 904,
-        "edges": 140304,
+        "edges": 140306,
         "vendorFilesRead": 591,
         "edgesByConfidence": {
             "EXTRACTED": 107737,
-            "INFERRED": 32135,
+            "INFERRED": 32137,
             "AMBIGUOUS": 432
         },
         "calls": {
@@ -211,7 +211,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 8.08,
+        "seconds": 8.8,
         "peakMemoryMb": 474
     },
     {
@@ -224,12 +224,12 @@
         "classLike": 8447,
         "methods": 38595,
         "external": 888,
-        "edges": 217294,
+        "edges": 217418,
         "vendorFilesRead": 687,
         "edgesByConfidence": {
             "EXTRACTED": 155411,
-            "INFERRED": 60186,
-            "AMBIGUOUS": 1697
+            "INFERRED": 60303,
+            "AMBIGUOUS": 1704
         },
         "calls": {
             "total": 159034,
@@ -327,8 +327,8 @@
             "contextPairs": 13,
             "layerFirst": false
         },
-        "seconds": 13.16,
-        "peakMemoryMb": 612
+        "seconds": 13.77,
+        "peakMemoryMb": 614
     },
     {
         "name": "prestashop",
@@ -340,11 +340,11 @@
         "classLike": 7291,
         "methods": 32895,
         "external": 1094,
-        "edges": 184961,
+        "edges": 184998,
         "vendorFilesRead": 592,
         "edgesByConfidence": {
             "EXTRACTED": 126837,
-            "INFERRED": 55936,
+            "INFERRED": 55973,
             "AMBIGUOUS": 2188
         },
         "calls": {
@@ -437,7 +437,7 @@
             "contextPairs": 293,
             "layerFirst": true
         },
-        "seconds": 12.69,
+        "seconds": 12.93,
         "peakMemoryMb": 540
     },
     {
@@ -534,7 +534,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.66,
+        "seconds": 0.65,
         "peakMemoryMb": 32
     },
     {
@@ -547,12 +547,12 @@
         "classLike": 698,
         "methods": 4076,
         "external": 325,
-        "edges": 23010,
+        "edges": 23020,
         "vendorFilesRead": 353,
         "edgesByConfidence": {
             "EXTRACTED": 14055,
-            "INFERRED": 8274,
-            "AMBIGUOUS": 681
+            "INFERRED": 8282,
+            "AMBIGUOUS": 683
         },
         "calls": {
             "total": 25494,
@@ -618,7 +618,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 3.26,
+        "seconds": 3.6,
         "peakMemoryMb": 124
     },
     {
@@ -631,11 +631,11 @@
         "classLike": 840,
         "methods": 7580,
         "external": 117,
-        "edges": 41951,
+        "edges": 41952,
         "vendorFilesRead": 0,
         "edgesByConfidence": {
             "EXTRACTED": 19124,
-            "INFERRED": 21194,
+            "INFERRED": 21195,
             "AMBIGUOUS": 1633
         },
         "calls": {
@@ -724,7 +724,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 6.13,
+        "seconds": 6.64,
         "peakMemoryMb": 127
     },
     {
@@ -809,7 +809,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.43,
+        "seconds": 0.45,
         "peakMemoryMb": 38
     },
     {
@@ -890,7 +890,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.57,
+        "seconds": 0.7,
         "peakMemoryMb": 46
     }
 ]

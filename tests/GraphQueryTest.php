@@ -162,7 +162,10 @@ final class GraphQueryTest extends TestCase
         $subgraph = (new GraphQuery((new \PhpGraph\Builder\GraphBuilder())->build($root)->graph))->subgraph('explain for me notification validation system');
         $labels = array_map(static fn ($node): string => $node->label, $subgraph->nodes);
 
-        self::assertSame(['Notification'], array_map(static fn ($node): string => $node->label, $subgraph->seeds), '"explain" and "system" name no code');
+        $seeds = array_map(static fn ($node): string => $node->label, $subgraph->seeds);
+        self::assertSame('Notification', $seeds[0], '"explain" and "system" name no code');
+        self::assertContains('InvariantValidator', $seeds, 'a class of the feature around it: about the question, working with it');
+        self::assertNotContains('MeasuringSystemRule', $seeds);
         foreach (['InvariantValidator', 'Violation', 'PathContext'] as $sibling) {
             self::assertContains($sibling, $labels, 'the module of the seed');
         }

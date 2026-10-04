@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace PhpGraph\Presentation;
 
 use PhpGraph\Builder\CallStats;
+use PhpGraph\Builder\TestFiles;
 use PhpGraph\Graph\Edge;
 use PhpGraph\Graph\Node;
 use PhpGraph\Graph\NodeKind;
+use PhpGraph\Graph\Relation;
 use PhpGraph\Query\Direction;
 use PhpGraph\Query\GraphQuery;
 use PhpGraph\Query\Result\Connection;
@@ -53,8 +55,15 @@ final class TextPresenter
 
         // By direction and relation, the most telling first; file-level links (use statements, the declaring file)
         // only counted: a class used everywhere would show nothing else.
+        // Test code using it is counted by module: a class every test touches would show its tests only.
         $groups = [];
+        $tests = [];
         foreach ($connections as $connection) {
+            $file = $connection->forward ? null : $graph->node(explode('::', $connection->other)[0])?->file;
+            if ($file !== null && $connection->edge->relation !== Relation::Imports && TestFiles::isTest($file)) {
+                $tests[TestFiles::module($file)][$file] = true;
+                continue;
+            }
             $groups[($connection->forward ? 'out' : 'in') . ':' . $connection->edge->relation->value][] = $connection;
         }
         $order = static function (string $key): int {
@@ -80,6 +89,18 @@ final class TextPresenter
             if (\count($group) > $perGroup) {
                 $lines[] = \sprintf('      ... %d more: get_neighbors, or impact_of for what depends on it', \count($group) - $perGroup);
             }
+        }
+
+        if ($tests !== []) {
+            uasort($tests, static fn (array $a, array $b): int => \count($b) <=> \count($a));
+            $modules = array_map(static fn (string $module, array $files): string => $module . ' ' . \count($files), array_keys($tests), $tests);
+            $lines[] = \sprintf(
+                '  <-- tests: %d files in %d modules (%s%s)',
+                array_sum(array_map('count', $tests)),
+                \count($tests),
+                implode(', ', \array_slice($modules, 0, 5)),
+                \count($modules) > 5 ? ', ...' : '',
+            );
         }
 
         if ($direction !== Direction::Out && $node->kind === NodeKind::Method) {
@@ -191,14 +212,32 @@ final class TextPresenter
             array_push($lines, ...$families);
         }
 
+        $lists = $this->query->injectedLists($subgraph->nodes);
+        if ($lists !== []) {
+            $lines[] = '';
+            $lines[] = 'Injected lists (container configuration):';
+            foreach ($lists as $list) {
+                $lines[] = \sprintf(
+                    '  %s receives %d %s (%s)',
+                    $this->query->label($list['receiver']),
+                    $list['members'],
+                    $list['family'] === null ? 'services' : $this->query->label($list['family']),
+                    $list['via'],
+                );
+            }
+        }
+
+        // An injected list's members appear in the summary above, not one edge each.
+        $edges = array_values(array_filter($subgraph->edges, static fn (Edge $edge): bool => $edge->relation !== Relation::Receives
+            || (!str_starts_with($edge->via(), 'tagged_') && !str_starts_with($edge->via(), 'through '))));
         $edgeLimit = $budget * 3;
         $lines[] = '';
-        $lines[] = 'Edges (' . \count($subgraph->edges) . '):';
-        foreach (\array_slice($subgraph->edges, 0, $edgeLimit) as $edge) {
+        $lines[] = 'Edges (' . \count($edges) . '):';
+        foreach (\array_slice($edges, 0, $edgeLimit) as $edge) {
             $lines[] = '  ' . $this->formatEdge($edge);
         }
-        if (\count($subgraph->edges) > $edgeLimit) {
-            $lines[] = \sprintf('  ... %d more', \count($subgraph->edges) - $edgeLimit);
+        if (\count($edges) > $edgeLimit) {
+            $lines[] = \sprintf('  ... %d more', \count($edges) - $edgeLimit);
         }
 
         return implode("\n", $lines);
@@ -609,6 +648,21 @@ final class TextPresenter
      * @param ?string $section one of IMPACT_SECTIONS, null for all of them
      * @param string  $format  text (compact, one line per class), full (every relation spelled out) or json
      */
+    /**
+     * The outline of the feature a question names (format text, full or json).
+     */
+    public function outline(string $topic, string $format = 'text'): string
+    {
+        $outline = $this->query->outline($topic);
+        if ($outline === null) {
+            $message = \sprintf('No class matches "%s": try query_graph, or other words.', $topic);
+
+            return $format === 'json' ? (string) json_encode(['error' => $message]) : $message;
+        }
+
+        return (new OutlineReport($this->query, $outline))->render($format);
+    }
+
     public function impact(string $name, int $depth = 3, int $limit = 40, ?string $section = null, string $format = 'text'): string
     {
         if ($format === 'full') {

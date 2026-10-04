@@ -127,6 +127,7 @@ final class GraphBuilder
         $returnTypes = [];
         /** @var array<string, string> $returnElements */
         $returnElements = [];
+        $invokedParameters = [];
         $propertyTypes = [];
         /** @var array<string, string> $constants */
         $constants = [];
@@ -155,10 +156,13 @@ final class GraphBuilder
                 $graph->addEdge(new Edge($id($edge->source), $id($edge->target), $edge->relation, $edge->confidence));
             }
             foreach ($extraction->pendingCalls as $call) {
-                $pending[$path][] = new PendingCall($id($call->source), $call->receiver?->map($id), $call->method, $call->referenceOnMiss, $call->line, $call->named);
+                $pending[$path][] = new PendingCall($id($call->source), $call->receiver?->map($id), $call->method, $call->referenceOnMiss, $call->line, $call->named, $call->closure);
             }
             foreach ($extraction->returnTypes as $method => $type) {
                 $returnTypes[$id($method)] ??= $type === TypeExpr::STATIC ? $type : $id($type);
+            }
+            foreach ($extraction->invokedParameters as $method => $parameters) {
+                $invokedParameters[$id($method)] = $parameters;
             }
             foreach ($extraction->returnElements as $method => $type) {
                 $returnElements[$id($method)] ??= $id($type);
@@ -277,13 +281,15 @@ final class GraphBuilder
         foreach ($pending as $path => $fileCalls) {
             $calls[$path] = $reuse && $previous !== null && !isset($changed[$path])
                 ? $previous->calls[$path] ?? []
-                : $this->resolveCalls($graph, $types, $methodsByName, $fileCalls);
+                : $this->resolveCalls($graph, $types, $methodsByName, $fileCalls, $invokedParameters);
             $inTests = TestFiles::isTest((string) $path);
             foreach ($calls[$path] as [$edge, $outcome, $method]) {
                 if ($edge !== null) {
                     $graph->addEdge($edge);
                 }
-                $counter->add($outcome, $inTests, $method);
+                if ($outcome !== '') {
+                    $counter->add($outcome, $inTests, $method);
+                }
             }
         }
 
@@ -525,39 +531,69 @@ final class GraphBuilder
      *
      * @param array<string, list<string>> $methodsByName
      * @param list<PendingCall>           $calls
+     * @param array<string, list<array{int, string}>> $invokedParameters method id => the parameters it calls
      *
-     * @return list<array{?Edge, string, string}>
+     * @return list<array{?Edge, string, string}> an empty outcome for an edge counting no call site
      */
-    private function resolveCalls(Graph $graph, TypeResolver $types, array $methodsByName, array $calls): array
+    private function resolveCalls(Graph $graph, TypeResolver $types, array $methodsByName, array $calls, array $invokedParameters = []): array
     {
         $results = [];
-        foreach ($calls as $call) {
-            $name = strtolower($call->method);
-
-            $leftProject = false;
-            $class = $call->receiver === null ? null : $types->resolve($call->receiver, $leftProject);
-
-            if ($class !== null) {
-                $found = $types->findMethod($class, $name);
-
-                // A method found in a dependency is outside the project, like before: no node, no call edge.
-                if ($found !== null && $graph->hasNode($found)) {
-                    $results[] = [new Edge($call->source, $found, Relation::Calls, Confidence::Inferred, (string) $call->line, self::named($call)), 'inferred', $call->method];
-                } else {
-                    $edge = $call->referenceOnMiss ? new Edge($call->source, $class, Relation::References, Confidence::Extracted) : null;
-                    $results[] = [$edge, 'outsideProject', $call->method];
-                }
-
+        $targets = [];
+        foreach ($calls as $index => $call) {
+            $count = \count($results);
+            $this->resolveCall($graph, $types, $methodsByName, $call, $results);
+            $edge = $results[$count][0] ?? null;
+            if ($edge === null || $edge->relation !== Relation::Calls) {
                 continue;
             }
+            $targets[$index] = $edge->target;
 
-            $candidates = $methodsByName[$name] ?? [];
-            $results[] = \count($candidates) === 1
-                ? [new Edge($call->source, $candidates[0], Relation::Calls, Confidence::Ambiguous, (string) $call->line, self::named($call)), 'ambiguous', $call->method]
-                : [null, $leftProject ? 'chainOutsideProject' : 'unknownReceiver', $call->method];
+            // Written in a closure passed to a method calling that parameter: the method runs it.
+            [$outer, $parameter] = $call->closure ?? [null, null];
+            $callee = $outer === null ? null : $targets[$outer] ?? null;
+            if ($callee === null) {
+                continue;
+            }
+            foreach ($invokedParameters[$callee] ?? [] as [$position, $name]) {
+                if ($parameter === $position || $parameter === $name) {
+                    $results[] = [new Edge($callee, $edge->target, Relation::Calls, $edge->confidence, '', 'closure of ' . $call->source), '', $call->method];
+                    break;
+                }
+            }
         }
 
         return $results;
+    }
+
+    /**
+     * @param array<string, list<string>>        $methodsByName
+     * @param list<array{?Edge, string, string}> $results
+     */
+    private function resolveCall(Graph $graph, TypeResolver $types, array $methodsByName, PendingCall $call, array &$results): void
+    {
+        $name = strtolower($call->method);
+
+        $leftProject = false;
+        $class = $call->receiver === null ? null : $types->resolve($call->receiver, $leftProject);
+
+        if ($class !== null) {
+            $found = $types->findMethod($class, $name);
+
+            // A method found in a dependency is outside the project, like before: no node, no call edge.
+            if ($found !== null && $graph->hasNode($found)) {
+                $results[] = [new Edge($call->source, $found, Relation::Calls, Confidence::Inferred, (string) $call->line, self::named($call)), 'inferred', $call->method];
+            } else {
+                $edge = $call->referenceOnMiss ? new Edge($call->source, $class, Relation::References, Confidence::Extracted) : null;
+                $results[] = [$edge, 'outsideProject', $call->method];
+            }
+
+            return;
+        }
+
+        $candidates = $methodsByName[$name] ?? [];
+        $results[] = \count($candidates) === 1
+            ? [new Edge($call->source, $candidates[0], Relation::Calls, Confidence::Ambiguous, (string) $call->line, self::named($call)), 'ambiguous', $call->method]
+            : [null, $leftProject ? 'chainOutsideProject' : 'unknownReceiver', $call->method];
     }
 
     /**

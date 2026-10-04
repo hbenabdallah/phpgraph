@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpGraph\Query;
 
 use PhpGraph\Builder\TestFiles;
+use PhpGraph\Graph\Confidence;
 use PhpGraph\Graph\Graph;
 use PhpGraph\Graph\Node;
 use PhpGraph\Graph\NodeKind;
@@ -14,6 +15,7 @@ use PhpGraph\Query\Result\Architecture;
 use PhpGraph\Query\Result\Connection;
 use PhpGraph\Query\Result\Impact;
 use PhpGraph\Query\Result\NamespaceGroup;
+use PhpGraph\Query\Result\Outline;
 use PhpGraph\Query\Result\Overview;
 use PhpGraph\Query\Result\Path;
 use PhpGraph\Query\Result\PathMode;
@@ -98,10 +100,23 @@ final class GraphQuery
         'feature', 'features', 'module', 'modules', 'code', 'project', 'this', 'that', 'these', 'those', 'you', 'our',
     ];
 
+    /**
+     * @param string|null $root the project's directory, to read the sources an outline shows
+     */
     public function __construct(
         private readonly Graph $graph,
         private readonly ?ProjectSummary $summary = null,
+        private readonly ?string $root = null,
     ) {
+    }
+
+    /**
+     * The structural outline of the feature a question names: its classes and what they declare, the families
+     * around them, how the application runs into it, its wiring, its users and tests. Null when nothing matches.
+     */
+    public function outline(string $topic): ?Outline
+    {
+        return (new FeatureOutline($this, $this->relevance(), $this->root))->build($topic);
     }
 
     public function overview(): Overview
@@ -439,7 +454,11 @@ final class GraphQuery
         return null;
     }
 
-    public function subgraph(string $question, int $depth = 2, int $budget = 40): Subgraph
+    /**
+     * @param bool $collaborators add to the seeds the classes of the feature around them (FeatureCluster): those
+     *                            of the seeds' namespace cluster about the question or working with a seed
+     */
+    public function subgraph(string $question, int $depth = 2, int $budget = 40, bool $collaborators = true): Subgraph
     {
         $terms = $this->terms($question);
         $routes = $this->routesAsked($question, $terms, max(1, intdiv($budget, 2)));
@@ -481,8 +500,83 @@ final class GraphQuery
             $classes[$class] = true;
             $seeds[] = $node;
         }
+        $primary = array_map('strval', array_keys($classes));
+        if ($collaborators && $seeds !== []) {
+            $seeds = [...$seeds, ...$this->collaborators($primary, $stems, self::SEEDS * 2 - \count($seeds))];
+        }
 
-        return $this->expand($stems, $seeds, $depth, $budget, $wantsTests);
+        return $this->expand($stems, $seeds, $depth, $budget, $wantsTests, $primary);
+    }
+
+    /**
+     * The classes of the feature around the seeds, in the seeds' namespace cluster (`App\Shared`): about the
+     * question, or taking or returning a seed. Members of a family are left to it.
+     *
+     * @param list<string> $seeds
+     * @param list<string> $stems
+     *
+     * @return list<Node>
+     */
+    private function collaborators(array $seeds, array $stems, int $limit): array
+    {
+        $cluster = new FeatureCluster($this->graph, $this->relevance());
+        $prefix = static fn (string $class): string => implode('\\', \array_slice(explode('\\', $class), 0, 2));
+        $areas = array_flip(array_map($prefix, $seeds));
+        $found = [];
+        foreach ($cluster->grow($seeds, $stems)['core'] as $class) {
+            $node = $this->graph->node($class);
+            if ($node === null || \in_array($class, $seeds, true) || !isset($areas[$prefix($class)]) || $node->kind === NodeKind::PhpInterface) {
+                continue;
+            }
+            $linked = array_intersect_key($cluster->linksOf($class), array_flip($seeds)) !== [];
+            $about = $this->relevance()->score($node, $stems, true) > 0;
+            if ($linked || $about) {
+                $found[] = [($about ? 2 : 0) + ($linked ? 1 : 0), $node];
+            }
+        }
+        usort($found, static fn (array $a, array $b): int => $b[0] <=> $a[0]);
+
+        return array_map(static fn (array $row): Node => $row[1], \array_slice($found, 0, max(0, $limit)));
+    }
+
+    /**
+     * The injected lists among classes: who receives which family under which tags, once per family rather than
+     * once per member (`ContextValidator` receives 34 `ContextRuleInterface`).
+     *
+     * @param list<Node> $nodes
+     *
+     * @return list<array{receiver: string, family: ?string, members: int, via: string}>
+     */
+    public function injectedLists(array $nodes): array
+    {
+        $cluster = new FeatureCluster($this->graph, $this->relevance());
+        $lists = [];
+        foreach ($nodes as $node) {
+            if (!$node->kind->isClassLike()) {
+                continue;
+            }
+            $groups = [];
+            foreach ($this->graph->incident($node->id) as $item) {
+                $edge = $item['edge'];
+                if ($item['forward'] && $edge->relation === Relation::Receives && $edge->confidence === Confidence::Extracted && str_starts_with($edge->via(), 'tagged_')) {
+                    [$kind, $tag] = explode(' ', $edge->via(), 2) + [1 => ''];
+                    $family = $cluster->headOf($item['other']) ?? '';
+                    $groups[$family . '|' . $kind]['members'][$item['other']] = true;
+                    $groups[$family . '|' . $kind]['tags'][$tag] = true;
+                }
+            }
+            foreach ($groups as $key => $group) {
+                [$family, $kind] = explode('|', (string) $key, 2);
+                $lists[] = [
+                    'receiver' => $node->id,
+                    'family' => $family === '' ? null : $family,
+                    'members' => \count($group['members']),
+                    'via' => $kind . ' ' . FeatureOutline::pattern(array_map('strval', array_keys($group['tags']))),
+                ];
+            }
+        }
+
+        return $lists;
     }
 
     /**
@@ -566,10 +660,12 @@ final class GraphQuery
     /**
      * The seeds and their neighbourhood, up to $depth steps and $budget nodes.
      *
-     * @param list<string> $terms
-     * @param list<Node>   $seeds
+     * @param list<string>      $terms
+     * @param list<Node>        $seeds
+     * @param list<string>|null $primary the classes the question names, whose methods may stand on their own (the
+     *                                   classes of the feature added around them stand as classes)
      */
-    private function expand(array $terms, array $seeds, int $depth, int $budget, bool $withTests = true): Subgraph
+    private function expand(array $terms, array $seeds, int $depth, int $budget, bool $withTests = true, ?array $primary = null): Subgraph
     {
         $selected = [];
         $frontier = [];
@@ -584,22 +680,29 @@ final class GraphQuery
         foreach ($seeds as $seed) {
             $seedClasses[explode('::', $seed->id)[0]] = true;
         }
-        $asCandidate = function (Node $node) use ($seedClasses): Node {
+        $methodsShown = $primary === null ? $seedClasses : array_fill_keys($primary, true);
+        $asCandidate = function (Node $node) use ($methodsShown): Node {
             if ($node->kind !== NodeKind::Method) {
                 return $node;
             }
             $class = explode('::', $node->id)[0];
 
-            return isset($seedClasses[$class]) ? $node : ($this->graph->node($class) ?? $node);
+            return isset($methodsShown[$class]) ? $node : ($this->graph->node($class) ?? $node);
         };
 
         // Each step keeps the neighbours that are about the question, then those linked by a telling relation;
         // the next step starts only from the first ones, so an unrelated hub never opens the way.
+        $cluster = new FeatureCluster($this->graph, $this->relevance());
         for ($level = 1; $level <= $depth && $frontier !== [] && \count($selected) < $budget; ++$level) {
             $candidates = [];
-            $consider = function (Node $other, int $weight, bool $ownName) use (&$candidates, &$selected, $terms, $withTests): void {
+            $consider = function (Node $other, int $weight, bool $ownName) use (&$candidates, &$selected, $terms, $withTests, $cluster): void {
                 if (isset($selected[$other->id]) || $other->kind === NodeKind::File || $other->kind === NodeKind::External
                     || (!$withTests && $other->file !== null && TestFiles::isTest($other->file))) {
+                    return;
+                }
+                // A member of a family the answer holds (one rule among 34): the family stands for it.
+                $head = $other->kind->isClassLike() ? $cluster->headOf($other->id) : null;
+                if ($head !== null && isset($selected[$head]) && $this->relevance()->score($other, $terms, true) <= 0) {
                     return;
                 }
                 $score = $this->relevance()->score($other, $terms, $ownName);
@@ -618,7 +721,15 @@ final class GraphQuery
                     if ($other === null || $relation === Relation::Imports || $relation === Relation::Defines) {
                         continue;
                     }
+                    // The members of an injected list are the list's: summed up apart (injectedLists), not neighbours.
+                    if ($relation === Relation::Receives && (str_starts_with($item['edge']->via(), 'tagged_') || str_starts_with($item['edge']->via(), 'through '))) {
+                        continue;
+                    }
                     if ($relation === Relation::HasMethod) {
+                        // A class added around the named ones stands as a class.
+                        if (isset($seedClasses[$id]) && !isset($methodsShown[$id])) {
+                            continue;
+                        }
                         // A method of a seed: only by its own name, or an entry point.
                         $name = strtolower(substr($other->id, (int) strrpos($other->id, ':') + 1));
                         if ($this->relevance()->score($other, $terms, true) <= 0 && !\in_array($name, self::ENTRY_POINTS, true)) {

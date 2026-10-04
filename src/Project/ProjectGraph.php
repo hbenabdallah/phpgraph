@@ -139,7 +139,7 @@ final class ProjectGraph
         file_put_contents($this->reportPath(), (new ReportGenerator())->generate($result, $this->options->depth, $summary));
 
         $this->builtFingerprint = $fingerprint;
-        $this->lastBuild = new GraphQuery($result->graph, $summary);
+        $this->lastBuild = new GraphQuery($result->graph, $summary, $this->root);
         $this->checkedAt = microtime(true);
         $this->say(sprintf(
             'graph built: %d files%s, %d nodes, %d edges in %.1f s',

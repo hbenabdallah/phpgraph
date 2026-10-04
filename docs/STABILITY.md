@@ -15,6 +15,7 @@ rely on what this page lists: it changes only in a major version (2.0.0), announ
 | `query <question>` | `--depth`, `--budget`, `-g, --graph` |
 | `explain <name>` | `-d, --direction` (`in`, `out`, `both`), `-g, --graph` |
 | `path <from> <to>` | `-g, --graph` |
+| `outline <topic>` | `-f, --format` (`text`, `full`, `json`), `-g, --graph` |
 | `impact <name>` | `-d, --depth`, `-l, --limit`, `-a, --all`, `-s, --section` (`direct`, `routes`, `state`, `tests`, `state-tests`, `helpers`), `-f, --format` (`text`, `full`, `json`), `-g, --graph` |
 | `check [path]` | `-o, --output`, `-b, --baseline`, `--generate-baseline` |
 | `mcp-config [agent]` | agent `sherpa`, `claude`, `codex`, `cursor` or `json`; `-p, --project`, `--docker` |
@@ -31,6 +32,7 @@ files, a new layer violation for `check`); `2` for invalid input (an unknown dir
 | `get_node` | `name` (required) |
 | `get_neighbors` | `name` (required), `direction` (`in`, `out`, `both`) |
 | `impact_of` | `name` (required), `depth`, `limit` (0 for complete lists), `section`, `format` (`text`, `full`, `json`) |
+| `outline` | `topic` (required), `format` (`text`, `full`, `json`) |
 | `shortest_path` | `from`, `to` (required) |
 | `god_nodes` | `limit` |
 
@@ -49,7 +51,7 @@ Format 2: `{"version": 2, "meta": {...}, "nodes": [...], "edges": [...]}`.
   multi-service repository (`billing@App\Domain\Order`).
 - An edge: `source`, `target`, `relation`, `confidence`, and when known `lines` (`"12,40"`, the source lines) and
   `via` (what carries it: `tagged_iterator app.rule`, `tagged_locator app.use_case`, `through <service id>` or `service <id>` (one of several services of a class) on a
-  `receives` edge; `named: severity, path` on a call written with named arguments).
+  `receives` edge; `closure of <method>` on a `calls` edge from a method running a closure it receives; `named: severity, path` on a call written with named arguments).
 - Relations: `defines`, `imports`, `extends`, `implements`, `uses_trait`, `has_method`, `overrides`, `instantiates`,
   `calls`, `references`, `dispatches`, `handled_by`, `contract`, `requests`, `receives`, `reads_state_of`.
 - Confidence: `EXTRACTED` (read in the code or the configuration), `INFERRED` (resolved from declared types or

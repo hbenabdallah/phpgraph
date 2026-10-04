@@ -109,6 +109,18 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
     private readonly bool $inConfigurationDirectory;
 
+    /** @var array<int, array{int, int|string}> closure passed as an argument => the call's index, the parameter */
+    private array $closureArguments = [];
+
+    /** @var list<array{int, int|string}|null> the closures being read, innermost last */
+    private array $closures = [];
+
+    /** @var array<string, int> parameters of the current callable => their position */
+    private array $parameters = [];
+
+    /** @var array<string, list<array{int, string}>> */
+    private array $invokedParameters = [];
+
     public function __construct(private readonly string $path)
     {
         $this->fileId = 'file:' . $path;
@@ -147,6 +159,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->configuration->calls(),
             $this->propertyReads,
             $this->returnElements,
+            $this->invokedParameters,
         );
     }
 
@@ -272,6 +285,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
         if ($node instanceof Expr\Closure || $node instanceof Expr\ArrowFunction) {
             $this->localTypes = array_pop($this->outerScopes) ?? [];
+            array_pop($this->closures);
         }
 
         if ($node instanceof Stmt) {
@@ -288,6 +302,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         if ($node instanceof Stmt\ClassMethod || $node instanceof Stmt\Function_) {
             $this->configuration->leaveCallable();
             $this->parameterElements = [];
+            $this->parameters = [];
+            $this->closures = [];
             $this->currentCallable = null;
             $this->localTypes = [];
             $this->pinned = [];
@@ -400,6 +416,12 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         $this->currentCallable = $id;
+        $this->parameters = [];
+        foreach ($node->params as $position => $param) {
+            if ($param->var instanceof Expr\Variable && \is_string($param->var->name)) {
+                $this->parameters[$param->var->name] = $position;
+            }
+        }
         $elements = $node->getAttribute(DocTypeResolver::ELEMENT_TYPES);
         $this->parameterElements = \is_array($elements) ? array_filter($elements, 'is_string') : [];
         $this->configuration->enterCallable($id, $node->params, array_values(array_map(fn (AstNode\Param $param): ?string => $this->singleType($param->type), $node->params)));
@@ -503,6 +525,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     private function enterClosure(Expr\Closure|Expr\ArrowFunction $node): void
     {
         $this->outerScopes[] = $this->localTypes;
+        $this->closures[] = $this->closureArguments[spl_object_id($node)] ?? end($this->closures) ?: null;
 
         if ($node instanceof Expr\Closure) {
             $inherited = [];
@@ -515,6 +538,28 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         $this->typeParameters($node->params);
+    }
+
+    /**
+     * The closure literals passed to the call just recorded: the calls written in them may run in the callee.
+     *
+     * @param array<AstNode\Arg|AstNode\ArgPlaceholder|AstNode\VariadicPlaceholder> $args
+     */
+    private function onClosureArguments(array $args): void
+    {
+        foreach ($args as $position => $arg) {
+            if ($arg instanceof AstNode\Arg && ($arg->value instanceof Expr\Closure || $arg->value instanceof Expr\ArrowFunction)) {
+                $this->closureArguments[spl_object_id($arg->value)] = [\count($this->pending) - 1, $arg->name?->toString() ?? $position];
+            }
+        }
+    }
+
+    /**
+     * @return array{int, int|string}|null the closure argument the current code is written in
+     */
+    private function closure(): ?array
+    {
+        return end($this->closures) ?: null;
     }
 
     /**
@@ -620,7 +665,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             // Outside any method (a configuration file's closure, a script), the file calls it: Wiring::wire($services, ...).
             $caller = $this->currentCallable ?? ($this->currentClass === null ? $this->fileId : null);
             if ($node->name instanceof Identifier && $caller !== null) {
-                $this->pending[] = new PendingCall($caller, TypeExpr::named($class), $node->name->toString(), true, $node->getStartLine(), $this->namedArguments($node->args));
+                $this->pending[] = new PendingCall($caller, TypeExpr::named($class), $node->name->toString(), true, $node->getStartLine(), $this->namedArguments($node->args), $this->closure());
+                $this->onClosureArguments($node->args);
             } else {
                 $this->reference($this->owner(), $class);
             }
@@ -637,7 +683,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                     false,
                     $node->getStartLine(),
                     $this->namedArguments($node->args),
+                    $this->closure(),
                 );
+                $this->onClosureArguments($node->args);
             }
             $this->onPossibleSend(
                 $node->name->toString(),
@@ -652,6 +700,13 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         // ($this->placeOrder)() and $handler($command): a call to __invoke on an invokable object. Only when the object
         // is typed: an untyped $callback() is most often a closure or a callable string, not a method call.
         if ($node instanceof Expr\FuncCall && $node->name instanceof Expr && $this->currentCallable !== null) {
+            // $apply(...) on a parameter: a closure passed to this method runs here.
+            if ($node->name instanceof Expr\Variable && \is_string($node->name->name) && isset($this->parameters[$node->name->name])) {
+                $invoked = [$this->parameters[$node->name->name], $node->name->name];
+                if (!\in_array($invoked, $this->invokedParameters[$this->currentCallable] ?? [], true)) {
+                    $this->invokedParameters[$this->currentCallable][] = $invoked;
+                }
+            }
             $invoked = $this->typeOf($node->name);
             if ($invoked !== null) {
                 $this->pending[] = new PendingCall($this->currentCallable, $invoked, '__invoke', false, $node->getStartLine());

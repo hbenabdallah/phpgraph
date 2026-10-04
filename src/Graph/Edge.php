@@ -52,6 +52,12 @@ final class Edge
             $names = array_unique([...explode(', ', substr($this->via, 7)), ...explode(', ', substr($other->via, 7))]);
             $this->via = 'named: ' . implode(', ', array_filter($names, static fn (string $name): bool => $name !== ''));
         }
+        // The closures a method runs: `closure of A::handle, B::handle`; a call written in the method itself wins.
+        if (str_starts_with($this->via, 'closure of ') && $other->via !== $this->via) {
+            $this->via = str_starts_with($other->via, 'closure of ')
+                ? 'closure of ' . implode(', ', array_unique([...explode(', ', substr($this->via, 11)), ...explode(', ', substr($other->via, 11))]))
+                : $other->via;
+        }
         if ($other->lines === '' || $other->lines === $this->lines) {
             return;
         }

@@ -6,6 +6,20 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 ## Unreleased
 
 ### Added
+- `outline` (command and MCP tool): the structural outline of a feature named in words, enough for an agent to read
+  only the few files with non-obvious logic: its classes by namespace and layer with their docblock's first sentence,
+  public signatures, constants and enum cases (read in the sources on demand, not stored in the graph); the
+  interfaces and base classes around it with their implementations by module, 0 stated; the routes running into it,
+  through the closures it runs; behaviour read in the bodies (guarded throws, early returns, branches on constants,
+  loop caps, state compared before and after); its container wiring with service ids; its users, tests counted by
+  module, what no test touches and what nothing uses. About 15 KB for a feature of 34 classes.
+- A method running a closure it receives (`$apply(...)`) calls what the closure calls, INFERRED, `via`
+  `closure of <the method writing it>`: use case → pipeline → (closure) → builder → aggregate is a path. `impact`
+  does not climb these edges: the method writing the closure already calls the same code.
+- `query` adds to the classes it names the classes of the feature around them (about the question or working with
+  them), and sums up an injected list once on the class receiving it (`ContextValidator receives 34
+  ContextRuleInterface`) instead of an edge per member; a member of a family the answer holds is left to it.
+- `explain` and `get_node` count the tests using a node by module instead of listing them.
 - `impact` lists the tests one path per line under their module, gives the other chains of a route (`+1 other chain`,
   listed with `--all`), and names the application classes on the way nothing outside tests uses.
 - A reader of the state using an enum the change writes (`$violation->type->value` serialized into a response) is
@@ -73,6 +87,8 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 - `impact` with an unknown section exits with code 2, as other invalid input.
 
 ### Fixed
+- `impact` no longer hangs on a test whose path back to the change loops, nor follows a test implementation of an
+  interface (a fake repository) up to the application calling the interface.
 - Collections documented as `iterable<T>`, `list<T>` or `array<K, T>` were read only in the `T[]` form.
 - A test running a generic processor with another use case's payload is no longer listed for a change behind it.
 - An API Platform route references the classes of its own operation only, not those of the resource's other

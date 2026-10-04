@@ -30,6 +30,23 @@ final class GraphQueryProvider
         return new self($project->graphPath(), new JsonGraphStorage(), $project);
     }
 
+    /**
+     * The project's directory, for the sources an outline reads: the one the graph was built from, or the one
+     * holding `phpgraph-out/` when the graph was built elsewhere (in a container).
+     *
+     * @param array<mixed> $meta
+     */
+    private function root(array $meta): ?string
+    {
+        $root = $meta['root'] ?? null;
+        if (\is_string($root) && is_dir($root)) {
+            return $root;
+        }
+        $output = \dirname($this->graphPath);
+
+        return basename($output) === 'phpgraph-out' && is_dir(\dirname($output)) ? \dirname($output) : null;
+    }
+
     public function get(): GraphQuery
     {
         $rebuilt = $this->project?->refresh() ?? false;
@@ -48,7 +65,7 @@ final class GraphQueryProvider
 
         if ($this->query === null || $modifiedAt !== $this->loadedAt) {
             [$graph, $meta] = $this->storage->loadWithMeta($this->graphPath);
-            $this->query = new GraphQuery($graph, \is_array($meta['summary'] ?? null) ? ProjectSummary::fromArray($meta['summary']) : null);
+            $this->query = new GraphQuery($graph, \is_array($meta['summary'] ?? null) ? ProjectSummary::fromArray($meta['summary']) : null, $this->root($meta));
             $this->loadedAt = $modifiedAt;
         }
 

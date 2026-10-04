@@ -8,6 +8,7 @@ use PhpGraph\Command\CheckCommand;
 use PhpGraph\Command\ExplainCommand;
 use PhpGraph\Command\ImpactCommand;
 use PhpGraph\Command\McpConfigCommand;
+use PhpGraph\Command\OutlineCommand;
 use PhpGraph\Command\OverviewCommand;
 use PhpGraph\Command\PathCommand;
 use PhpGraph\Command\QueryCommand;
@@ -28,6 +29,7 @@ $application->addCommands([
     new BuildCommand(),
     new OverviewCommand(),
     new QueryCommand(),
+    new OutlineCommand(),
     new PathCommand(),
     new ExplainCommand(),
     new ImpactCommand(),

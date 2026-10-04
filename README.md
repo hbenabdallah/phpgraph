@@ -101,8 +101,9 @@ claude mcp add phpgraph -- /home/you/.local/bin/phpgraph serve /path/to/project
 | Tool | Use it to |
 |---|---|
 | `overview` | Start here: Composer stack, namespace tree with layers, bounded contexts, layer-rule violations, messages, HTTP routes (each with method, path, controller and file up to 30, else grouped by path prefix), services, and what the graph cannot see. |
-| `query_graph` | Find the code about a topic when you do not know the class names, by the words of their names (validated finds `Validator`). A question about routes (*"mooc courses routes"*, *"GET /courses"*) returns the matching routes and their controllers. The families of classes around the answer are counted by folder (*ContextRuleInterface: 34 in …*). |
-| `get_node` | Read one class, method, route or channel with all its relations. |
+| `query_graph` | Find the code about a topic when you do not know the class names, by the words of their names (validated finds `Validator`), with the classes of the feature around the ones it names. A question about routes (*"mooc courses routes"*, *"GET /courses"*) returns the matching routes and their controllers. The families of classes around the answer are counted by folder (*ContextRuleInterface: 34 in …*), injected lists once (*ContextValidator receives 34 ContextRuleInterface*). |
+| `outline` | Before explaining a feature: its structural outline, enough to read only the few files with non-obvious logic. The classes it is made of, by namespace and layer, with the first sentence of their docblock, their public signatures, constants and enum cases; the interfaces and base classes around it with their implementations by module (0 stated); the routes running into it, chain by chain, through the closures it runs; behaviour read in the bodies (guarded throws, early returns, branches on constants, loop caps, state compared before and after); the container wiring with service ids; its users, tests counted by module, what no test touches and what nothing uses. |
+| `get_node` | Read one class, method, route or channel with all its relations; tests using it are counted by module. |
 | `get_neighbors` | See what uses a node (`in`) or what it depends on (`out`). |
 | `impact_of` | Before a change: every class that depends on a class or method, nearest first, with the lines of the calls; callers through the interface it implements; code depending on the state it writes; the routes reaching it, with each chain; and the tests to run, found through test helpers. It flags the classes no test touches and those nothing in the application uses. |
 | `shortest_path` | See how two pieces of code are connected. |
@@ -127,6 +128,7 @@ phpgraph check                               # layer rules, for CI: exit code 1 
 phpgraph explain "PlaceOrderHandler" [-d in] # a node and its relations
 phpgraph path "StockChecker" "DbalOrderRepository"
 phpgraph query "how is stock checked"
+phpgraph outline "notification validation"   # the outline of a feature (--format full|json)
 phpgraph serve [path]                        # the MCP server, over stdio
 phpgraph mcp-config claude|codex|cursor|json [--docker image]
 ```
@@ -141,7 +143,7 @@ phpgraph mcp-config claude|codex|cursor|json [--docker image]
 | `extends`, `implements`, `uses_trait` | class → parent, interface, trait |
 | `has_method`, `overrides` | class → method, method → the method it overrides |
 | `instantiates`, `references` | `new Foo()`; parameter, return and property types, `catch`, `instanceof`, constants, attributes |
-| `calls` | method → resolved method, with the lines of the call sites |
+| `calls` | method → resolved method, with the lines of the call sites; a method running a closure it receives (`$apply(...)`) calls what the closure calls, INFERRED, `via` `closure of <the method writing it>` |
 | `dispatches`, `handled_by` | sender → message or channel → handler; route → controller; class tested by a `supports()` method → that strategy |
 | `contract` | a message class sent by one service → the same class handled by another |
 | `requests` | HTTP call → the route it reaches, in the same service or another |
