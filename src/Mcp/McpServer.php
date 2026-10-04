@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpGraph\Mcp;
 
+use PhpGraph\Presentation\OutlineReport;
 use PhpGraph\Presentation\TextPresenter;
 use PhpGraph\Query\Direction;
 use PhpGraph\Query\GraphQueryProvider;
@@ -231,7 +232,8 @@ final class McpServer
                     'type' => 'object',
                     'properties' => [
                         'topic' => $text('The feature, in words or class names: "notification validation", "stock reservation".'),
-                        'format' => ['type' => 'string', 'enum' => TextPresenter::IMPACT_FORMATS, 'description' => 'text (default, compact), full (no list cut) or json.'],
+                        'section' => ['type' => 'string', 'enum' => OutlineReport::SECTIONS, 'description' => 'Only one section, uncut: what a "+N more: section ..." line names.'],
+                        'format' => ['type' => 'string', 'enum' => TextPresenter::IMPACT_FORMATS, 'description' => 'text (default, compact, about 15 KB), full (every list uncut: often too large to read inline; prefer section) or json.'],
                     ],
                     'required' => ['topic'],
                 ],
@@ -296,6 +298,7 @@ final class McpServer
                 'outline' => $presenter->outline(
                     $this->requireString($arguments, 'topic'),
                     \is_string($arguments['format'] ?? null) && \in_array($arguments['format'], TextPresenter::IMPACT_FORMATS, true) ? $arguments['format'] : 'text',
+                    \is_string($arguments['section'] ?? null) && \in_array($arguments['section'], OutlineReport::SECTIONS, true) ? $arguments['section'] : null,
                 ),
                 'impact_of' => $presenter->impact(
                     $this->requireString($arguments, 'name'),

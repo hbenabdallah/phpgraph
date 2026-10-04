@@ -657,7 +657,10 @@ final class TextPresenter
     /**
      * The outline of the feature a question names (format text, full or json).
      */
-    public function outline(string $topic, string $format = 'text'): string
+    /**
+     * @param ?string $section one of OutlineReport::SECTIONS, uncut, null for all of them
+     */
+    public function outline(string $topic, string $format = 'text', ?string $section = null): string
     {
         $outline = $this->query->outline($topic);
         if ($outline === null) {
@@ -666,7 +669,7 @@ final class TextPresenter
             return $format === 'json' ? (string) json_encode(['error' => $message]) : $message;
         }
 
-        return (new OutlineReport($this->query, $outline))->render($format);
+        return (new OutlineReport($this->query, $outline))->render($format, $section);
     }
 
     public function impact(string $name, int $depth = 3, int $limit = 40, ?string $section = null, string $format = 'text'): string

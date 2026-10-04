@@ -3,6 +3,19 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## 1.0.2 (2026-10-04)
+
+### Added
+- `outline --section` (`-s`; `section` on the MCP tool): one section alone, every entry listed (`core`, `families`,
+  `flow`, `behaviour`, `wiring`, `users`; 1 to 9 KB on a feature of 34 classes). A list cut short names its section
+  (`+21 more: section behaviour`) instead of `format full`, which agents followed to a 38 KB answer too large to read
+  inline. The MCP description of `format full` says so.
+
+### Fixed
+- `outline` lists every caller of a method of the core: a member of a family calling it (`ReservationRequest::create()`
+  calling `MutationValidators::validate()`) was left out, though the routes went through it; members are named under
+  their family (`(ValidationPathRootInterface)`), counted when more than 4. The callers from the core are added too.
+
 ## 1.0.1 (2026-10-04)
 
 ### Changed

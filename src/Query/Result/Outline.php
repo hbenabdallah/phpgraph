@@ -20,6 +20,7 @@ final readonly class Outline
      * @param list<array{head: string, members: int, directories: array<string, int>, receivers: list<string>}> $families
      * @param list<array{route: string, chain: list<string>}>                                                  $routes   from the route's handler down into the core
      * @param array<string, list<string>>                                                                      $entries  method of the core => the methods outside calling it
+     * @param array<string, array<string, list<string>>>                                                       $fromFamilies method of the core => family head => its members' methods calling it
      * @param array<string, array<string, list<string>>>                                                       $closures method of the core => the method writing a closure it runs => what the closure calls
      * @param array<string, list<string>>                                                                      $inside   method of the core => the methods of other core classes it calls
      * @param list<array{string, Hint}>                                                                        $hints    class, hint
@@ -39,6 +40,7 @@ final readonly class Outline
         public array $families,
         public array $routes,
         public array $entries,
+        public array $fromFamilies,
         public array $closures,
         public array $inside,
         public array $hints,
