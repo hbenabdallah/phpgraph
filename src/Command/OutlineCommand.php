@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpGraph\Command;
 
+use PhpGraph\Presentation\OutlineReport;
 use PhpGraph\Presentation\TextPresenter;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -19,7 +20,8 @@ final class OutlineCommand extends AbstractGraphCommand
     {
         $this
             ->addArgument('topic', InputArgument::REQUIRED, 'The feature, in words or class names')
-            ->addOption('format', 'f', InputOption::VALUE_REQUIRED, 'text (compact), full (no list cut) or json', 'text');
+            ->addOption('section', 's', InputOption::VALUE_REQUIRED, 'Only one section, uncut: ' . implode(', ', OutlineReport::SECTIONS))
+            ->addOption('format', 'f', InputOption::VALUE_REQUIRED, 'text (compact), full (no list cut, much larger) or json', 'text');
         $this->addGraphOption();
     }
 
@@ -31,7 +33,13 @@ final class OutlineCommand extends AbstractGraphCommand
 
             return Command::INVALID;
         }
-        $output->writeln($this->loadPresenter($input)->outline((string) $input->getArgument('topic'), $format), OutputInterface::OUTPUT_RAW);
+        $section = $input->getOption('section');
+        if ($section !== null && !\in_array($section, OutlineReport::SECTIONS, true)) {
+            $output->writeln(\sprintf('<error>Unknown section "%s": %s.</error>', \is_string($section) ? $section : '', implode(', ', OutlineReport::SECTIONS)));
+
+            return Command::INVALID;
+        }
+        $output->writeln($this->loadPresenter($input)->outline((string) $input->getArgument('topic'), $format, $section), OutputInterface::OUTPUT_RAW);
 
         return Command::SUCCESS;
     }

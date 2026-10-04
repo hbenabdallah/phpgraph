@@ -51,7 +51,8 @@ final class OutlineTest extends TestCase
             'POST /orders → PlaceOrderProcessor::process() → PlaceOrder::handle() → PipelineRunner::run() runs the closure → OrderBuilder::build() → Order::create() → MutationValidators::validate()',
             $text,
         );
-        self::assertStringContainsString('MutationValidators::validate() ← Order::create()', $text);
+        self::assertStringContainsString('MutationValidators::validate() ← Order::create(); from the core: Revalidation::again()', $text, 'every caller, the core\'s too');
+        self::assertStringContainsString('Notification::add() ← VatRule::apply(), PriceRule::apply(), StockRule::apply() (ContextRuleInterface)', $text, 'the members of a family, under it');
         self::assertStringContainsString('PipelineRunner::run() → ContextValidator::validate(), Notification::hasErrors(), Outcome::{halted,completed}()', $text);
     }
 
@@ -83,12 +84,29 @@ final class OutlineTest extends TestCase
         self::assertStringContainsString('Tests touching the core: 2 files in 2 modules', $text);
         self::assertStringNotContainsString('tests/Validation/NotificationTest.php', $text, 'tests are counted by module, not listed');
         self::assertMatchesRegularExpression('/^At a glance:\n(  .*\n)*  No test touches: .*ContextValidator.*PipelineRunner/m', $text, 'the gaps come first');
-        self::assertStringContainsString('Nothing in the application uses: ViolationPrinter.', $text);
+        self::assertStringContainsString('Nothing in the application uses: Revalidation, ViolationPrinter.', $text);
 
         $json = json_decode($presenter->outline('notification validation', 'json'), true);
         self::assertIsArray($json);
         self::assertContains('App\Validation\ViolationPrinter', $json['unused'] ?? []);
         self::assertSame('No class matches "zzz": try query_graph, or other words.', $presenter->outline('zzz'));
+    }
+
+    public function testASectionComesAloneAndUncutAndTheCutsNameIt(): void
+    {
+        $presenter = $this->presenter();
+
+        $behaviour = $presenter->outline('notification validation', 'text', 'behaviour');
+        self::assertStringContainsString('Behaviour (read in the method bodies):', $behaviour);
+        self::assertStringContainsString('UNPROCESSABLE (422)', $behaviour, 'the outcomes too');
+        self::assertStringNotContainsString('Core, by namespace', $behaviour);
+        self::assertStringNotContainsString('At a glance', $behaviour);
+
+        $users = $presenter->outline('notification validation', 'text', 'users');
+        self::assertMatchesRegularExpression('/^Gaps:\n  Nothing in the application uses: Revalidation, ViolationPrinter/m', $users);
+        self::assertStringNotContainsString('Flow:', $users);
+
+        self::assertStringNotContainsString('format full', $presenter->outline('notification validation'));
     }
 
     public function testACallInAClosureRunsInTheMethodCallingIt(): void

@@ -102,7 +102,7 @@ claude mcp add phpgraph -- /home/you/.local/bin/phpgraph serve /path/to/project
 |---|---|
 | `overview` | Start here: Composer stack, namespace tree with layers, bounded contexts, layer-rule violations, messages, HTTP routes (each with method, path, controller and file up to 30, else grouped by path prefix), services, and what the graph cannot see. |
 | `query_graph` | Find the code about a topic when you do not know the class names, by the words of their names (validated finds `Validator`), with the classes of the feature around the ones it names. A question about routes (*"mooc courses routes"*, *"GET /courses"*) returns the matching routes and their controllers. The families of classes around the answer are counted by folder (*ContextRuleInterface: 34 in …*), injected lists once (*ContextValidator receives 34 ContextRuleInterface*). |
-| `outline` | Before explaining a feature: its structural outline, enough to read only the few files with non-obvious logic. The classes it is made of, by namespace and layer, with the first sentence of their docblock, their public signatures, constants and enum cases; the interfaces and base classes around it with their implementations by module (0 stated); the routes running into it, chain by chain, through the closures it runs; behaviour read in the bodies (guarded throws, early returns, branches on constants, loop caps, state compared before and after); the container wiring with service ids; its users, tests counted by module, what no test touches and what nothing uses. |
+| `outline` | Before explaining a feature: its structural outline, enough to read only the few files with non-obvious logic. The classes it is made of, by namespace and layer, with the first sentence of their docblock, their public signatures, constants and enum cases; the interfaces and base classes around it with their implementations by module (0 stated); the routes running into it, chain by chain, through the closures it runs; behaviour read in the bodies (guarded throws, early returns, branches on constants, loop caps, state compared before and after); the container wiring with service ids; its users, tests counted by module, what no test touches and what nothing uses. About 15 KB; a list cut short names the section that has it all (`section behaviour`, 1 to 9 KB). |
 | `get_node` | Read one class, method, route or channel with all its relations; tests using it are counted by module. |
 | `get_neighbors` | See what uses a node (`in`) or what it depends on (`out`). |
 | `impact_of` | Before a change: every class that depends on a class or method, nearest first, with the lines of the calls; callers through the interface it implements; code depending on the state it writes; the routes reaching it, with each chain; and the tests to run, found through test helpers. It flags the classes no test touches and those nothing in the application uses. |
@@ -128,7 +128,7 @@ phpgraph check                               # layer rules, for CI: exit code 1 
 phpgraph explain "PlaceOrderHandler"         # a node and its relations (-d in|out)
 phpgraph path "StockChecker" "DbalOrderRepository"
 phpgraph query "how is stock checked"
-phpgraph outline "notification validation"   # the outline of a feature (--format full|json)
+phpgraph outline "notification validation"   # the outline of a feature (--section flow, --format json)
 phpgraph serve [path]                        # the MCP server, over stdio
 phpgraph mcp-config claude|codex|cursor|json [--docker image]
 ```
@@ -234,12 +234,12 @@ Two small microservices projects complete the corpus: [two Laravel services over
 
 ### With an agent
 
-Measured on a private 4,800-file Symfony/DDD project, 3 runs per setup, the same agent ([Sherpa](https://github.com/hbenabdallah/sherpa)) with and without phpgraph 1.0.0:
+Measured on a private 4,800-file Symfony/DDD project, 3 runs per setup, the same agent ([Sherpa](https://github.com/hbenabdallah/sherpa)) with and without phpgraph 1.0.2:
 
 | Kind of question | With phpgraph | Quality |
 |---|---|---|
-| Impact or refactoring (`impact_of`) | −35 % tokens, −41 % time, −51 % tool calls | better |
-| Explaining a feature (`outline`) | −20 % tokens, −21 % time, −39 % tool calls | same |
+| Impact or refactoring (`impact_of`) | −42 % tokens, −50 % time, −59 % tool calls | same or better |
+| Explaining a feature (`outline`) | −25 % tokens, −34 % time, −49 % tool calls; −31 % tokens with the default outline | same |
 
 The ranges of the runs with and without phpgraph do not overlap.
 

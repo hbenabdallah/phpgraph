@@ -11,10 +11,13 @@ use PhpGraph\Query\Layers;
 use PhpGraph\Query\Result\Outline;
 
 /**
- * An outline as text, compact by default (`full` lifts the limits), or as JSON.
+ * An outline as text, compact by default (a section lists all its entries, `full` also lifts the limits of each line),
+ * or as JSON.
  */
 final class OutlineReport
 {
+    public const SECTIONS = ['core', 'families', 'flow', 'behaviour', 'wiring', 'users'];
+
     private const METHODS = 5;
 
     private const LIST = 12;
@@ -33,18 +36,24 @@ final class OutlineReport
     ) {
     }
 
-    public function render(string $format): string
+    /**
+     * @param ?string $section one of SECTIONS, uncut, null for all of them
+     */
+    public function render(string $format, ?string $section = null): string
     {
-        return $format === 'json' ? $this->json() : $this->text($format === 'full');
+        return $format === 'json' ? $this->json() : $this->text($format === 'full', $section);
     }
 
-    private function text(bool $full): string
+    private function text(bool $full, ?string $section): string
     {
+        $wanted = static fn (string $name): bool => $section === null || $section === $name;
         $outline = $this->outline;
         $graph = $this->query->graph();
         $files = array_filter(array_map(fn (string $class): ?string => $graph->node($class)?->file, $outline->core));
         $this->prefix = self::commonDirectory(array_values($files));
-        $limit = static fn (array $items, int $count): array => $full ? $items : \array_slice($items, 0, $count);
+        // A section alone lists everything, each line still compact; full also spells out every line.
+        $all = $full || $section !== null;
+        $limit = static fn (array $items, int $count): array => $all ? $items : \array_slice($items, 0, $count);
         $more = static fn (array $all, array $shown): string => \count($all) > \count($shown) ? \sprintf(' (+%d)', \count($all) - \count($shown)) : '';
 
         $lines = [
@@ -61,56 +70,61 @@ final class OutlineReport
         // At a glance: what an agent explaining the feature must not miss, before the details.
         $hints = $outline->hints;
         $glance = [];
-        foreach ($hints as $index => [$class, $hint]) {
+        foreach ($section === null ? $hints : [] as $index => [$class, $hint]) {
             if (str_contains($hint->text, ', else ') && \count($glance) < 3) {
                 $glance[] = \sprintf('  Outcome: %s::%s L%d: %s', $this->query->label($class), $hint->method, $hint->line, $hint->text);
                 unset($hints[$index]);
             }
         }
-        if ($outline->unused !== []) {
+        // A section alone: the gaps with the users, the outcomes with the behaviour.
+        $gaps = $section === null || $section === 'users';
+        if ($gaps && $outline->unused !== []) {
             $glance[] = '  Nothing in the application uses: ' . implode(', ', array_map(
                 fn (string $class, bool $tested): string => $this->query->label($class) . ($tested ? ' (tests only)' : ''),
                 array_keys($outline->unused),
                 $outline->unused,
             )) . '.';
         }
-        if ($outline->uncovered !== []) {
+        if ($gaps && $outline->uncovered !== []) {
             $glance[] = '  No test touches: ' . implode(', ', array_map(fn (string $class): string => $this->query->label($class), $outline->uncovered)) . '.';
         }
         if ($glance !== []) {
             $lines[] = '';
-            $lines[] = 'At a glance:';
+            $lines[] = $section === null ? 'At a glance:' : 'Gaps:';
             array_push($lines, ...$glance);
         }
         $hints = array_values($hints);
 
         // Core, by namespace.
-        $byNamespace = [];
-        foreach ($outline->core as $class) {
-            $byNamespace[substr($class, 0, (int) strrpos($class, '\\'))][] = $class;
-        }
-        $common = array_reduce(array_map('strval', array_keys($byNamespace)), static function (?string $common, string $namespace): string {
-            if ($common === null) {
-                return $namespace . '\\';
+        if ($wanted('core')) {
+            $byNamespace = [];
+            foreach ($outline->core as $class) {
+                $byNamespace[substr($class, 0, (int) strrpos($class, '\\'))][] = $class;
             }
-            while ($common !== '' && !str_starts_with($namespace . '\\', $common)) {
-                $common = substr($common, 0, (int) strrpos(rtrim($common, '\\'), '\\') + 1);
+            $common = array_reduce(array_map('strval', array_keys($byNamespace)), static function (?string $common, string $namespace): string {
+                if ($common === null) {
+                    return $namespace . '\\';
+                }
+                while ($common !== '' && !str_starts_with($namespace . '\\', $common)) {
+                    $common = substr($common, 0, (int) strrpos(rtrim($common, '\\'), '\\') + 1);
+                }
+
+                return $common;
+            }) ?? '';
+            $lines[] = '';
+            $lines[] = 'Core, by namespace' . ($common === '' ? '' : ' (under ' . rtrim($common, '\\') . ')') . ':';
+            foreach ($byNamespace as $namespace => $classes) {
+                $layer = Layers::of(explode('\\', (string) $namespace));
+                $lines[] = '  ' . (substr((string) $namespace, \strlen($common)) ?: (string) $namespace) . ($layer === null ? '' : ' [' . $layer['segment'] . ']');
+                foreach ($classes as $class) {
+                    array_push($lines, ...$this->classLines($class, $outline->facts[$class] ?? null, $all));
+                }
             }
 
-            return $common;
-        }) ?? '';
-        $lines[] = '';
-        $lines[] = 'Core, by namespace' . ($common === '' ? '' : ' (under ' . rtrim($common, '\\') . ')') . ':';
-        foreach ($byNamespace as $namespace => $classes) {
-            $layer = Layers::of(explode('\\', (string) $namespace));
-            $lines[] = '  ' . (substr((string) $namespace, \strlen($common)) ?: (string) $namespace) . ($layer === null ? '' : ' [' . $layer['segment'] . ']');
-            foreach ($classes as $class) {
-                array_push($lines, ...$this->classLines($class, $outline->facts[$class] ?? null, $full));
-            }
         }
 
         // Families.
-        if ($outline->families !== []) {
+        if ($wanted('families') && $outline->families !== []) {
             $lines[] = '';
             $all = [];
             foreach ($outline->families as $family) {
@@ -148,56 +162,76 @@ final class OutlineReport
         }
 
         // Flow.
-        $lines[] = '';
-        $lines[] = 'Flow:';
-        if ($outline->routes !== []) {
-            $lines[] = \sprintf('  Routes (%d), from their handler into the core:', \count($outline->routes));
-            foreach ($limit($outline->routes, self::LIST) as $route) {
-                $lines[] = '    ' . $this->query->label($route['route']) . ' → ' . $this->chain($route['chain']);
+        if ($wanted('flow')) {
+            $lines[] = '';
+            $lines[] = 'Flow:';
+            if ($outline->routes !== []) {
+                $lines[] = \sprintf('  Routes (%d), from their handler into the core:', \count($outline->routes));
+                foreach ($limit($outline->routes, self::LIST) as $route) {
+                    $lines[] = '    ' . $this->query->label($route['route']) . ' → ' . $this->chain($route['chain']);
+                }
             }
-        }
-        if ($outline->entries !== []) {
-            $lines[] = '  Into the core, from outside (callers):';
-            foreach ($limit($outline->entries, self::ENTRIES) as $method => $callers) {
-                $classes = array_unique(array_map(static fn (string $caller): string => explode('::', $caller)[0], $callers));
-                $lines[] = \sprintf(
-                    '    %s ← %s',
-                    $this->query->label($method),
-                    \count($classes) > 8 && !$full ? \sprintf('%d classes', \count($classes)) : $this->methodList($callers, $full ? 0 : 4),
-                );
+            // The methods called from outside, then those called only by the members of a family.
+            $called = array_keys($outline->entries + $outline->fromFamilies);
+            if ($called !== []) {
+                $lines[] = '  Into the core, from outside (callers):';
+                foreach ($limit($called, self::ENTRIES) as $method) {
+                    $callers = $outline->entries[$method] ?? [];
+                    $classes = array_unique(array_map(static fn (string $caller): string => explode('::', $caller)[0], $callers));
+                    $from = [];
+                    if ($callers !== []) {
+                        $from[] = \count($classes) > 8 && !$full ? \sprintf('%d classes', \count($classes)) : $this->methodList($callers, $full ? 0 : 4);
+                    }
+                    // The members of a family by name when few, else counted under the family.
+                    foreach ($outline->fromFamilies[$method] ?? [] as $head => $members) {
+                        $memberClasses = array_unique(array_map(static fn (string $caller): string => explode('::', $caller)[0], $members));
+                        $from[] = \count($memberClasses) > 4 && !$full
+                            ? \sprintf('%d %s', \count($memberClasses), $this->query->label((string) $head))
+                            : $this->methodList($members, 0) . ' (' . $this->query->label((string) $head) . ')';
+                    }
+                    // The callers from the core too, else the line reads as every caller while "Inside" is cut.
+                    $fromCore = array_keys(array_filter($outline->inside, static fn (array $callees): bool => \in_array($method, $callees, true)));
+                    $lines[] = \sprintf(
+                        '    %s ← %s%s',
+                        $this->query->label($method),
+                        implode(', ', $from),
+                        $fromCore === [] ? '' : ($from === [] ? 'from the core: ' : '; from the core: ') . $this->methodList(array_map('strval', $fromCore), $full ? 0 : 4),
+                    );
+                }
+                if (!$all && \count($called) > self::ENTRIES) {
+                    $lines[] = \sprintf('    +%d more: section flow', \count($called) - self::ENTRIES);
+                }
             }
-            if (!$full && \count($outline->entries) > self::ENTRIES) {
-                $lines[] = \sprintf('    +%d more: format full', \count($outline->entries) - self::ENTRIES);
+            foreach ($outline->closures as $method => $sources) {
+                $parts = [];
+                foreach ($sources as $source => $targets) {
+                    $parts[] = $this->query->label($source) . ($full ? ' (→ ' . $this->methodList($targets, 0) . ')' : '');
+                }
+                $lines[] = \sprintf('  %s runs the closures written in %s', $this->query->label((string) $method), $full ? implode(', ', $parts) : $this->methodList(array_keys($sources), 5));
             }
-        }
-        foreach ($outline->closures as $method => $sources) {
-            $parts = [];
-            foreach ($sources as $source => $targets) {
-                $parts[] = $this->query->label($source) . ($full ? ' (→ ' . $this->methodList($targets, 0) . ')' : '');
+            if ($outline->inside !== []) {
+                $lines[] = '  Inside the core:';
+                foreach ($limit($outline->inside, self::INSIDE) as $method => $callees) {
+                    $lines[] = \sprintf('    %s → %s', $this->query->label($method), $this->methodList($callees, $full ? 0 : 4));
+                }
             }
-            $lines[] = \sprintf('  %s runs the closures written in %s', $this->query->label((string) $method), $full ? implode(', ', $parts) : $this->methodList(array_keys($sources), 5));
-        }
-        if ($outline->inside !== []) {
-            $lines[] = '  Inside the core:';
-            foreach ($limit($outline->inside, self::INSIDE) as $method => $callees) {
-                $lines[] = \sprintf('    %s → %s', $this->query->label($method), $this->methodList($callees, $full ? 0 : 4));
-            }
+
         }
 
         // Behaviour.
-        if ($hints !== []) {
+        if ($wanted('behaviour') && $hints !== []) {
             $lines[] = '';
             $lines[] = 'Behaviour (read in the method bodies)' . ($hints === $outline->hints ? '' : ', besides the outcomes above') . ':';
             foreach ($limit($hints, self::HINTS) as [$class, $hint]) {
                 $lines[] = \sprintf('  %s::%s L%d: %s', $this->query->label($class), $hint->method, $hint->line, $hint->text);
             }
-            if (!$full && \count($hints) > self::HINTS) {
-                $lines[] = \sprintf('  +%d more: format full', \count($hints) - self::HINTS);
+            if (!$all && \count($hints) > self::HINTS) {
+                $lines[] = \sprintf('  +%d more: section behaviour', \count($hints) - self::HINTS);
             }
         }
 
         // Wiring.
-        if ($outline->wiring !== []) {
+        if ($wanted('wiring') && $outline->wiring !== []) {
             $lines[] = '';
             $lines[] = 'Wiring (container configuration):';
             $file = null;
@@ -223,28 +257,31 @@ final class OutlineReport
         }
 
         // Users.
-        $lines[] = '';
-        $consumers = $outline->consumers;
-        $shownConsumers = $limit($consumers, 8);
-        $lines[] = \sprintf(
-            'Used by %d files outside the core. Application%s: %s%s.',
-            $outline->consumerFiles,
-            ' (links)',
-            implode(', ', array_map(fn (string $class, int $links): string => $this->query->label($class) . ' ' . $links, array_keys($shownConsumers), $shownConsumers)),
-            $more($consumers, $shownConsumers),
-        );
-        if ($outline->tests !== []) {
-            $tests = $outline->tests;
-            $shownTests = $limit($tests, 4);
+        if ($wanted('users')) {
+            $lines[] = '';
+            $consumers = $outline->consumers;
+            $shownConsumers = $limit($consumers, 8);
             $lines[] = \sprintf(
-                'Tests touching the core: %d files in %d modules (%s%s); touching the most: %s.',
-                array_sum($tests),
-                \count($tests),
-                implode(', ', array_map(static fn (string $module, int $count): string => $module . ' ' . $count, array_keys($shownTests), $shownTests)),
-                $more($tests, $shownTests),
-                implode(', ', $outline->topTests),
+                'Used by %d files outside the core. Application%s: %s%s.',
+                $outline->consumerFiles,
+                ' (links)',
+                implode(', ', array_map(fn (string $class, int $links): string => $this->query->label($class) . ' ' . $links, array_keys($shownConsumers), $shownConsumers)),
+                $more($consumers, $shownConsumers),
             );
+            if ($outline->tests !== []) {
+                $tests = $outline->tests;
+                $shownTests = $limit($tests, 4);
+                $lines[] = \sprintf(
+                    'Tests touching the core: %d files in %d modules (%s%s); touching the most: %s.',
+                    array_sum($tests),
+                    \count($tests),
+                    implode(', ', array_map(static fn (string $module, int $count): string => $module . ' ' . $count, array_keys($shownTests), $shownTests)),
+                    $more($tests, $shownTests),
+                    implode(', ', $outline->topTests),
+                );
+            }
         }
+
         return implode("\n", $lines);
     }
 
@@ -452,6 +489,7 @@ final class OutlineReport
             'families' => $outline->families,
             'routes' => array_map(fn (array $route): array => ['route' => $this->query->label($route['route']), 'id' => $route['route'], 'chain' => $route['chain']], $outline->routes),
             'entries' => $outline->entries,
+            'fromFamilies' => $outline->fromFamilies,
             'closures' => $outline->closures,
             'inside' => $outline->inside,
             'hints' => array_map(static fn (array $hint): array => ['class' => $hint[0], 'method' => $hint[1]->method, 'line' => $hint[1]->line, 'text' => $hint[1]->text], $outline->hints),

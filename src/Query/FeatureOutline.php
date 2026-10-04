@@ -91,7 +91,7 @@ final class FeatureOutline
             }
         }
 
-        [$entries, $closures, $inside] = $this->calls($core, $inCore, $members);
+        [$entries, $closures, $inside, $fromFamilies] = $this->calls($core, $inCore, $members);
         [$routes, $routeEntries] = $this->routes($entries, $inside, $members);
         // The entries followed to the routes first, then those called by the most classes.
         uksort($entries, fn (string $a, string $b): int => [!\in_array($a, $routeEntries, true), -\count($this->classesOf($entries[$a]))]
@@ -184,6 +184,7 @@ final class FeatureOutline
             $this->families($families, $cluster),
             $routes,
             $entries,
+            $fromFamilies,
             $closures,
             $inside,
             $hints,
@@ -205,11 +206,11 @@ final class FeatureOutline
      * @param array<string, true>   $inCore
      * @param array<string, string> $members
      *
-     * @return array{array<string, list<string>>, array<string, array<string, list<string>>>, array<string, list<string>>}
+     * @return array{array<string, list<string>>, array<string, array<string, list<string>>>, array<string, list<string>>, array<string, array<string, list<string>>>}
      */
     private function calls(array $core, array $inCore, array $members): array
     {
-        $entries = $closures = $inside = [];
+        $entries = $closures = $inside = $fromFamilies = [];
         foreach ($core as $class) {
             foreach ($this->methods($class) as $method) {
                 foreach ($this->graph->incident($method) as $item) {
@@ -234,15 +235,20 @@ final class FeatureOutline
                         continue;
                     }
                     $node = $this->graph->node($owner);
-                    if (!isset($inCore[$owner]) && !isset($members[$owner]) && $node !== null && $node->kind->isClassLike()
-                        && $node->file !== null && !TestFiles::isTest($node->file)) {
+                    if (isset($inCore[$owner]) || $node === null || !$node->kind->isClassLike() || $node->file === null || TestFiles::isTest($node->file)) {
+                        continue;
+                    }
+                    // A family member stands in its family: kept apart, not followed to the routes.
+                    if (isset($members[$owner])) {
+                        $fromFamilies[$method][$members[$owner]][] = $other;
+                    } else {
                         $entries[$method][] = $other;
                     }
                 }
             }
         }
 
-        return [$entries, $closures, $inside];
+        return [$entries, $closures, $inside, $fromFamilies];
     }
 
     /**
