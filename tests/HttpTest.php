@@ -210,13 +210,21 @@ final class HttpTest extends TestCase
         self::assertTrue($this->hasEdge($graph, $availability, 'App\Reservation\CheckAvailability', Relation::References, Confidence::Extracted), 'the use case the operation names');
         self::assertTrue($this->hasEdge($graph, $availability, 'App\Shared\CollectionProcessor::process', Relation::HandledBy, Confidence::Extracted));
 
+        $impact = $query->impactOf($query->resolve('App\Reservation\CheckAvailabilityQuery') ?? self::fail('No node'));
         $routes = [];
-        foreach ($query->impactOf($query->resolve('App\Reservation\CheckAvailabilityQuery') ?? self::fail('No node'))->classes as $class) {
+        foreach ($impact->classes as $class) {
             if (str_starts_with($class->class, 'route:')) {
                 $routes[] = $query->label($class->class);
             }
         }
         self::assertSame(['POST /availability'], $routes, 'not POST /stock: the processor picks the use case the operation names');
+
+        $tests = array_map(
+            static fn ($class): string => $class->class,
+            array_filter($impact->classes, static fn ($class): bool => $class->isTest),
+        );
+        self::assertContains('App\Tests\Reservation\CheckAvailabilityProcessorTest', $tests, 'it runs the processor with the availability payload');
+        self::assertNotContains('App\Tests\Shared\CollectionProcessorTest', $tests, 'it runs the processor with another payload');
     }
 
     public function testHttpCallsReachTheRoutesOfAnotherService(): void

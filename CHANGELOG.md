@@ -6,6 +6,15 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 ## Unreleased
 
 ### Added
+- `impact` lists the tests one path per line under their module, gives the other chains of a route (`+1 other chain`,
+  listed with `--all`), and names the application classes on the way nothing outside tests uses.
+- A reader of the state using an enum the change writes (`$violation->type->value` serialized into a response) is
+  INFERRED, `[uses ViolationTypeEnum]`; the readers only guessed (AMBIGUOUS) are counted, listed with
+  `--section state`.
+- A `receives` edge from a service named by id says which one (`service sales_order.estimate.validation_pipeline`):
+  which pipeline of a shared class each use case gets, shown by `explain`, `get_node` and the routes of `impact`.
+- `query` counts the implementations of the interfaces around its answer, by folder (`ContextRuleInterface: 34`).
+- `foreach` over a method documented as returning a collection (`@return list<Violation>`) types its variable.
 - `impact` answers in a compact text by default: one line per class with its methods reaching the change and their
   lines, paths shortened, one line per route, tests grouped by module (about a third of the size: 10 KB instead of
   31 KB for a change reaching 90 classes). `--format full` gives every relation spelled out, `--format json` the data.
@@ -64,6 +73,8 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 - `impact` with an unknown section exits with code 2, as other invalid input.
 
 ### Fixed
+- Collections documented as `iterable<T>`, `list<T>` or `array<K, T>` were read only in the `T[]` form.
+- A test running a generic processor with another use case's payload is no longer listed for a change behind it.
 - An API Platform route references the classes of its own operation only, not those of the resource's other
   operations.
 - A graph built by another version of phpgraph is rebuilt by `serve`, even when the sources did not change: an upgrade

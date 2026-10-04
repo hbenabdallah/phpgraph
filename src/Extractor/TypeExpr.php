@@ -20,6 +20,7 @@ final readonly class TypeExpr
         public ?self $receiver = null,
         public ?string $member = null,
         public bool $isProperty = false,
+        public bool $isElement = false,
     ) {
     }
 
@@ -31,6 +32,15 @@ final readonly class TypeExpr
     public static function returnOf(self $receiver, string $method): self
     {
         return new self(null, $receiver, $method);
+    }
+
+    /**
+     * An element of the collection a method returns: `foreach ($notification->all() as $violation)` with
+     * `@return list<Violation>`.
+     */
+    public static function elementsOf(self $receiver, string $method): self
+    {
+        return new self(null, $receiver, $method, false, true);
     }
 
     public static function propertyOf(self $receiver, string $property): self
@@ -47,7 +57,7 @@ final readonly class TypeExpr
     {
         return $this->receiver === null
             ? new self($this->className === null ? null : $map($this->className))
-            : new self(null, $this->receiver->map($map), $this->member, $this->isProperty);
+            : new self(null, $this->receiver->map($map), $this->member, $this->isProperty, $this->isElement);
     }
 
     public function key(): string
@@ -56,6 +66,6 @@ final readonly class TypeExpr
             return strtolower((string) $this->className);
         }
 
-        return $this->receiver->key() . ($this->isProperty ? '->$' : '->') . $this->member . ($this->isProperty ? '' : '()');
+        return $this->receiver->key() . ($this->isProperty ? '->$' : '->') . $this->member . ($this->isProperty ? '' : '()') . ($this->isElement ? '[]' : '');
     }
 }

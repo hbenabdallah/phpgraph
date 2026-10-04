@@ -713,6 +713,81 @@ final class GraphQuery
     }
 
     /**
+     * The families of classes around an answer: the interfaces among its nodes or declared in the namespace of one of
+     * its classes, implemented by at least two application classes, the largest first (rules: 34 context, 23
+     * invariant).
+     *
+     * @param list<Node> $nodes
+     *
+     * @return array<string, array<string, int>> interface id => directory => classes
+     */
+    public function implementationFamilies(array $nodes, int $limit = 8): array
+    {
+        $namespaces = [];
+        foreach ($nodes as $node) {
+            if ($node->kind->isClassLike()) {
+                $namespaces[$this->namespaceOf($node->id)] = true;
+            }
+        }
+        $families = [];
+        foreach ($this->graph->nodes() as $node) {
+            if ($node->kind !== NodeKind::PhpInterface || !isset($namespaces[$this->namespaceOf($node->id)])
+                || ($node->file !== null && TestFiles::isTest($node->file))) {
+                continue;
+            }
+            $byDirectory = $this->implementationsByDirectory($node);
+            if (array_sum($byDirectory) >= 2) {
+                $families[$node->id] = $byDirectory;
+            }
+        }
+        uasort($families, static fn (array $a, array $b): int => array_sum($b) <=> array_sum($a));
+
+        return \array_slice($families, 0, $limit, true);
+    }
+
+    private function namespaceOf(string $id): string
+    {
+        $position = strrpos($id, '\\');
+
+        return $position === false ? '' : substr($id, 0, $position);
+    }
+
+    /**
+     * The application classes implementing an interface, directly, through an interface extending it or through a
+     * parent class, counted by the directory of their file: a family of rules spread over bounded contexts.
+     *
+     * @return array<string, int> directory => classes, the largest first
+     */
+    public function implementationsByDirectory(Node $interface): array
+    {
+        $family = [$interface->id => true];
+        $classes = [];
+        for ($queue = [$interface->id]; $queue !== [];) {
+            $next = [];
+            foreach ($queue as $id) {
+                foreach ($this->graph->incident($id) as $item) {
+                    $relation = $item['edge']->relation;
+                    if ($item['forward'] || isset($family[$item['other']])
+                        || !\in_array($relation, [Relation::Implements, Relation::Extends], true)) {
+                        continue;
+                    }
+                    $family[$item['other']] = true;
+                    $next[] = $item['other'];
+                    $node = $this->graph->node($item['other']);
+                    if ($node?->kind === NodeKind::PhpClass && $node->file !== null && !TestFiles::isTest($node->file)) {
+                        $classes[$node->id] = \dirname($node->file);
+                    }
+                }
+            }
+            $queue = $next;
+        }
+        $byDirectory = array_count_values($classes);
+        arsort($byDirectory);
+
+        return $byDirectory;
+    }
+
+    /**
      * @return list<RankedNode>
      */
     public function godNodes(int $limit = 15): array

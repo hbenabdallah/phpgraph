@@ -125,6 +125,8 @@ final class GraphBuilder
         $handlers = [];
         $dispatches = [];
         $returnTypes = [];
+        /** @var array<string, string> $returnElements */
+        $returnElements = [];
         $propertyTypes = [];
         /** @var array<string, string> $constants */
         $constants = [];
@@ -137,6 +139,8 @@ final class GraphBuilder
         $parameterTypes = [];
         /** @var array<string, \Closure(string): string> $fileIds file => its names as project ids */
         $fileIds = [];
+        /** @var list<array{string, TypeExpr}> $propertyReads */
+        $propertyReads = [];
         // By reference: both are filled while the files are read, the helpers are evaluated after.
         $configuration = new ConfigurationEvaluator(function (string $constant, string $file) use (&$fileIds, &$constants): ?string {
             return isset($fileIds[$file]) ? $constants[$this->qualifiedMember($constant, $fileIds[$file])] ?? null : null;
@@ -156,6 +160,9 @@ final class GraphBuilder
             foreach ($extraction->returnTypes as $method => $type) {
                 $returnTypes[$id($method)] ??= $type === TypeExpr::STATIC ? $type : $id($type);
             }
+            foreach ($extraction->returnElements as $method => $type) {
+                $returnElements[$id($method)] ??= $id($type);
+            }
             foreach ($extraction->propertyTypes as $property => $type) {
                 $propertyTypes[$this->qualifiedMember($property, $id)] ??= $id($type);
             }
@@ -173,6 +180,9 @@ final class GraphBuilder
             }
             foreach ($extraction->serviceArguments as $argument) {
                 $containerArguments[$service][] = $argument;
+            }
+            foreach ($extraction->propertyReads as [$reader, $property]) {
+                $propertyReads[] = [$id($reader), $property->map($id)];
             }
             $fileIds[(string) $path] = $id;
             $member = fn (string $name): string => str_contains($name, '::') ? $this->qualifiedMember($name, $id) : $id($name);
@@ -245,7 +255,15 @@ final class GraphBuilder
         }
 
         $methodsByClass = $this->methodsByClass($graph);
-        $types = new TypeResolver($graph, $names, $methodsByClass, $returnTypes, $propertyTypes, $vendor);
+        $types = new TypeResolver($graph, $names, $methodsByClass, $returnTypes, $propertyTypes, $vendor, $returnElements);
+
+        // A method reading a property typed as an enum (`$violation->type`) uses that enum: what it outputs depends on it.
+        foreach ($propertyReads as [$reader, $property]) {
+            $type = $types->resolve($property);
+            if ($type !== null && $graph->node($type)?->kind === NodeKind::PhpEnum) {
+                $graph->addEdge(new Edge($reader, $type, Relation::References, Confidence::Inferred));
+            }
+        }
 
         $overrides = $reuse && $previous !== null ? $previous->overrides : $this->overrides($graph, $types, $methodsByClass);
         foreach ($overrides as $edge) {

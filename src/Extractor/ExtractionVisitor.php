@@ -95,6 +95,12 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
     private readonly ConfigurationHelpers $configuration;
 
+    /** @var list<array{string, TypeExpr}> */
+    private array $propertyReads = [];
+
+    /** @var array<string, string> */
+    private array $returnElements = [];
+
     /** @var array<string, string> property of the current class => class of the elements it holds (`@var Rule[]`) */
     private array $propertyElements = [];
 
@@ -139,6 +145,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             ], $this->stateAccess),
             $this->configuration->helpers(),
             $this->configuration->calls(),
+            $this->propertyReads,
+            $this->returnElements,
         );
     }
 
@@ -228,7 +236,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             // `foreach ($this->rules as $rule)` over a collection typed in a docblock: `$rule` is a Rule.
             $element = $this->elementOf($node->expr);
             if ($element !== null && $node->valueVar instanceof Expr\Variable && \is_string($node->valueVar->name)) {
-                $this->assignLocal($node->valueVar->name, TypeExpr::named($element));
+                $this->assignLocal($node->valueVar->name, \is_string($element) ? TypeExpr::named($element) : $element);
             }
 
             return null;
@@ -430,6 +438,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             if ($returnType !== null) {
                 $this->returnTypes[$id] = $returnType;
             }
+            $element = $node->getAttribute(DocTypeResolver::RETURN_ELEMENT);
+            $element = \is_string($element) ? $this->documentedClass($element) : null;
+            if ($element !== null) {
+                $this->returnElements[$id] = $element;
+            }
             if ($this->currentClass !== null) {
                 $this->http->onControllerMethod(
                     $this->currentClass,
@@ -567,6 +580,15 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         if (($node instanceof Expr\StaticCall || $node instanceof Expr\MethodCall) && $node->name instanceof Identifier) {
             $this->onPossibleRoute($node);
             $this->onPossibleRequest($node);
+        }
+
+        // `$violation->type` on a typed object: the builder links the method to the property's type when it is an enum.
+        if (($node instanceof Expr\PropertyFetch || $node instanceof Expr\NullsafePropertyFetch) && $node->name instanceof Identifier
+            && $this->currentCallable !== null && $this->thisProperty($node) === null) {
+            $receiver = $this->typeOf($node->var);
+            if ($receiver !== null) {
+                $this->propertyReads[] = [$this->currentCallable, TypeExpr::propertyOf($receiver, $node->name->toString())];
+            }
         }
 
         if ($node instanceof Expr\MethodCall && $node->name instanceof Identifier) {
@@ -1493,8 +1515,14 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /**
      * The class of the elements a foreach walks: a parameter or a property typed as a collection in a docblock.
      */
-    private function elementOf(Expr $expr): ?string
+    private function elementOf(Expr $expr): TypeExpr|string|null
     {
+        // `foreach ($notification->all() as $violation)`: resolved by the builder from `@return list<Violation>`.
+        if (($expr instanceof Expr\MethodCall || $expr instanceof Expr\NullsafeMethodCall) && $expr->name instanceof Identifier) {
+            $receiver = $this->typeOf($expr->var);
+
+            return $receiver === null ? null : TypeExpr::elementsOf($receiver, $expr->name->toString());
+        }
         if ($expr instanceof Expr\Variable && \is_string($expr->name)) {
             $class = $this->parameterElements[$expr->name] ?? null;
 

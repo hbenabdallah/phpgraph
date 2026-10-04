@@ -32,6 +32,11 @@ final class DocTypeResolver extends NodeVisitorAbstract
      */
     public const ELEMENT_TYPES = 'phpgraph.elementTypes';
 
+    /**
+     * string: the class of the elements of the collection a method returns (`@return list<Violation>`).
+     */
+    public const RETURN_ELEMENT = 'phpgraph.returnElement';
+
     private const BUILTIN = [
         'array', 'bool', 'boolean', 'callable', 'false', 'float', 'double', 'int', 'integer', 'iterable', 'mixed',
         'never', 'null', 'object', 'resource', 'string', 'true', 'void', 'list', 'scalar', 'numeric',
@@ -63,6 +68,10 @@ final class DocTypeResolver extends NodeVisitorAbstract
                 $type = $this->resolve($match[1], $this->templates($doc));
                 if ($type !== null) {
                     $node->setAttribute(self::RETURN_TYPE, $type);
+                }
+                $element = $this->elementType($this->firstType(trim($match[1])), $this->templates($doc));
+                if ($element !== null) {
+                    $node->setAttribute(self::RETURN_ELEMENT, $element);
                 }
             }
             $elements = [];
@@ -127,7 +136,7 @@ final class DocTypeResolver extends NodeVisitorAbstract
         if (str_ends_with($type, '[]') && !str_contains($type, '<')) {
             return $this->resolve(substr($type, 0, -2), $templates);
         }
-        if (preg_match('/^\\?(array|list|non-empty-list|non-empty-array|iterable|Traversable|Iterator|IteratorAggregate|Generator)<(.+)>$/i', $type, $match) !== 1) {
+        if (preg_match('/^\\\\?(array|list|non-empty-list|non-empty-array|iterable|Traversable|Iterator|IteratorAggregate|Generator)<(.+)>$/i', $type, $match) !== 1) {
             return null;
         }
         // The last argument outside nested brackets: `array<int, Rule>` gives Rule.

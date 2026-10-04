@@ -25,7 +25,7 @@ final class ImpactReport
     private const TESTS = 100;
 
     /** @var array<string, list<ImpactedClass>> */
-    private array $groups = ['direct' => [], 'routes' => [], 'state' => [], 'tests' => [], 'stateTests' => [], 'quietStateTests' => [], 'helpers' => []];
+    private array $groups = ['direct' => [], 'routes' => [], 'state' => [], 'quietState' => [], 'tests' => [], 'stateTests' => [], 'quietStateTests' => [], 'helpers' => []];
 
     private string $prefix;
 
@@ -43,6 +43,8 @@ final class ImpactReport
                 $class->isTest && !$this->isTestCase($class->class) => 'helpers',
                 $class->isTest && $class->throughState && $class->confidence === Confidence::Ambiguous => 'quietStateTests',
                 $class->isTest => $class->throughState ? 'stateTests' : 'tests',
+                // Reading all of the state, without using what the change writes: counted, listed on request.
+                $class->throughState && $class->confidence === Confidence::Ambiguous => 'quietState',
                 default => $class->throughState ? 'state' : 'direct',
             };
             $this->groups[$key][] = $class;
@@ -51,7 +53,7 @@ final class ImpactReport
         $module = static fn (string $class): string => implode('\\', \array_slice(explode('\\', $class), 0, 2));
         $modules = array_fill_keys(array_map(static fn (ImpactedClass $class): string => $module($class->class), $this->groups['direct']), true);
         $rank = static fn (ImpactedClass $class): int => $class->confidence === Confidence::Ambiguous ? 1 : 0;
-        foreach (['state', 'stateTests', 'quietStateTests'] as $key) {
+        foreach (['state', 'quietState', 'stateTests', 'quietStateTests'] as $key) {
             usort($this->groups[$key], static fn ($a, $b): int => [$rank($a), isset($modules[$module($b->class)]), $a->depth] <=> [$rank($b), isset($modules[$module($a->class)]), $b->depth]);
         }
 
@@ -80,11 +82,12 @@ final class ImpactReport
         $lines = [
             \sprintf('Impact of changing %s [%s], %s', $this->changed->label, $this->changed->kind->value, $this->location($this->changed, false)),
             \sprintf(
-                '%d classes up to %d relations away, %d routes, %d more through the state; %d tests, %d through the state%s; %d helpers%s.',
+                '%d classes up to %d relations away, %d routes, %d more through the state%s; %d tests, %d through the state%s; %d helpers%s.',
                 \count($g['direct']),
                 $this->impact->maxDepth,
                 \count($g['routes']),
                 \count($g['state']),
+                $g['quietState'] === [] ? '' : \sprintf(' (+%d reading all of it: section state)', \count($g['quietState'])),
                 \count($g['tests']),
                 \count($g['stateTests']),
                 $g['quietStateTests'] === [] ? '' : \sprintf(' (+%d reading all of it: section state-tests)', \count($g['quietStateTests'])),
@@ -110,7 +113,17 @@ final class ImpactReport
             $lines[] = 'Routes reaching it, ← from their handler:';
             foreach ($shown = $slice($g['routes'], 0) as $route) {
                 $marked = $route->confidence === Confidence::Inferred ? '' : ' [' . $route->confidence->value . ']';
-                $lines[] = \sprintf('  %s%s ← %s', $this->query->label($route->class), $marked, $this->chain($route->chain));
+                $others = \count($route->otherChains);
+                $lines[] = \sprintf(
+                    '  %s%s ← %s%s',
+                    $this->query->label($route->class),
+                    $marked,
+                    $this->chain($route->chain),
+                    $others === 0 || $limit === 0 ? '' : \sprintf(' (+%d other chain%s: limit 0)', $others, $others > 1 ? 's' : ''),
+                );
+                foreach ($limit === 0 ? \array_slice($route->otherChains, 0, 5) : [] as $chain) {
+                    $lines[] = '    also ← ' . $this->chain($chain);
+                }
             }
             $more($g['routes'], $shown);
         }
@@ -135,17 +148,29 @@ final class ImpactReport
             }
         }
 
-        if ($wanted('state') && $g['state'] !== []) {
+        $state = $section === 'state' ? [...$g['state'], ...$g['quietState']] : $g['state'];
+        if ($wanted('state') && $state !== []) {
             $lines[] = '';
-            $lines[] = 'Through the state it changes (they call a method reading what it writes; INFERRED: filter on it or compare before and after):';
-            foreach ($shown = $slice($g['state'], 0) as $class) {
+            $lines[] = 'Through the state it changes (they call a method reading what it writes and filter on it, compare before and after, or use what it writes):';
+            foreach ($shown = $slice($state, 0) as $class) {
                 $lines[] = '  ' . $this->classLine($class, $limit);
             }
-            $more($g['state'], $shown);
+            $more($state, $shown);
+        }
+        if ($section === null) {
+            $unused = $this->unused();
+            if ($unused !== []) {
+                $lines[] = '';
+                $lines[] = 'Nothing in the application uses: ' . implode(', ', array_map(
+                    static fn (string $name, bool $tested): string => $name . ($tested ? ' (tests only)' : ''),
+                    array_keys($unused),
+                    $unused,
+                ));
+            }
         }
 
         foreach ([
-            'tests' => ['Tests to run, by module (← what they reach):', $g['tests'], $wanted('tests')],
+            'tests' => ['Tests to run, by module (path below it; ← what they reach):', $g['tests'], $wanted('tests')],
             'stateTests' => ['Tests possibly affected through the state:', $g['stateTests'], $wanted('tests') || $section === 'state-tests'],
             // Tests reaching only what reads all of the state: counted in the summary, listed on request.
             'quietStateTests' => ['Tests reaching a method that reads all of the state (AMBIGUOUS):', $g['quietStateTests'], $section === 'state-tests'],
@@ -155,12 +180,21 @@ final class ImpactReport
             }
             $lines[] = '';
             $lines[] = $title;
+            // One test per line, its path below its module: what PHPUnit takes, and unique where names repeat.
             $byModule = [];
             foreach ($shown = $slice($tests, self::TESTS) as $test) {
-                $byModule[$this->module($this->file($test->class))][] = $this->query->label($test->class) . $this->reason($test);
+                $file = (string) $this->file($test->class);
+                $module = $this->module($file);
+                $base = $this->prefix . ($module === '' ? '' : $module . '/');
+                $byModule[$module][] = (str_starts_with($file, $base) ? substr($file, \strlen($base)) : $file) . $this->reason($test);
             }
-            foreach ($byModule as $module => $names) {
-                $lines[] = \sprintf('  %s: %s', $module, implode(', ', $names));
+            ksort($byModule);
+            foreach ($byModule as $module => $paths) {
+                sort($paths);
+                $lines[] = \sprintf('  %s%s/', $this->prefix, $module);
+                foreach ($paths as $path) {
+                    $lines[] = '    ' . $path;
+                }
             }
             $more($tests, $shown);
         }
@@ -203,7 +237,8 @@ final class ImpactReport
             ], $this->groups['routes']),
             'direct' => array_map($class, $this->groups['direct']),
             'uncovered' => $this->uncovered(),
-            'state' => array_map($class, $this->groups['state']),
+            'unused' => array_keys($this->unused()),
+            'state' => array_map($class, [...$this->groups['state'], ...$this->groups['quietState']]),
             'tests' => array_map($class, $this->groups['tests']),
             'stateTests' => array_map($class, [...$this->groups['stateTests'], ...$this->groups['quietStateTests']]),
             'helpers' => array_map(static fn (ImpactedClass $helper): string => $helper->class, $this->groups['helpers']),
@@ -228,6 +263,9 @@ final class ImpactReport
         $notes = [];
         if ($class->comparesState) {
             $notes[] = 'compares before and after';
+        }
+        if ($class->uses !== null) {
+            $notes[] = 'uses ' . $this->query->label($class->uses);
         }
         if ($class->through !== null) {
             $notes[] = 'through ' . $this->query->label($class->through);
@@ -275,10 +313,12 @@ final class ImpactReport
             }
         }
 
+        $where = $this->where($class->class);
+
         return \sprintf(
-            '%s (%s)%s%s',
+            '%s%s%s%s',
             $this->query->label($class->class),
-            $this->where($class->class),
+            $where === '' || $where === '.' ? '' : ' (' . $where . ')',
             $notes === [] ? '' : ' [' . implode(', ', $notes) . ']',
             $shown === [] ? '' : ': ' . implode('; ', $shown) . (\count($sites) > \count($shown) ? \sprintf('; +%d', \count($sites) - \count($shown)) : ''),
         );
@@ -411,6 +451,53 @@ final class ImpactReport
         }
 
         return $uncovered;
+    }
+
+    /**
+     * The application classes on the way that nothing outside tests uses: no other class of the application calls,
+     * instantiates, references, receives or extends it, nor its methods. Only a class standing alone counts: one
+     * implementing an interface or extending a class may be reached through that type, wired by the framework.
+     *
+     * @return array<string, bool> name => whether a test uses it
+     */
+    private function unused(): array
+    {
+        $graph = $this->query->graph();
+        $unused = [];
+        foreach ([...$this->groups['direct'], ...$this->groups['state'], ...$this->groups['quietState']] as $class) {
+            $node = $graph->node($class->class);
+            if ($node?->kind !== NodeKind::PhpClass || $node->file === null || TestFiles::isTest($node->file)) {
+                continue;
+            }
+            $nodes = [$class->class];
+            foreach ($graph->incident($class->class) as $item) {
+                if ($item['forward'] && \in_array($item['edge']->relation, [Relation::Extends, Relation::Implements], true)) {
+                    continue 2;
+                }
+                if ($item['forward'] && $item['edge']->relation === Relation::HasMethod) {
+                    $nodes[] = $item['other'];
+                }
+            }
+            $tested = false;
+            foreach ($nodes as $member) {
+                foreach ($graph->incident($member) as $item) {
+                    if ($item['forward'] || \in_array($item['edge']->relation, [Relation::Defines, Relation::Imports, Relation::HasMethod, Relation::ReadsStateOf], true)) {
+                        continue;
+                    }
+                    $owner = $graph->node(explode('::', $item['other'])[0]);
+                    if ($owner?->id === $class->class) {
+                        continue;
+                    }
+                    if ($owner?->file === null || !TestFiles::isTest($owner->file)) {
+                        continue 3;
+                    }
+                    $tested = true;
+                }
+            }
+            $unused[$this->name($class->class)] = $tested;
+        }
+
+        return $unused;
     }
 
     /**

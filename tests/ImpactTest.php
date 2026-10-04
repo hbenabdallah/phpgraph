@@ -211,6 +211,46 @@ final class ImpactTest extends TestCase
         self::assertContains('Untested', $json['uncovered'] ?? []);
     }
 
+    public function testReadersUsingWhatTheChangeWritesComeFirst(): void
+    {
+        $presenter = new TextPresenter(new GraphQuery($this->buildProject([
+            'src/Kind.php' => 'namespace App; enum Kind: string { case Context = "context"; }',
+            'src/Violation.php' => 'namespace App; final class Violation { public function __construct(public Kind $type) {} }',
+            'src/Notification.php' => 'namespace App; final class Notification { private array $items = [];'
+                . ' public function add(): void { $this->items[] = new Violation(Kind::Context); }'
+                . ' /** @return list<Violation> */ public function all(): array { return $this->items; } }',
+            'src/Response.php' => 'namespace App; final class Response { public static function create(Notification $n): array { $types = [];'
+                . ' foreach ($n->all() as $violation) { $types[] = $violation->type->value; } return $types; } }',
+            'src/Logger.php' => 'namespace App; final class Logger { public function log(Notification $n): int { return \\count($n->all()); } }',
+            'src/Controller.php' => 'namespace App; final class Controller { public function __construct(private Logger $logger) {} public function show(Notification $n): array { $this->logger->log($n); return []; } }',
+            'tests/ResponseTest.php' => 'namespace App\Tests; use App\Response; use App\Notification; final class ResponseTest { public function testIt(): void { Response::create(new Notification()); } }',
+        ])->graph));
+
+        $text = $presenter->impact('App\Notification::add');
+        self::assertStringContainsString('Response [uses Kind]', $text, 'it serializes the type the change writes');
+        self::assertStringNotContainsString('Logger', explode('Nothing in', $text)[0], 'reading all of it, AMBIGUOUS: counted, not listed');
+        self::assertStringContainsString('+1 reading all of it: section state', $text);
+        self::assertStringContainsString('Logger', $presenter->impact('App\Notification::add', 3, 40, 'state'));
+        self::assertStringContainsString('Nothing in the application uses: Response (tests only)', $text);
+        self::assertStringNotContainsString('uses: Response (tests only), Logger', $text, 'the controller uses the logger');
+    }
+
+    public function testARouteReachingTheChangeTwiceShowsItsOtherChains(): void
+    {
+        $presenter = new TextPresenter(new GraphQuery($this->buildProject([
+            'src/Ledger.php' => 'namespace App; class Ledger { public function record(): void {} }',
+            'src/Pricing.php' => 'namespace App; class Pricing { public function __construct(private Ledger $ledger) {} public function price(): void { $this->ledger->record(); } }',
+            'src/Stock.php' => 'namespace App; class Stock { public function __construct(private Ledger $ledger) {} public function reserve(): void { $this->ledger->record(); } }',
+            'src/OrderProcessor.php' => 'namespace App; class OrderProcessor { public function __construct(private Pricing $pricing, private Stock $stock) {}'
+                . ' public function process(): void { $this->pricing->price(); $this->stock->reserve(); } }',
+            'src/OrderResource.php' => 'namespace App; use ApiPlatform\Metadata\ApiResource; use ApiPlatform\Metadata\Post;'
+                . ' #[ApiResource(operations: [new Post(uriTemplate: "/orders", processor: OrderProcessor::class)])] class OrderResource {}',
+        ])->graph));
+
+        self::assertStringContainsString('(+1 other chain: limit 0)', $presenter->impact('App\Ledger::record', 3, 40, 'routes'));
+        self::assertStringContainsString('    also ← ', $presenter->impact('App\Ledger::record', 3, 0, 'routes'));
+    }
+
     public function testCallEdgesCarryTheLinesOfTheirCallSites(): void
     {
         $graph = $this->buildProject([

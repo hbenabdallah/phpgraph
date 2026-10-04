@@ -149,7 +149,8 @@ final class ArchitectureTest extends TestCase
         self::assertIsString($text);
         self::assertStringContainsString('Impact of changing TaxApi', $text);
         self::assertMatchesRegularExpression('/\n  Pricing \([^)]*\) \[EXTRACTED\]/', $text);
-        self::assertMatchesRegularExpression('/Tests to run[^\n]*\n  [^\n]*PricingTest/', $text);
+        self::assertMatchesRegularExpression('/Tests to run[^\n]*\n  tests\/Sales\/\n    PricingTest\.php/', $text, 'one test per line, below its module');
+        self::assertStringContainsString('No test touches: Pricing', $text, 'PricingTest only creates a TaxApi');
 
         $full = $server->handle(['jsonrpc' => '2.0', 'id' => 2, 'method' => 'tools/call', 'params' => ['name' => 'impact_of', 'arguments' => ['name' => 'TaxApi', 'format' => 'full']]]);
         self::assertStringContainsString("Tests to run:\n  - PricingTest", (string) ($full['result']['content'][0]['text'] ?? ''), 'every relation spelled out');

@@ -64,6 +64,13 @@ final class ServiceInjections
                 ? $this->tagged->named($argument['tag'])
                 : array_filter([$this->classOf((string) $argument['target'], $argument['service'])]);
             $via = $argument['tag'] !== null ? ($argument['locator'] ? 'tagged_locator ' : 'tagged_iterator ') . $argument['tag'] : '';
+            // A service named by an id rather than its class says which of several services of one class it is: the
+            // pipeline of one use case among those built by a helper (`sales_order.estimate.validation_pipeline`).
+            // Not when the consumer is such a service itself: its class serves every id, the edge only one.
+            $strip = static fn (string $class): string => preg_replace('/^[^\\\\@]+@/', '', $class) ?? $class;
+            if ($via === '' && $targets !== [] && strcasecmp(ltrim($argument['id'], '\\'), $strip($consumer)) === 0 && strcasecmp(ltrim((string) $argument['target'], '\\'), $strip((string) reset($targets))) !== 0) {
+                $via = 'service ' . $argument['target'];
+            }
             foreach ($targets as $target) {
                 if ($target !== $consumer && !$this->hasEdge($consumer, $target)) {
                     $this->graph->addEdge(new Edge($consumer, $target, Relation::Receives, Confidence::Extracted, '', $via));

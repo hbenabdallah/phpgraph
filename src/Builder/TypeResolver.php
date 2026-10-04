@@ -41,6 +41,7 @@ final class TypeResolver
      * @param array<string, array<string, string>> $methodsByClass class to lowercase method name to method id
      * @param array<string, string>                $returnTypes    method id to class, or TypeExpr::STATIC
      * @param array<string, string>                $propertyTypes  "Class::property" to class
+     * @param array<string, string>                $returnElements method id to the class of the elements it returns
      */
     public function __construct(
         private readonly Graph $graph,
@@ -49,6 +50,7 @@ final class TypeResolver
         private readonly array $returnTypes,
         private readonly array $propertyTypes,
         private readonly ?VendorSignatures $vendor = null,
+        private readonly array $returnElements = [],
     ) {
     }
 
@@ -81,6 +83,12 @@ final class TypeResolver
             $leftProject = true;
 
             return null;
+        }
+
+        if ($type->isElement) {
+            $element = $this->returnElements[$method] ?? null;
+
+            return $element === null ? null : $this->names->canonical($element);
         }
 
         $returned = $this->returnTypes[$method] ?? $this->vendorReturnType($method);

@@ -27,6 +27,9 @@ final readonly class ImpactedClass
      * @param bool       $comparesState it reads the state the change writes before and after a call, `count($n->all())`
      *                                  twice: it depends on what the change appends (INFERRED)
      * @param ?string    $node          the node of this class the walk reached first
+     * @param list<list<string>> $otherChains for a route, the other ways down to the change (a few)
+     * @param ?string    $uses          through the state: the enum the change writes that it uses, putting the written
+     *                                  value in its output (`$violation->type`)
      */
     public function __construct(
         public string $class,
@@ -41,6 +44,8 @@ final readonly class ImpactedClass
         public array $chain = [],
         public bool $comparesState = false,
         public ?string $node = null,
+        public array $otherChains = [],
+        public ?string $uses = null,
     ) {
     }
 }

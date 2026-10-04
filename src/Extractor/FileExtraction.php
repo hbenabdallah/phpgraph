@@ -36,6 +36,9 @@ final readonly class FileExtraction
      *                                             service configuration written in helpers, as templates (ConfigurationHelpers)
      * @param list<array{caller: ?string, callee: string, args: list<array{?string, ?array<mixed>}>, line: int}> $configurationCalls
      *                                             calls that may be to such helpers, with their arguments as templates
+     * @param array<string, string> $returnElements method id => class of the elements of the collection it returns
+     * @param list<array{string, TypeExpr}> $propertyReads method id => a property it reads on a typed object,
+     *                                             `$violation->type`: an enum read so is linked to the method
      */
     public function __construct(
         public array $nodes,
@@ -56,6 +59,8 @@ final readonly class FileExtraction
         public array $stateAccess = [],
         public array $configurationHelpers = [],
         public array $configurationCalls = [],
+        public array $propertyReads = [],
+        public array $returnElements = [],
     ) {
     }
 }

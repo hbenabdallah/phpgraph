@@ -114,10 +114,11 @@ final class TextPresenter
         $lines = $connection->edge->lines();
 
         return rtrim(\sprintf(
-            '  %s %s [%s] [%s]  %s%s',
+            '  %s %s [%s%s] [%s]  %s%s',
             $connection->forward ? '-->' : '<--',
             $this->query->label($connection->other),
             $connection->edge->relation->value,
+            $connection->edge->via() === '' ? '' : ' ' . $connection->edge->via(),
             $connection->edge->confidence->value,
             $other?->file === null ? '' : $this->location($other),
             $lines === [] ? '' : ', at L' . implode(', L', \array_slice($lines, 0, 8)) . (\count($lines) > 8 ? ', ...' : ''),
@@ -180,6 +181,16 @@ final class TextPresenter
             $lines[] = \sprintf('  - %s [%s] %s', $node->label, $node->kind->value, $this->location($node));
         }
 
+        $families = [];
+        foreach ($this->query->implementationFamilies($subgraph->nodes) as $interface => $byDirectory) {
+            $families[] = \sprintf('  %s: %d%s', $this->query->label($interface), array_sum($byDirectory), $this->directories($byDirectory));
+        }
+        if ($families !== []) {
+            $lines[] = '';
+            $lines[] = 'Implementations (application classes, by directory):';
+            array_push($lines, ...$families);
+        }
+
         $edgeLimit = $budget * 3;
         $lines[] = '';
         $lines[] = 'Edges (' . \count($subgraph->edges) . '):';
@@ -191,6 +202,37 @@ final class TextPresenter
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * ` in Sales/Rule 12, Billing/Rule 3, +2 directories`: the directories of a family of classes, their common prefix
+     * left out when there are several.
+     *
+     * @param array<string, int> $byDirectory directory => classes, the largest first
+     */
+    private function directories(array $byDirectory): string
+    {
+        $directories = array_map('strval', array_keys($byDirectory));
+        $common = '';
+        if (\count($directories) > 1) {
+            $common = $directories[0] . '/';
+            foreach ($directories as $directory) {
+                while ($common !== '' && !str_starts_with($directory . '/', $common)) {
+                    $common = substr($common, 0, (int) strrpos(rtrim($common, '/'), '/') + 1);
+                    if (!str_contains($common, '/')) {
+                        $common = '';
+                    }
+                }
+            }
+        }
+        $shown = [];
+        foreach (\array_slice($directories, 0, 4) as $directory) {
+            $shown[] = \sprintf('%s %d', substr($directory, \strlen($common)), $byDirectory[$directory]);
+        }
+
+        return ' in ' . ($common === '' ? '' : $common . '{') . implode(', ', $shown)
+            . (\count($directories) > 4 ? \sprintf(', +%d directories', \count($directories) - 4) : '')
+            . ($common === '' ? '' : '}');
     }
 
     public function godNodes(int $limit = 15): string

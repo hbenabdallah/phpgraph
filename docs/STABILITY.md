@@ -48,7 +48,7 @@ Format 2: `{"version": 2, "meta": {...}, "nodes": [...], "edges": [...]}`.
   `route:<routing file>#<METHODS> <path>` for a route, `channel:<name>` for a channel; prefixed with `service@` in a
   multi-service repository (`billing@App\Domain\Order`).
 - An edge: `source`, `target`, `relation`, `confidence`, and when known `lines` (`"12,40"`, the source lines) and
-  `via` (what carries it: `tagged_iterator app.rule`, `tagged_locator app.use_case`, `through <service id>` on a
+  `via` (what carries it: `tagged_iterator app.rule`, `tagged_locator app.use_case`, `through <service id>` or `service <id>` (one of several services of a class) on a
   `receives` edge; `named: severity, path` on a call written with named arguments).
 - Relations: `defines`, `imports`, `extends`, `implements`, `uses_trait`, `has_method`, `overrides`, `instantiates`,
   `calls`, `references`, `dispatches`, `handled_by`, `contract`, `requests`, `receives`, `reads_state_of`.

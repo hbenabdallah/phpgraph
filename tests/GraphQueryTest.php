@@ -200,7 +200,7 @@ final class GraphQueryTest extends TestCase
         self::assertSame(['POST /invoices', 'POST /orders'], array_keys($fromNotification), 'eight calls away, beyond the depth limit');
 
         $text = (new \PhpGraph\Presentation\TextPresenter($query))->impact('App\Sales\Rules\StockRule::apply', 3, 0, 'routes');
-        self::assertStringContainsString('PlaceOrderProcessor::process() ← PlaceOrder::handle() ← PipelineRunner::run() ← ContextValidator::validate()', $text);
+        self::assertStringContainsString('PlaceOrderProcessor::process() ← PlaceOrder::handle() (service sales.pipeline) ← PipelineRunner::run() ← ContextValidator::validate()', $text);
         self::assertStringContainsString('ContextValidator::executeRules() (tagged_iterator sales.context_rule)', $text);
     }
 
@@ -215,5 +215,17 @@ final class GraphQueryTest extends TestCase
             }
         }
         self::assertContains('App\Validation\ContextRuleInterface::apply', $calls, '@param RuleExecution[] $executions, then $execution->rule');
+    }
+
+    public function testServicesOfOneClassAndFamiliesOfRules(): void
+    {
+        $presenter = new \PhpGraph\Presentation\TextPresenter(new GraphQuery((new \PhpGraph\Builder\GraphBuilder())->build(__DIR__ . '/Fixtures/validation-pipeline')->graph));
+
+        $explain = $presenter->explain('App\Validation\PipelineRunner');
+        self::assertStringContainsString('<-- PlaceOrder [receives service sales.pipeline] [EXTRACTED]', $explain, 'which pipeline of a shared class a use case gets');
+        self::assertStringContainsString('<-- Invoice [receives service billing.pipeline] [EXTRACTED]', $explain);
+        self::assertStringNotContainsString('--> ContextValidator [receives service', $explain, 'one class for several pipelines: the edge cannot name one');
+
+        self::assertStringContainsString('ContextRuleInterface: 2 in src/{Billing/Rules 1, Sales/Rules 1}', $presenter->query('validation pipeline runner'));
     }
 }

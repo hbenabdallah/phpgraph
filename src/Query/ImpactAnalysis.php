@@ -65,6 +65,11 @@ final class ImpactAnalysis
      */
     private const MAX_ENTRY_WALK = 20000;
 
+    /**
+     * Chains kept per route, besides the first.
+     */
+    private const MAX_CHAINS = 40;
+
     private string $root = '';
 
     public function of(Node $changed, int $maxDepth = 3, int $limit = 200): Impact
@@ -120,7 +125,12 @@ final class ImpactAnalysis
         $stateHops = [];
         /** @var array<string, true> $stateParent nodes whose parent is a step through the state */
         $stateParent = [];
-        $step = function (string $id, string $dependent, Edge $edge, ?string $through, bool $state = false) use (&$scope, &$parent, &$stateParent, &$dispatched, &$routes): void {
+        /** @var array<string, array<string, true>> $callers node => every node it was reached from, for the other chains */
+        $callers = [];
+        $step = function (string $id, string $dependent, Edge $edge, ?string $through, bool $state = false) use (&$scope, &$parent, &$stateParent, &$dispatched, &$routes, &$callers): void {
+            if (!$state) {
+                $callers[$dependent][$id] = true;
+            }
             // The chain of a route shows the calls: a parent through the state gives way to a call.
             if (!isset($parent[$dependent]) || (isset($stateParent[$dependent]) && !$state)) {
                 $parent[$dependent] = $id;
@@ -314,11 +324,28 @@ final class ImpactAnalysis
                 }
             }
             unset($classes[(string) $route]);
-            $classes[(string) $route] = new ImpactedClass((string) $route, \count($chain), $edge, $confidence[$route] ?? Confidence::Ambiguous, false, false, null, false, [], $chain);
+            $classes[(string) $route] = new ImpactedClass(
+                (string) $route,
+                \count($chain),
+                $edge,
+                $confidence[$route] ?? Confidence::Ambiguous,
+                false,
+                false,
+                null,
+                false,
+                [],
+                $chain,
+                false,
+                null,
+                $this->otherChains($handler, $changed->id, $callers, $chain),
+            );
         }
 
         $withSites = [];
         foreach ($classes as $class => $impacted) {
+            if ($impacted->isTest && !$this->testServesTheChange($class, $impacted->node, $parent, $reachedClasses)) {
+                continue;
+            }
             $edges = array_values($sites[$class] ?? []);
             usort($edges, static fn (Edge $a, Edge $b): int => [$a->source, $a->target] <=> [$b->source, $b->target]);
             $chain = $impacted->chain;
@@ -330,10 +357,75 @@ final class ImpactAnalysis
                     }
                 }
             }
-            $withSites[] = new ImpactedClass($impacted->class, $impacted->depth, $impacted->edge, $impacted->confidence, $impacted->isTest, $impacted->followed, $impacted->through, $impacted->throughState, $edges, $chain, $impacted->comparesState, $impacted->node);
+            // Reading all of the state, but using the enum the change writes (`$violation->type` put in an API
+            // response): it shows what the change records, ranked with the readers filtering on it.
+            $confidenceNow = $impacted->confidence;
+            $uses = null;
+            if ($impacted->throughState && $confidenceNow === Confidence::Ambiguous) {
+                $uses = $this->usedEnum((string) $class, $changed->id);
+                if ($uses !== null) {
+                    $confidenceNow = Confidence::Inferred;
+                }
+            }
+            $withSites[] = new ImpactedClass($impacted->class, $impacted->depth, $impacted->edge, $confidenceNow, $impacted->isTest, $impacted->followed, $impacted->through, $impacted->throughState, $edges, $chain, $impacted->comparesState, $impacted->node, $impacted->otherChains, $uses);
         }
 
         return new Impact($changed, $maxDepth, $withSites, $truncated);
+    }
+
+    /**
+     * The other ways from a route's handler down to the change, through calls (not the state): PUT /estimate reaches
+     * notifyContextViolation() directly, and through the validation pipeline and its rules too.
+     *
+     * @param array<string, array<string, true>> $callers
+     * @param list<string>                       $first   the chain already shown
+     *
+     * @return list<list<string>>
+     */
+    private function otherChains(string $handler, string $changed, array $callers, array $first): array
+    {
+        /** @var list<list<string>> $chains */
+        $chains = [];
+        /** @param list<string> $path */
+        $walk = function (string $node, array $path) use (&$walk, &$chains, $changed, $callers, $first): void {
+            if (\count($chains) >= self::MAX_CHAINS || \count($path) > 30) {
+                return;
+            }
+            $path[] = $node;
+            if ($node === $changed) {
+                if ($path !== $first) {
+                    $chains[] = $path;
+                }
+
+                return;
+            }
+            foreach (array_keys($callers[$node] ?? []) as $from) {
+                $from = (string) $from;
+                if (\in_array($from, $path, true)) {
+                    continue;
+                }
+                // A tagged member is on the way only when a class of the chain holds it: the estimate use case runs
+                // the estimate rules, not those of the customer orders.
+                $holders = $this->ownHolders($this->classOf($from));
+                if ($holders !== [] && array_filter($path, fn (string $step): bool => isset($holders[$this->classOf($step)])) === []) {
+                    continue;
+                }
+                $walk($from, $path);
+            }
+        };
+        $walk($handler, []);
+
+        // One per way through, not one per rule on it: chains differing only at their last steps are the same way.
+        /** @var array<string, list<string>> $distinct */
+        $distinct = [];
+        foreach ($chains as $chain) {
+            $distinct[implode('>', \array_slice($chain, 0, 4))] ??= $chain;
+        }
+        unset($distinct[implode('>', \array_slice($first, 0, 4))]);
+        /** @var list<list<string>> $others */
+        $others = array_values($distinct);
+
+        return $others;
     }
 
     /**
@@ -464,6 +556,54 @@ final class ImpactAnalysis
     }
 
     /**
+     * An enum the changed method uses (`ViolationTypeEnum` for `addContextViolation()`) that the class uses too.
+     */
+    private function usedEnum(string $class, string $changed): ?string
+    {
+        $enums = [];
+        foreach ($this->graph->incident($changed) as $item) {
+            if ($item['forward'] && $item['edge']->relation === Relation::References && $this->graph->node($item['other'])?->kind === NodeKind::PhpEnum) {
+                $enums[$item['other']] = true;
+            }
+        }
+        foreach ($enums === [] ? [] : [$class, ...$this->methods($class)] as $member) {
+            foreach ($this->graph->incident($member) as $item) {
+                if ($item['forward'] && $item['edge']->relation === Relation::References && isset($enums[$item['other']])) {
+                    return $item['other'];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The holders of a tagged member that no other holder holds: the use cases wired to it, not the validator and the
+     * pipeline every context shares.
+     *
+     * @return array<string, true>
+     */
+    private function ownHolders(string $class): array
+    {
+        $holders = $this->scopeOf($class);
+        $own = [];
+        foreach (array_keys($holders) as $holder) {
+            $shared = false;
+            foreach ($this->graph->incident((string) $holder) as $item) {
+                if (!$item['forward'] && $item['edge']->relation === Relation::Receives && isset($holders[$item['other']])) {
+                    $shared = true;
+                    break;
+                }
+            }
+            if (!$shared) {
+                $own[(string) $holder] = true;
+            }
+        }
+
+        return $own;
+    }
+
+    /**
      * Inside the scope of an injected list, a method of a class shared by several contexts (a validator, a pipeline,
      * held by other holders of the scope) leads only to the callers in the scope: the rules of the reservation
      * context reach the reservation use case, not every use case.
@@ -522,6 +662,38 @@ final class ImpactAnalysis
         foreach ($this->graph->incident($route) as $item) {
             if ($item['forward'] && $item['edge']->relation === Relation::References && isset($reached[$item['other']])) {
                 return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * A test reaching the change only through a generic handler (a processor picking its use case from a locator)
+     * tests that handler with other use cases: it is kept when it names another class the change reaches.
+     *
+     * @param array<string, string> $parent
+     * @param array<string, true>   $reached
+     */
+    private function testServesTheChange(string $test, ?string $node, array $parent, array $reached): bool
+    {
+        $generic = null;
+        for ($step = $node; $step !== null; $step = $parent[$step] ?? null) {
+            if ($this->isGeneric($step, false) && !$this->isTest($step)) {
+                $generic = $this->classOf($step);
+                break;
+            }
+        }
+        if ($generic === null) {
+            return true;
+        }
+
+        foreach ([$test, ...$this->methods($test)] as $member) {
+            foreach ($this->graph->incident($member) as $item) {
+                $other = $this->classOf($item['other']);
+                if ($item['forward'] && $other !== $generic && $other !== $test && isset($reached[$other]) && !$this->isTest($other)) {
+                    return true;
+                }
             }
         }
 
