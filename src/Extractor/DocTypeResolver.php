@@ -26,6 +26,12 @@ final class DocTypeResolver extends NodeVisitorAbstract
      */
     public const VAR_TYPES = 'phpgraph.varTypes';
 
+    /**
+     * array<string, string>: the class of the elements of a collection, by parameter name on a method (`@param
+     * Rule[] $rules`, `iterable<Rule>`, `array<int, Rule>`, `list<Rule>`), or under '' on a property (`@var Rule[]`).
+     */
+    public const ELEMENT_TYPES = 'phpgraph.elementTypes';
+
     private const BUILTIN = [
         'array', 'bool', 'boolean', 'callable', 'false', 'float', 'double', 'int', 'integer', 'iterable', 'mixed',
         'never', 'null', 'object', 'resource', 'string', 'true', 'void', 'list', 'scalar', 'numeric',
@@ -59,6 +65,19 @@ final class DocTypeResolver extends NodeVisitorAbstract
                     $node->setAttribute(self::RETURN_TYPE, $type);
                 }
             }
+            $elements = [];
+            foreach (preg_split('/\R/', $doc) ?: [] as $line) {
+                if (preg_match('/@(?:phpstan-|psalm-)?param\s+(.+)/', $line, $match) === 1) {
+                    $token = $this->firstType(trim($match[1]));
+                    $element = $this->elementType($token, $this->templates($doc));
+                    if ($element !== null && preg_match('/^\s*(?:\.\.\.)?\$(\w+)/', substr(trim($match[1]), \strlen($token)), $variable) === 1) {
+                        $elements[$variable[1]] = $element;
+                    }
+                }
+            }
+            if ($elements !== []) {
+                $node->setAttribute(self::ELEMENT_TYPES, $elements);
+            }
 
             return null;
         }
@@ -86,8 +105,47 @@ final class DocTypeResolver extends NodeVisitorAbstract
         if ($types !== []) {
             $node->setAttribute(self::VAR_TYPES, $types);
         }
+        if ($node instanceof Stmt\Property && preg_match('/@(?:phpstan-|psalm-)?var\s+(.+)/', $doc, $match) === 1) {
+            $element = $this->elementType($this->firstType(trim($match[1])));
+            if ($element !== null) {
+                $node->setAttribute(self::ELEMENT_TYPES, ['' => $element]);
+            }
+        }
 
         return null;
+    }
+
+    /**
+     * The class of the elements of a collection type: `Rule[]`, `array<Rule>`, `array<int, Rule>`, `list<Rule>`,
+     * `iterable<Rule>`, `Traversable<int, Rule>`; null for anything else.
+     *
+     * @param list<string> $templates
+     */
+    private function elementType(string $type, array $templates = []): ?string
+    {
+        $type = ltrim($type, '?');
+        if (str_ends_with($type, '[]') && !str_contains($type, '<')) {
+            return $this->resolve(substr($type, 0, -2), $templates);
+        }
+        if (preg_match('/^\\?(array|list|non-empty-list|non-empty-array|iterable|Traversable|Iterator|IteratorAggregate|Generator)<(.+)>$/i', $type, $match) !== 1) {
+            return null;
+        }
+        // The last argument outside nested brackets: `array<int, Rule>` gives Rule.
+        $depth = 0;
+        $start = 0;
+        $arguments = $match[2];
+        for ($i = 0, $length = \strlen($arguments); $i < $length; ++$i) {
+            $depth += match ($arguments[$i]) {
+                '<', '{', '(' => 1,
+                '>', '}', ')' => -1,
+                default => 0,
+            };
+            if ($depth === 0 && $arguments[$i] === ',') {
+                $start = $i + 1;
+            }
+        }
+
+        return $this->resolve(trim(substr($arguments, $start)), $templates);
     }
 
     public function leaveNode(AstNode $node)

@@ -24,7 +24,7 @@ final class ConfigurationEvaluator
     /** @var list<array{caller: ?string, callee: string, args: list<array{?string, ?array<mixed>}>, file: string, service: string}> */
     private array $calls = [];
 
-    /** @var array{definitions: array<string, array<string, string>>, tags: array<string, list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>>, arguments: array<string, list<array{id: string, tag: ?string, service: ?string}>>} */
+    /** @var array{definitions: array<string, array<string, string>>, tags: array<string, list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>>, arguments: array<string, list<array{id: string, tag: ?string, service: ?string, locator?: bool}>>} */
     private array $result = ['definitions' => [], 'tags' => [], 'arguments' => []];
 
     /**
@@ -51,7 +51,7 @@ final class ConfigurationEvaluator
     }
 
     /**
-     * @return array{definitions: array<string, array<string, string>>, tags: array<string, list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>>, arguments: array<string, list<array{id: string, tag: ?string, service: ?string}>>}
+     * @return array{definitions: array<string, array<string, string>>, tags: array<string, list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>>, arguments: array<string, list<array{id: string, tag: ?string, service: ?string, locator?: bool}>>}
      */
     public function evaluate(): array
     {
@@ -101,7 +101,7 @@ final class ConfigurationEvaluator
                 $tag = $value(\is_array($fact['tag'] ?? null) ? $fact['tag'] : null);
                 $target = $value(\is_array($fact['service'] ?? null) ? $fact['service'] : null);
                 if ($id !== null && ($tag !== null || $target !== null)) {
-                    $this->result['arguments'][$service][] = ['id' => $id, 'tag' => $tag, 'service' => $target];
+                    $this->result['arguments'][$service][] = ['id' => $id, 'tag' => $tag, 'service' => $target, 'locator' => ($fact['locator'] ?? false) === true];
                 }
             }
         }

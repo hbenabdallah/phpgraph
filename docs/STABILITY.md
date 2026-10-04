@@ -47,7 +47,8 @@ Format 2: `{"version": 2, "meta": {...}, "nodes": [...], "edges": [...]}`.
 - Node ids: `App\Domain\Order` for a class, `App\Domain\Order::place` for a method, `file:src/Order.php` for a file,
   `route:<routing file>#<METHODS> <path>` for a route, `channel:<name>` for a channel; prefixed with `service@` in a
   multi-service repository (`billing@App\Domain\Order`).
-- An edge: `source`, `target`, `relation`, `confidence`, and `lines` (`"12,40"`, the source lines) when known.
+- An edge: `source`, `target`, `relation`, `confidence`, and when known `lines` (`"12,40"`, the source lines) and
+  `via` (what carries it: `tagged_iterator app.rule`, `tagged_locator app.use_case`, `through <service id>`).
 - Relations: `defines`, `imports`, `extends`, `implements`, `uses_trait`, `has_method`, `overrides`, `instantiates`,
   `calls`, `references`, `dispatches`, `handled_by`, `contract`, `requests`, `receives`, `reads_state_of`.
 - Confidence: `EXTRACTED` (read in the code or the configuration), `INFERRED` (resolved from declared types or

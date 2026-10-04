@@ -664,7 +664,8 @@ final class TextPresenter
             $lines[] = '';
             $lines[] = 'Routes reaching it (the entry points to check):';
             foreach ($slice($groups['routes']) as $route) {
-                $lines[] = \sprintf('  - %s  via %s  %s', $this->query->label($route->class), $this->formatEdge($route->edge), $this->classLocation($route->class));
+                $lines[] = \sprintf('  - %s [%s]  %s', $this->query->label($route->class), $route->confidence->value, $this->classLocation($route->class));
+                $lines[] = '      via ' . ($route->chain === [] ? $this->formatEdge($route->edge) : $this->chain($route->chain));
             }
             $more($groups['routes']);
         }
@@ -705,6 +706,44 @@ final class TextPresenter
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * `CreateEstimateProcessor::process() ← CreateEstimate::handle() ← ContextValidator::executeRules() (tagged_iterator
+     * app.rule) ← PaymentsModeRule::apply() ← Notification::add()`: from a route's handler down to the change, with the
+     * tag of the injected lists crossed.
+     *
+     * @param list<string> $chain
+     */
+    private function chain(array $chain): string
+    {
+        $graph = $this->query->graph();
+        $parts = [];
+        foreach ($chain as $index => $node) {
+            $label = $this->query->label($node);
+            $next = $chain[$index + 1] ?? null;
+            if ($next !== null) {
+                $holder = explode('::', $node)[0];
+                $member = explode('::', $next)[0];
+                foreach ($graph->incident($holder) as $item) {
+                    if ($item['forward'] && $item['other'] === $member && $item['edge']->relation === \PhpGraph\Graph\Relation::Receives && $item['edge']->via !== '') {
+                        $label .= ' (' . $item['edge']->via . ')';
+                        break;
+                    }
+                }
+                foreach ($graph->incident($node) as $item) {
+                    if ($item['forward'] && $item['other'] === $next && $item['edge']->relation === \PhpGraph\Graph\Relation::ReadsStateOf) {
+                        $label .= ' (reads what it writes)';
+                        break;
+                    }
+                }
+            }
+            if ($parts === [] || end($parts) !== $label) {
+                $parts[] = $label;
+            }
+        }
+
+        return implode(' ← ', $parts);
     }
 
     private function classLocation(string $class): string

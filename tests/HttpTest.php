@@ -201,6 +201,24 @@ final class HttpTest extends TestCase
         self::assertTrue($this->hasEdge($graph, 'route:src/ProblemController.php#GET /problems/{type}', 'App\ProblemController::show', Relation::HandledBy), 'self::CONSTANT in an attribute');
     }
 
+    public function testAGenericProcessorOnlyLetsThroughTheRoutesNamingWhatTheChangeReaches(): void
+    {
+        $graph = (new \PhpGraph\Builder\GraphBuilder())->build(__DIR__ . '/Fixtures/generic-processor')->graph;
+        $query = new GraphQuery($graph);
+
+        $availability = 'route:src/Api/CheckAvailabilityResource.php#POST /availability';
+        self::assertTrue($this->hasEdge($graph, $availability, 'App\Reservation\CheckAvailability', Relation::References, Confidence::Extracted), 'the use case the operation names');
+        self::assertTrue($this->hasEdge($graph, $availability, 'App\Shared\CollectionProcessor::process', Relation::HandledBy, Confidence::Extracted));
+
+        $routes = [];
+        foreach ($query->impactOf($query->resolve('App\Reservation\CheckAvailabilityQuery') ?? self::fail('No node'))->classes as $class) {
+            if (str_starts_with($class->class, 'route:')) {
+                $routes[] = $query->label($class->class);
+            }
+        }
+        self::assertSame(['POST /availability'], $routes, 'not POST /stock: the processor picks the use case the operation names');
+    }
+
     public function testHttpCallsReachTheRoutesOfAnotherService(): void
     {
         $result = $this->buildProject([

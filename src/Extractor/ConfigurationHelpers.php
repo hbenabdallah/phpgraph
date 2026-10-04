@@ -183,7 +183,7 @@ final class ConfigurationHelpers
     /**
      * `tagged_iterator(...)`, `tagged_locator(...)`, `service(...)`, alone or in an array.
      *
-     * @return list<array{tag: ?array<mixed>, service: ?array<mixed>}>
+     * @return list<array{tag: ?array<mixed>, service: ?array<mixed>, locator?: bool}>
      */
     private function injections(?Expr $value): array
     {
@@ -206,7 +206,8 @@ final class ConfigurationHelpers
         }
 
         return match (strtolower($value->name->getLast())) {
-            'tagged_iterator', 'tagged_locator' => [['tag' => $template, 'service' => null]],
+            'tagged_iterator' => [['tag' => $template, 'service' => null]],
+            'tagged_locator' => [['tag' => $template, 'service' => null, 'locator' => true]],
             'service' => [['tag' => null, 'service' => $template]],
             default => [],
         };

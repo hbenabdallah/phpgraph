@@ -176,4 +176,44 @@ final class GraphQueryTest extends TestCase
         }
         rmdir($root);
     }
+
+    public function testImpactReachesTheRoutesThroughATaggedListOfRulesScopedToItsContext(): void
+    {
+        $query = new GraphQuery((new \PhpGraph\Builder\GraphBuilder())->build(__DIR__ . '/Fixtures/validation-pipeline')->graph);
+        $routes = static function (GraphQuery $query, string $name): array {
+            $routes = [];
+            foreach ($query->impactOf($query->resolve($name) ?? self::fail('No node ' . $name))->classes as $class) {
+                if (str_starts_with($class->class, 'route:')) {
+                    $routes[$query->label($class->class)] = $class;
+                }
+            }
+            ksort($routes);
+
+            return $routes;
+        };
+
+        $fromRule = $routes($query, 'App\Sales\Rules\StockRule::apply');
+        self::assertSame(['POST /orders'], array_keys($fromRule), 'a sales rule reaches the sales use case only, not billing');
+        self::assertSame(\PhpGraph\Graph\Confidence::Inferred, $fromRule['POST /orders']->confidence, 'a hop through an injected list');
+
+        $fromNotification = $routes($query, 'App\Validation\Notification::addContextViolation');
+        self::assertSame(['POST /invoices', 'POST /orders'], array_keys($fromNotification), 'eight calls away, beyond the depth limit');
+
+        $text = (new \PhpGraph\Presentation\TextPresenter($query))->impact('App\Sales\Rules\StockRule::apply', 3, 0, 'routes');
+        self::assertStringContainsString('PlaceOrderProcessor::process() ← PlaceOrder::handle() ← PipelineRunner::run() ← ContextValidator::validate()', $text);
+        self::assertStringContainsString('ContextValidator::executeRules() (tagged_iterator sales.context_rule) ← StockRule::apply()', $text);
+    }
+
+    public function testForeachOverADocumentedCollectionTypesItsElements(): void
+    {
+        $graph = (new \PhpGraph\Builder\GraphBuilder())->build(__DIR__ . '/Fixtures/validation-pipeline')->graph;
+
+        $calls = [];
+        foreach ($graph->edges() as $edge) {
+            if ($edge->relation === \PhpGraph\Graph\Relation::Calls && $edge->source === 'App\Validation\ContextValidator::executeRules') {
+                $calls[] = $edge->target;
+            }
+        }
+        self::assertContains('App\Validation\ContextRuleInterface::apply', $calls, '@param RuleExecution[] $executions, then $execution->rule');
+    }
 }

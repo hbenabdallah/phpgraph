@@ -197,7 +197,8 @@ final class McpServer
                     . 'through the state the method writes (direct callers of methods reading the same properties, such as '
                     . 'all() or hasErrors() for add(), not followed further). Lists the tests to run apart, found through test helpers (fakers) without the depth limit. '
                     . 'Stops at a service receiving the change among others (a tagged collection) and at inherited code '
-                    . 'shared with other subclasses, which are listed but not followed. Lists are cut at 40 entries: '
+                    . 'shared with other subclasses, which are listed but not followed. Lists the routes reaching the change '
+                    . 'without the depth limit, each with its chain down to the change, scoped by the injected lists on the way. Lists are cut at 40 entries: '
                     . 'pass limit 0 for complete lists, or section to get a single one.',
                 'inputSchema' => [
                     'type' => 'object',

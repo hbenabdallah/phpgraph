@@ -245,7 +245,7 @@ Deux petits projets microservices complètent le corpus : [deux services Laravel
 ## Limites
 
 - Les appels de fonctions globales et les appels dynamiques (`$this->$name()`, `__call`) ne sont pas résolus.
-- Pas de génériques : le type des éléments d'un `foreach` reste inconnu, et `Collection<Foo>` est lu comme `Collection`.
+- Les génériques ne sont lus que pour les collections : un `foreach` sur un paramètre ou une propriété documentés `Foo[]`, `array<Foo>`, `list<Foo>` ou `iterable<Foo>` est typé ; `Collection<Foo>` et les autres classes génériques sont lues comme `Collection`.
 - Les chaînes s'arrêtent aux méthodes magiques, aux classes internes de PHP et aux dépendances sans type de retour exploitable.
 - Sans `vendor/` installé, les chaînes d'appels s'arrêtent à la première dépendance.
 - Les services construits à l'exécution (passes de compilation, extensions de bundle, identifiants calculés à partir de valeurs connues seulement à l'exécution), les routes en XML, les ressources API Platform déclarées en XML ou YAML et les schémas d'API (OpenAPI, protobuf) ne sont pas lus ; les injections non reliées sont listées par `overview`.

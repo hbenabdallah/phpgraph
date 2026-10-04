@@ -28,7 +28,7 @@ final class ContainerServices
     /** @var list<array{service: string, id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}> */
     private array $tags = [];
 
-    /** @var list<array{service: string, id: string, tag: ?string, target: ?string}> */
+    /** @var list<array{service: string, id: string, tag: ?string, target: ?string, locator: bool}> */
     private array $arguments = [];
 
     /** @var array<string, array{int, int, array<mixed>}> file => [modification time, size, what it declares] */
@@ -43,7 +43,7 @@ final class ContainerServices
     /** @var list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}> */
     private array $fileTags = [];
 
-    /** @var list<array{id: string, tag: ?string, service: ?string}> */
+    /** @var list<array{id: string, tag: ?string, service: ?string, locator?: bool}> */
     private array $fileArguments = [];
 
     /**
@@ -52,14 +52,14 @@ final class ContainerServices
      * @param array<string, list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>> $declaredTags
      *                                                         tags collected from PHP, by application service
      * @param array<string, array{int, int, array<mixed>}> $cache files read by the last build of this process
-     * @param array<string, list<array{id: string, tag: ?string, service: ?string}>> $declaredArguments
+     * @param array<string, list<array{id: string, tag: ?string, service: ?string, locator?: bool}>> $declaredArguments
      *                                                         injections collected from PHP, by application service
      */
     public function __construct(string $root, array $files, ServiceMap $services, array $declared = [], array $declaredTags = [], array $cache = [], array $declaredArguments = [])
     {
         foreach ($declaredArguments as $service => $arguments) {
             foreach ($arguments as $argument) {
-                $this->arguments[] = ['service' => (string) $service, 'id' => $argument['id'], 'tag' => $argument['tag'], 'target' => $argument['service']];
+                $this->arguments[] = ['service' => (string) $service, 'id' => $argument['id'], 'tag' => $argument['tag'], 'target' => $argument['service'], 'locator' => $argument['locator'] ?? false];
             }
         }
         foreach ($declared as $service => $definitions) {
@@ -127,15 +127,15 @@ final class ContainerServices
             $this->tags[] = ['service' => $service] + $tag;
         }
         foreach (\is_array($declared['arguments'] ?? null) ? $declared['arguments'] : [] as $argument) {
-            /** @var array{id: string, tag: ?string, service: ?string} $argument */
-            $this->arguments[] = ['service' => $service, 'id' => $argument['id'], 'tag' => $argument['tag'], 'target' => $argument['service']];
+            /** @var array{id: string, tag: ?string, service: ?string, locator?: bool} $argument */
+            $this->arguments[] = ['service' => $service, 'id' => $argument['id'], 'tag' => $argument['tag'], 'target' => $argument['service'], 'locator' => $argument['locator'] ?? false];
         }
     }
 
     /**
      * What services receive by configuration: the services of a tag, or one service named by id.
      *
-     * @return list<array{service: string, id: string, tag: ?string, target: ?string}>
+     * @return list<array{service: string, id: string, tag: ?string, target: ?string, locator: bool}>
      */
     public function arguments(): array
     {
@@ -293,7 +293,7 @@ final class ContainerServices
             foreach ($definition->getElementsByTagName('argument') as $argument) {
                 $type = $argument->getAttribute('type');
                 if (\in_array($type, ['tagged_iterator', 'tagged_locator', 'tagged'], true) && $argument->getAttribute('tag') !== '') {
-                    $this->fileArguments[] = ['id' => $id, 'tag' => $argument->getAttribute('tag'), 'service' => null];
+                    $this->fileArguments[] = ['id' => $id, 'tag' => $argument->getAttribute('tag'), 'service' => null, 'locator' => $type === 'tagged_locator'];
                 } elseif ($type === 'service' && $argument->getAttribute('id') !== '') {
                     $decorates = $definition->getAttribute('decorates');
                     $this->fileArguments[] = ['id' => $id] + $this->undecorated(['tag' => null, 'service' => $argument->getAttribute('id')], $id, $decorates === '' ? null : $decorates);
@@ -334,7 +334,7 @@ final class ContainerServices
      * `!tagged_iterator app.rule`, `!tagged_iterator { tag: app.rule }`, `!tagged_locator ...`, and `'@app.mailer'`
      * (not `'@?optional'` nor the escaped `'@@'`), in a list or by parameter name.
      *
-     * @return list<array{tag: ?string, service: ?string}>
+     * @return list<array{tag: ?string, service: ?string, locator?: bool}>
      */
     private function yamlInjections(mixed $values): array
     {
@@ -343,7 +343,7 @@ final class ContainerServices
             if ($value instanceof TaggedValue && \in_array($value->getTag(), ['tagged_iterator', 'tagged_locator', 'tagged'], true)) {
                 $tag = \is_array($value->getValue()) ? ($value->getValue()['tag'] ?? null) : $value->getValue();
                 if (\is_string($tag) && $tag !== '') {
-                    $injected[] = ['tag' => $tag, 'service' => null];
+                    $injected[] = ['tag' => $tag, 'service' => null, 'locator' => $value->getTag() === 'tagged_locator'];
                 }
             } elseif (\is_string($value) && preg_match('/^@([^@?=].*)$/', $value, $match) === 1) {
                 $injected[] = ['tag' => null, 'service' => $match[1]];
@@ -358,9 +358,9 @@ final class ContainerServices
     /**
      * A decorator receives the service it decorates: `.inner` (or `<id>.inner`) is that service.
      *
-     * @param array{tag: ?string, service: ?string} $injected
+     * @param array{tag: ?string, service: ?string, locator?: bool} $injected
      *
-     * @return array{tag: ?string, service: ?string}
+     * @return array{tag: ?string, service: ?string, locator?: bool}
      */
     private function undecorated(array $injected, string $id, ?string $decorates): array
     {

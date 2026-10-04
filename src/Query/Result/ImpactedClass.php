@@ -23,6 +23,7 @@ final readonly class ImpactedClass
      *                                 changed one writes (`hasErrors()` for `addError()`), not the change itself
      * @param list<Edge> $sites        every relation from this class to what the change reaches: its calling methods,
      *                                 with their source lines
+     * @param list<string> $chain      for a route, the nodes from its handler down to the change
      */
     public function __construct(
         public string $class,
@@ -34,6 +35,7 @@ final readonly class ImpactedClass
         public ?string $through = null,
         public bool $throughState = false,
         public array $sites = [],
+        public array $chain = [],
     ) {
     }
 }

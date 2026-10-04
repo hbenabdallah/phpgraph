@@ -84,7 +84,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<string, string> */
     private array $parameterTypes = [];
 
-    /** @var list<array{id: string, tag: ?string, service: ?string}> */
+    /** @var list<array{id: string, tag: ?string, service: ?string, locator?: bool}> */
     private array $serviceArguments = [];
 
     /** @var array<string, array{reads: array<string, true>, writes: array<string, true>, constants?: array<string, true>}> method id => properties of $this, and the class constants it uses */
@@ -94,6 +94,12 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     private array $writtenFetches = [];
 
     private readonly ConfigurationHelpers $configuration;
+
+    /** @var array<string, string> property of the current class => class of the elements it holds (`@var Rule[]`) */
+    private array $propertyElements = [];
+
+    /** @var array<string, string> parameter of the current callable => class of its elements (`@param Rule[] $rules`) */
+    private array $parameterElements = [];
 
     private readonly bool $inConfigurationDirectory;
 
@@ -219,6 +225,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         if ($node instanceof Stmt\Foreach_) {
             $this->forgetAssigned($node->keyVar);
             $this->forgetAssigned($node->valueVar);
+            // `foreach ($this->rules as $rule)` over a collection typed in a docblock: `$rule` is a Rule.
+            $element = $this->elementOf($node->expr);
+            if ($element !== null && $node->valueVar instanceof Expr\Variable && \is_string($node->valueVar->name)) {
+                $this->assignLocal($node->valueVar->name, TypeExpr::named($element));
+            }
 
             return null;
         }
@@ -268,6 +279,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
         if ($node instanceof Stmt\ClassMethod || $node instanceof Stmt\Function_) {
             $this->configuration->leaveCallable();
+            $this->parameterElements = [];
             $this->currentCallable = null;
             $this->localTypes = [];
             $this->pinned = [];
@@ -339,6 +351,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             }
         }
         $this->propertyTypes = $this->collectPropertyTypes($node);
+        $this->propertyElements = $this->collectPropertyElements($node);
         foreach ($this->propertyTypes as $property => $type) {
             $this->declaredPropertyTypes[$fqcn . '::' . $property] = $type;
         }
@@ -379,6 +392,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         $this->currentCallable = $id;
+        $elements = $node->getAttribute(DocTypeResolver::ELEMENT_TYPES);
+        $this->parameterElements = \is_array($elements) ? array_filter($elements, 'is_string') : [];
         $this->configuration->enterCallable($id, $node->params, array_values(array_map(fn (AstNode\Param $param): ?string => $this->singleType($param->type), $node->params)));
         $this->localTypes = [];
         $this->pinned = [];
@@ -741,7 +756,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                     if ($decorated !== null && ($target === '.inner' || $target === $id . '.inner')) {
                         $target = $decorated;
                     }
-                    $this->serviceArguments[] = ['id' => (string) $id, 'tag' => $injected['tag'], 'service' => $target];
+                    $this->serviceArguments[] = ['id' => (string) $id, 'tag' => $injected['tag'], 'service' => $target, 'locator' => $injected['locator'] ?? false];
                 }
             }
 
@@ -769,7 +784,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
      * What a configuration value injects: `tagged_iterator('t')`, `tagged_locator('t')` (or `['tag' => 't']`),
      * `service('id')`, and those inside arrays (`iterator([...])`, `->args([...])`).
      *
-     * @return list<array{tag: ?string, service: ?string}>
+     * @return list<array{tag: ?string, service: ?string, locator?: bool}>
      */
     private function injectedValues(Expr $value): array
     {
@@ -803,7 +818,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         return match ($function) {
-            'tagged_iterator', 'tagged_locator' => [['tag' => $string, 'service' => null]],
+            'tagged_iterator' => [['tag' => $string, 'service' => null]],
+            'tagged_locator' => [['tag' => $string, 'service' => null, 'locator' => true]],
             'service' => [['tag' => null, 'service' => $string]],
             default => [],
         };
@@ -829,7 +845,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                             continue;
                         }
                         if (\in_array($short, ['AutowireIterator', 'TaggedIterator', 'AutowireLocator', 'TaggedLocator'], true) && ($key === 'tag' || ($key === null && $position === 0))) {
-                            $this->serviceArguments[] = ['id' => $class, 'tag' => $value, 'service' => null];
+                            $this->serviceArguments[] = ['id' => $class, 'tag' => $value, 'service' => null, 'locator' => str_ends_with($short, 'Locator')];
                         } elseif ($short === 'Autowire' && $key === 'service') {
                             $this->serviceArguments[] = ['id' => $class, 'tag' => null, 'service' => $value];
                         }
@@ -1425,6 +1441,50 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         return $types;
+    }
+
+    /**
+     * @return array<string, string> property => class of the elements it holds, from `@var Rule[]` on the property or
+     *                               `@param iterable<Rule> $rules` on a promoted constructor parameter
+     */
+    private function collectPropertyElements(Stmt\ClassLike $node): array
+    {
+        $elements = [];
+        foreach ($node->stmts as $statement) {
+            if ($statement instanceof Stmt\Property) {
+                $types = $statement->getAttribute(DocTypeResolver::ELEMENT_TYPES);
+                $class = \is_array($types) && \is_string($types[''] ?? null) ? $this->documentedClass($types['']) : null;
+                foreach ($class === null ? [] : $statement->props as $property) {
+                    $elements[$property->name->toString()] = (string) $class;
+                }
+            } elseif ($statement instanceof Stmt\ClassMethod && strtolower($statement->name->toString()) === '__construct') {
+                $types = $statement->getAttribute(DocTypeResolver::ELEMENT_TYPES);
+                foreach ($statement->params as $param) {
+                    $name = $param->var instanceof Expr\Variable && \is_string($param->var->name) ? $param->var->name : null;
+                    $class = $name !== null && \is_array($types) && \is_string($types[$name] ?? null) ? $this->documentedClass($types[$name]) : null;
+                    if ($param->flags !== 0 && $name !== null && $class !== null) {
+                        $elements[$name] = $class;
+                    }
+                }
+            }
+        }
+
+        return $elements;
+    }
+
+    /**
+     * The class of the elements a foreach walks: a parameter or a property typed as a collection in a docblock.
+     */
+    private function elementOf(Expr $expr): ?string
+    {
+        if ($expr instanceof Expr\Variable && \is_string($expr->name)) {
+            $class = $this->parameterElements[$expr->name] ?? null;
+
+            return $class === null ? null : $this->documentedClass($class);
+        }
+        $property = $this->thisProperty($expr);
+
+        return $property === null ? null : $this->propertyElements[$property] ?? null;
     }
 
     private function documentedPropertyType(Stmt\Property $property): ?string

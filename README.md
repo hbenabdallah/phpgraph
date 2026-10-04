@@ -245,7 +245,7 @@ Two small microservices projects complete the corpus: [two Laravel services over
 ## Limitations
 
 - Calls to global functions and dynamic calls (`$this->$name()`, `__call`) are not resolved.
-- No generics: the element type of a `foreach` stays unknown, and `Collection<Foo>` is read as `Collection`.
+- Generics are read for collections only: a `foreach` over a parameter or property documented as `Foo[]`, `array<Foo>`, `list<Foo>` or `iterable<Foo>` is typed; `Collection<Foo>` and other generic classes are read as `Collection`.
 - Chains stop at magic methods, PHP internal classes, and dependencies without a usable return type.
 - Without an installed `vendor/`, call chains stop at the first dependency.
 - Services built at runtime (compiler passes, bundle extensions, ids computed from values only known at runtime), XML routes, API Platform resources declared in XML or YAML, and API schemas (OpenAPI, protobuf) are not read; injections that cannot be linked are listed by `overview`.

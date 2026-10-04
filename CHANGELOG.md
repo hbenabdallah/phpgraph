@@ -6,6 +6,17 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 ## Unreleased
 
 ### Added
+- `impact` finds the routes reaching a change without the depth limit, each with its chain from the route's handler
+  down to the change (`CreateEstimateProcessor::process() ← CreateEstimate::handle() ← ValidationPipelineRunner::run()
+  ← ContextValidator::executeRules() (tagged_iterator sales_order.estimate_quotation.context_rule) ← Rule::apply()`).
+- Injected lists scope the walk: a service holding a tagged member through other services (a use case, its pipeline,
+  its validator) `receives` it, INFERRED, and `impact` keeps the rules of one bounded context to the use cases wired
+  to them. `receives` edges carry what injects them (`via`).
+- A route handled by a generic processor, picking the use case at run time (a `tagged_locator`, or an interface
+  implemented by the operation's payload), is kept only when its operation names a class the change reaches: its use
+  case or its payload.
+- `foreach` over a parameter or a property documented as a collection (`@param Rule[] $rules`, `iterable<Rule>`,
+  `array<int, Rule>`, `list<Rule>`) types its variable: calls in such loops are resolved.
 - `query` and `query_graph` match words, not substrings: names are split into words and reduced to a stem
   (validated finds Validator, prices finds PricesCalculator), rare words weigh more, and the nodes naming more of the
   question come first. Words naming the question, not code (explain, system, flow, how), are left out. Up to 6
@@ -29,6 +40,8 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 - A version tag with a suffix (`v1.0.0-rc.1`) is published as a pre-release, and does not move the `latest` Docker tag.
 
 ### Changed
+- `impact` follows a template method of a parent class only to the callers holding the subclass (the processor holding
+  the use case), and no longer lists the tests of every other subclass through it.
 - `reads_state_of` is weighed by the class constants: when the writers of a property each write their own constant
   (`ViolationType::CONTEXT`, `SURFACE`), a reader testing the writer's is INFERRED, a reader testing only another
   writer's is not linked, and a reader testing none is AMBIGUOUS. `impact` ranks the first ones first.

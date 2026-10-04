@@ -9,6 +9,8 @@ final class Edge
     /**
      * @param string $lines the lines of the source file where the relation is written, `12,40`: the call sites of a
      *                      `calls` edge. A string, not a list: the large graphs have hundreds of thousands of edges.
+     * @param string $via   what carries the relation, when it says more than the relation: the tag of a `receives`
+     *                      edge (`tagged_iterator app.rule`, `tagged_locator app.use_case`)
      */
     public function __construct(
         public readonly string $source,
@@ -16,6 +18,7 @@ final class Edge
         public readonly Relation $relation,
         public readonly Confidence $confidence = Confidence::Extracted,
         private string $lines = '',
+        public readonly string $via = '',
     ) {
         $this->lines = $lines === '0' ? '' : $lines;
     }
@@ -57,7 +60,7 @@ final class Edge
             'target' => $this->target,
             'relation' => $this->relation->value,
             'confidence' => $this->confidence->value,
-        ] + ($this->lines === '' ? [] : ['lines' => $this->lines]);
+        ] + ($this->lines === '' ? [] : ['lines' => $this->lines]) + ($this->via === '' ? [] : ['via' => $this->via]);
     }
 
     /**
@@ -71,6 +74,7 @@ final class Edge
             Relation::from((string) $data['relation']),
             Confidence::from((string) $data['confidence']),
             \is_string($data['lines'] ?? null) ? $data['lines'] : '',
+            \is_string($data['via'] ?? null) ? $data['via'] : '',
         );
     }
 }

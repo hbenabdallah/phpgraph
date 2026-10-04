@@ -6,15 +6,15 @@ phpgraph could not type, the main target of type inference work. Arrows compare 
 
 | Project | Files | Failed | Duplicates | Classes | Methods | Edges | Vendor files read | Seconds | Memory MB |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4179 | 105 | 0.71 | 24 |
-| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140094 | 583 | 9.07 | 446 |
-| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 215442 | 680 | 15.20 | 578 |
-| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 184543 | 568 | 17.69 | 500 |
-| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6789 | 59 | 0.89 | 30 |
-| bookstack | 1513 | 0 | 0 | 698 | 4076 | 23001 | 347 | 3.91 | 114 |
-| wordpress | 1899 | 0 | 50 | 840 | 7580 | 41926 | 0 | 7.11 | 113 |
-| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 97 | 0.63 | 38 |
-| art-gallery | 266 | 0 | 0 | 140 | 148 | 1692 | 80 | 0.82 | 46 |
+| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4179 | 105 | 0.62 | 24 |
+| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140272 | 583 | 8.88 | 454 |
+| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 217193 | 680 | 16.65 | 592 |
+| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 184771 | 569 | 15.41 | 512 |
+| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6789 | 59 | 1.04 | 30 |
+| bookstack | 1513 | 0 | 0 | 698 | 4076 | 23009 | 347 | 6.29 | 114 |
+| wordpress | 1899 | 0 | 50 | 840 | 7580 | 41935 | 0 | 6.94 | 115 |
+| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 97 | 0.55 | 38 |
+| art-gallery | 266 | 0 | 0 | 140 | 148 | 1692 | 80 | 0.60 | 46 |
 
 ## Method calls in application code
 
@@ -23,12 +23,12 @@ The main indicator: test code (see `TestFiles`) is left out.
 | Project | Call sites | Inferred | Ambiguous | Outside project | Unknown receiver | of which chain left project |
 |---|---:|---:|---:|---:|---:|---:|
 | php-ddd-example | 665 | 67.1% | 0.5% | 30.8% | 1.7% | 0.6% |
-| sylius | 19686 | 22.3% | 0.1% | 57.2% | 20.3% | 17.4% |
-| akeneo-pim | 33853 | 50.4% | 0.9% | 35.7% | 13.0% | 4.4% |
-| prestashop | 75968 | 52.1% | 2.6% | 35.9% | 9.5% | 2.5% |
+| sylius | 19686 | 22.4% | 0.1% | 57.2% | 20.3% | 17.4% |
+| akeneo-pim | 33853 | 51.0% | 0.8% | 35.7% | 12.5% | 4.4% |
+| prestashop | 75968 | 52.3% | 2.6% | 35.9% | 9.3% | 2.5% |
 | ecotone-quickstart | 948 | 25.1% | 0.2% | 68.4% | 6.3% | 5.8% |
-| bookstack | 7461 | 43.9% | 4.2% | 39.9% | 12.0% | 6.5% |
-| wordpress | 26448 | 79.2% | 9.3% | 2.4% | 9.1% | 0.7% |
+| bookstack | 7461 | 44.1% | 4.1% | 40.2% | 11.6% | 6.6% |
+| wordpress | 26448 | 79.3% | 9.3% | 2.4% | 9.0% | 0.7% |
 | laravel-rabbitmq-microservices | 136 | 1.5% | 3.7% | 75.0% | 19.9% | 7.4% |
 | art-gallery | 586 | 4.1% | 0.2% | 68.8% | 27.0% | 9.6% |
 
@@ -40,8 +40,8 @@ Mocks and specs make test code harder to type; read it apart.
 |---|---:|---:|---:|---:|---:|---:|
 | php-ddd-example | 680 | 69.0% | 1.5% | 24.3% | 5.3% | 0.6% |
 | sylius | 82913 | 22.2% | 0.1% | 51.4% | 26.4% | 25.9% |
-| akeneo-pim | 125181 | 35.0% | 1.2% | 34.6% | 29.2% | 11.5% |
-| prestashop | 40938 | 47.2% | 0.5% | 45.3% | 7.0% | 3.7% |
+| akeneo-pim | 125181 | 35.0% | 1.2% | 34.6% | 29.1% | 11.5% |
+| prestashop | 40938 | 47.3% | 0.5% | 45.3% | 6.9% | 3.7% |
 | ecotone-quickstart | 415 | 13.5% | 0.2% | 85.3% | 1.0% | 1.0% |
 | bookstack | 18033 | 31.6% | 3.0% | 49.7% | 15.8% | 8.7% |
 | wordpress | 0 | - | - | - | - | - |
@@ -56,11 +56,11 @@ Application and test code together.
 |---|---:|---:|---:|---:|---:|---:|
 | php-ddd-example | 1345 | 68.0% | 1.0% | 27.5% | 3.5% | 0.6% |
 | sylius | 102599 | 22.2% | 0.1% | 52.5% | 25.2% | 24.3% |
-| akeneo-pim | 159034 | 38.3% | 1.1% | 34.8% | 25.7% | 10.0% |
-| prestashop | 116906 | 50.3% | 1.9% | 39.2% | 8.6% | 2.9% |
+| akeneo-pim | 159034 | 38.4% | 1.1% | 34.9% | 25.6% | 10.0% |
+| prestashop | 116906 | 50.5% | 1.9% | 39.2% | 8.4% | 2.9% |
 | ecotone-quickstart | 1363 | 21.6% | 0.2% | 73.5% | 4.7% | 4.3% |
-| bookstack | 25494 | 35.2% | 3.4% | 46.8% | 14.7% | 8.0% |
-| wordpress | 26448 | 79.2% | 9.3% | 2.4% | 9.1% | 0.7% |
+| bookstack | 25494 | 35.2% | 3.3% | 46.9% | 14.6% | 8.0% |
+| wordpress | 26448 | 79.3% | 9.3% | 2.4% | 9.0% | 0.7% |
 | laravel-rabbitmq-microservices | 146 | 1.4% | 3.4% | 74.0% | 21.2% | 6.8% |
 | art-gallery | 661 | 3.6% | 0.2% | 71.1% | 25.1% | 8.5% |
 
@@ -103,9 +103,9 @@ What the container configuration injects by tag or by id (`receives`), and what 
 | Project | Injections | Linked | Receives edges | Not linked |
 |---|---:|---:|---:|---:|
 | php-ddd-example | 13 | 12 | 30 | 1 |
-| sylius | 1737 | 675 | 1188 | 1062 |
-| akeneo-pim | 6534 | 4949 | 3928 | 1585 |
-| prestashop | 2607 | 2187 | 1998 | 420 |
+| sylius | 1737 | 675 | 1360 | 1062 |
+| akeneo-pim | 6534 | 4949 | 5531 | 1585 |
+| prestashop | 2607 | 2187 | 2074 | 420 |
 | ecotone-quickstart | 0 | 0 | 0 | 0 |
 | bookstack | 0 | 0 | 0 | 0 |
 | wordpress | 0 | 0 | 0 | 0 |

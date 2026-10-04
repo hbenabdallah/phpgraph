@@ -94,7 +94,7 @@
             "contextPairs": 14,
             "layerFirst": false
         },
-        "seconds": 0.71,
+        "seconds": 0.62,
         "peakMemoryMb": 24
     },
     {
@@ -107,27 +107,27 @@
         "classLike": 4449,
         "methods": 23781,
         "external": 904,
-        "edges": 140094,
+        "edges": 140272,
         "vendorFilesRead": 583,
         "edgesByConfidence": {
             "EXTRACTED": 107737,
-            "INFERRED": 31923,
+            "INFERRED": 32101,
             "AMBIGUOUS": 434
         },
         "calls": {
             "total": 102599,
-            "inferred": 22772,
+            "inferred": 22778,
             "ambiguous": 133,
-            "outsideProject": 53840,
-            "unknownReceiver": 25854,
+            "outsideProject": 53842,
+            "unknownReceiver": 25846,
             "chainOutsideProject": 24897
         },
         "applicationCalls": {
             "total": 19686,
-            "inferred": 4399,
+            "inferred": 4405,
             "ambiguous": 19,
-            "outsideProject": 11262,
-            "unknownReceiver": 4006,
+            "outsideProject": 11264,
+            "unknownReceiver": 3998,
             "chainOutsideProject": 3435
         },
         "testCalls": {
@@ -192,7 +192,7 @@
         "injections": {
             "injections": 1737,
             "linked": 675,
-            "edges": 1188,
+            "edges": 1360,
             "unlinkedCount": 1062,
             "unlinked": [
                 "service sylius.factory.zone into sylius.custom_factory.zone",
@@ -211,8 +211,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 9.07,
-        "peakMemoryMb": 446
+        "seconds": 8.88,
+        "peakMemoryMb": 454
     },
     {
         "name": "akeneo-pim",
@@ -224,35 +224,35 @@
         "classLike": 8447,
         "methods": 38595,
         "external": 888,
-        "edges": 215442,
+        "edges": 217193,
         "vendorFilesRead": 680,
         "edgesByConfidence": {
             "EXTRACTED": 155411,
-            "INFERRED": 58295,
-            "AMBIGUOUS": 1736
+            "INFERRED": 60067,
+            "AMBIGUOUS": 1715
         },
         "calls": {
             "total": 159034,
-            "inferred": 60919,
-            "ambiguous": 1805,
-            "outsideProject": 55407,
-            "unknownReceiver": 40903,
+            "inferred": 61117,
+            "ambiguous": 1780,
+            "outsideProject": 55432,
+            "unknownReceiver": 40705,
             "chainOutsideProject": 15938
         },
         "applicationCalls": {
             "total": 33853,
-            "inferred": 17070,
-            "ambiguous": 308,
-            "outsideProject": 12085,
-            "unknownReceiver": 4390,
+            "inferred": 17249,
+            "ambiguous": 283,
+            "outsideProject": 12102,
+            "unknownReceiver": 4219,
             "chainOutsideProject": 1498
         },
         "testCalls": {
             "total": 125181,
-            "inferred": 43849,
+            "inferred": 43868,
             "ambiguous": 1497,
-            "outsideProject": 43322,
-            "unknownReceiver": 36513,
+            "outsideProject": 43330,
+            "unknownReceiver": 36486,
             "chainOutsideProject": 14440
         },
         "bus": {
@@ -308,7 +308,7 @@
         "injections": {
             "injections": 6534,
             "linked": 4949,
-            "edges": 3928,
+            "edges": 5531,
             "unlinkedCount": 1585,
             "unlinked": [
                 "service akeneo_elasticsearch.client.product_and_product_model into Akeneo\\Catalogs\\Infrastructure\\TemporaryEnrichmentBridge\\SearchAfterSizeUuidResultCursorFactory",
@@ -327,8 +327,8 @@
             "contextPairs": 13,
             "layerFirst": false
         },
-        "seconds": 15.2,
-        "peakMemoryMb": 578
+        "seconds": 16.65,
+        "peakMemoryMb": 592
     },
     {
         "name": "prestashop",
@@ -340,35 +340,35 @@
         "classLike": 7291,
         "methods": 32895,
         "external": 1094,
-        "edges": 184543,
-        "vendorFilesRead": 568,
+        "edges": 184771,
+        "vendorFilesRead": 569,
         "edgesByConfidence": {
             "EXTRACTED": 126837,
-            "INFERRED": 55464,
-            "AMBIGUOUS": 2242
+            "INFERRED": 55704,
+            "AMBIGUOUS": 2230
         },
         "calls": {
             "total": 116906,
-            "inferred": 58859,
-            "ambiguous": 2180,
-            "outsideProject": 45785,
-            "unknownReceiver": 10082,
+            "inferred": 59071,
+            "ambiguous": 2167,
+            "outsideProject": 45812,
+            "unknownReceiver": 9856,
             "chainOutsideProject": 3424
         },
         "applicationCalls": {
             "total": 75968,
-            "inferred": 39548,
-            "ambiguous": 1959,
-            "outsideProject": 27238,
-            "unknownReceiver": 7223,
+            "inferred": 39723,
+            "ambiguous": 1952,
+            "outsideProject": 27248,
+            "unknownReceiver": 7045,
             "chainOutsideProject": 1910
         },
         "testCalls": {
             "total": 40938,
-            "inferred": 19311,
-            "ambiguous": 221,
-            "outsideProject": 18547,
-            "unknownReceiver": 2859,
+            "inferred": 19348,
+            "ambiguous": 215,
+            "outsideProject": 18564,
+            "unknownReceiver": 2811,
             "chainOutsideProject": 1514
         },
         "bus": {
@@ -418,7 +418,7 @@
         "injections": {
             "injections": 2607,
             "linked": 2187,
-            "edges": 1998,
+            "edges": 2074,
             "unlinkedCount": 420,
             "unlinked": [
                 "service security.access_map into PrestaShopBundle\\EventListener\\Admin\\TokenizedUrlsListener",
@@ -437,8 +437,8 @@
             "contextPairs": 293,
             "layerFirst": true
         },
-        "seconds": 17.69,
-        "peakMemoryMb": 500
+        "seconds": 15.41,
+        "peakMemoryMb": 512
     },
     {
         "name": "ecotone-quickstart",
@@ -534,7 +534,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.89,
+        "seconds": 1.04,
         "peakMemoryMb": 30
     },
     {
@@ -547,28 +547,28 @@
         "classLike": 698,
         "methods": 4076,
         "external": 325,
-        "edges": 23001,
+        "edges": 23009,
         "vendorFilesRead": 347,
         "edgesByConfidence": {
             "EXTRACTED": 14055,
-            "INFERRED": 8256,
-            "AMBIGUOUS": 690
+            "INFERRED": 8271,
+            "AMBIGUOUS": 683
         },
         "calls": {
             "total": 25494,
-            "inferred": 8966,
-            "ambiguous": 859,
-            "outsideProject": 11930,
-            "unknownReceiver": 3739,
-            "chainOutsideProject": 2049
+            "inferred": 8983,
+            "ambiguous": 850,
+            "outsideProject": 11951,
+            "unknownReceiver": 3710,
+            "chainOutsideProject": 2051
         },
         "applicationCalls": {
             "total": 7461,
-            "inferred": 3275,
-            "ambiguous": 313,
-            "outsideProject": 2975,
-            "unknownReceiver": 898,
-            "chainOutsideProject": 487
+            "inferred": 3292,
+            "ambiguous": 304,
+            "outsideProject": 2996,
+            "unknownReceiver": 869,
+            "chainOutsideProject": 489
         },
         "testCalls": {
             "total": 18033,
@@ -618,7 +618,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 3.91,
+        "seconds": 6.29,
         "peakMemoryMb": 114
     },
     {
@@ -631,27 +631,27 @@
         "classLike": 840,
         "methods": 7580,
         "external": 117,
-        "edges": 41926,
+        "edges": 41935,
         "vendorFilesRead": 0,
         "edgesByConfidence": {
             "EXTRACTED": 19124,
-            "INFERRED": 21144,
-            "AMBIGUOUS": 1658
+            "INFERRED": 21167,
+            "AMBIGUOUS": 1644
         },
         "calls": {
             "total": 26448,
-            "inferred": 20944,
-            "ambiguous": 2469,
-            "outsideProject": 636,
-            "unknownReceiver": 2399,
+            "inferred": 20979,
+            "ambiguous": 2453,
+            "outsideProject": 639,
+            "unknownReceiver": 2377,
             "chainOutsideProject": 186
         },
         "applicationCalls": {
             "total": 26448,
-            "inferred": 20944,
-            "ambiguous": 2469,
-            "outsideProject": 636,
-            "unknownReceiver": 2399,
+            "inferred": 20979,
+            "ambiguous": 2453,
+            "outsideProject": 639,
+            "unknownReceiver": 2377,
             "chainOutsideProject": 186
         },
         "testCalls": {
@@ -724,8 +724,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 7.11,
-        "peakMemoryMb": 113
+        "seconds": 6.94,
+        "peakMemoryMb": 115
     },
     {
         "name": "laravel-rabbitmq-microservices",
@@ -809,7 +809,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.63,
+        "seconds": 0.55,
         "peakMemoryMb": 38
     },
     {
@@ -890,7 +890,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.82,
+        "seconds": 0.6,
         "peakMemoryMb": 46
     }
 ]
