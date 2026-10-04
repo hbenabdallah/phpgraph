@@ -6,6 +6,12 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 ## Unreleased
 
 ### Added
+- `impact` lists, under each class, every method reaching the change with the lines of its calls (3 per class by
+  default, all with `--all` or `limit: 0`).
+- A strategy declaring what it handles, `supports(object $input): bool { return $input instanceof LineQuery; }`
+  (rules, voters, normalizers), is linked: `LineQuery --handled_by--> LineRule`, INFERRED.
+- `path` finds a dependency in the other direction before ignoring directions: from a rule to the use case running
+  it, it shows that the use case depends on the rule.
 - `impact` and `impact_of` give complete lists on demand: `--limit N` (`limit`), `--all` (`limit: 0`), and one list
   only with `--section direct|state|tests|helpers` (`section`).
 - `docs/STABILITY.md`: the commands, MCP tools, graph format and files kept stable from 1.0.0.
@@ -14,6 +20,12 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 - A version tag with a suffix (`v1.0.0-rc.1`) is published as a pre-release, and does not move the `latest` Docker tag.
 
 ### Changed
+- `reads_state_of` is weighed by the class constants: when the writers of a property each write their own constant
+  (`ViolationType::CONTEXT`, `SURFACE`), a reader testing the writer's is INFERRED, a reader testing only another
+  writer's is not linked, and a reader testing none is AMBIGUOUS. `impact` ranks the first ones first.
+- `impact` classifies a class reached both by a call and through the state as a caller.
+- `explain` and `get_node` group the connections by relation, the most telling first, and only count the files
+  importing a class.
 - `impact`: the code reached through the state a method writes is listed as possibly affected, its callers no longer
   followed; tests reached that way are listed apart, those in the modules of the direct dependents first.
 - The MCP server negotiates the protocol version: it answers with the client's version when it speaks it

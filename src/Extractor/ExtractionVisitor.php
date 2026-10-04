@@ -17,6 +17,7 @@ use PhpParser\Node\Name;
 use PhpParser\Node\NullableType;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\UnionType;
+use PhpParser\NodeFinder;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitorAbstract;
 
@@ -86,7 +87,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var list<array{id: string, tag: ?string, service: ?string}> */
     private array $serviceArguments = [];
 
-    /** @var array<string, array{reads: array<string, true>, writes: array<string, true>}> method id => properties of $this */
+    /** @var array<string, array{reads: array<string, true>, writes: array<string, true>, constants?: array<string, true>}> method id => properties of $this, and the class constants it uses */
     private array $stateAccess = [];
 
     /** @var array<int, true> property fetches being written, not read: `$this->items[] = $item` */
@@ -128,6 +129,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             array_map(static fn (array $access): array => [
                 'reads' => array_map('strval', array_keys($access['reads'])),
                 'writes' => array_map('strval', array_keys($access['writes'])),
+                'constants' => array_map('strval', array_keys($access['constants'] ?? [])),
             ], $this->stateAccess),
             $this->configuration->helpers(),
             $this->configuration->calls(),
@@ -391,6 +393,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
         foreach ($this->typeNames($node->returnType) as $type) {
             $this->reference($id, $type);
+        }
+
+        if ($kind === NodeKind::Method && $this->currentClass !== null && str_starts_with(strtolower($node->name->toString()), 'supports')) {
+            $this->onSupports($this->currentClass, $node);
         }
 
         if ($kind === NodeKind::Method && $this->currentClass !== null && strtolower($node->name->toString()) === '__construct') {
@@ -832,6 +838,30 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     }
 
     /**
+     * A strategy declaring what it handles: `supports(object $input): bool { return $input instanceof LineQuery; }`,
+     * as rules, voters and normalizers do. The class tested is handled by this one, INFERRED: read from the shape of
+     * the code, and chosen at runtime.
+     */
+    private function onSupports(string $class, Stmt\ClassMethod|Stmt\Function_ $method): void
+    {
+        $parameters = [];
+        foreach ($method->params as $param) {
+            if ($param->var instanceof Expr\Variable && \is_string($param->var->name)) {
+                $parameters[$param->var->name] = true;
+            }
+        }
+
+        foreach ((new NodeFinder())->findInstanceOf($method->stmts ?? [], Expr\Instanceof_::class) as $test) {
+            if ($test->expr instanceof Expr\Variable && \is_string($test->expr->name) && isset($parameters[$test->expr->name]) && $test->class instanceof Name) {
+                $handled = $this->resolveName($test->class);
+                if ($handled !== null && $handled !== $class) {
+                    $this->edges[] = new Edge($handled, $class, Relation::HandledBy, Confidence::Inferred);
+                }
+            }
+        }
+    }
+
+    /**
      * A statement of a Symfony PHP routing file: a call chain on a RoutingConfigurator.
      */
     private function onPossibleRoutingConfigurator(Expr\MethodCall $chain): void
@@ -985,6 +1015,15 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                 $this->stateAccess[$method]['writes'][$property] = true;
                 $this->stateAccess[$method]['reads'] ??= [];
                 $this->writtenFetches[spl_object_id($target)] = true;
+            }
+        }
+
+        // The class constants and enum cases it uses: `ViolationType::CONTEXT` tells which records a reader filters on.
+        if ($node instanceof Expr\ClassConstFetch && $node->class instanceof Name && $node->name instanceof Identifier && strtolower($node->name->toString()) !== 'class') {
+            $class = $this->resolveName($node->class);
+            if ($class !== null) {
+                $this->stateAccess[$method] ??= ['reads' => [], 'writes' => []];
+                $this->stateAccess[$method]['constants'][$class . '::' . $node->name->toString()] = true;
             }
         }
 

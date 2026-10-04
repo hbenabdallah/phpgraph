@@ -94,7 +94,7 @@
             "contextPairs": 14,
             "layerFirst": false
         },
-        "seconds": 0.51,
+        "seconds": 0.5,
         "peakMemoryMb": 24
     },
     {
@@ -107,12 +107,12 @@
         "classLike": 4449,
         "methods": 23781,
         "external": 904,
-        "edges": 140152,
+        "edges": 140094,
         "vendorFilesRead": 580,
         "edgesByConfidence": {
             "EXTRACTED": 107737,
-            "INFERRED": 32286,
-            "AMBIGUOUS": 129
+            "INFERRED": 31923,
+            "AMBIGUOUS": 434
         },
         "calls": {
             "total": 102569,
@@ -211,8 +211,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 8.69,
-        "peakMemoryMb": 444
+        "seconds": 7.53,
+        "peakMemoryMb": 446
     },
     {
         "name": "akeneo-pim",
@@ -224,12 +224,12 @@
         "classLike": 8447,
         "methods": 38595,
         "external": 888,
-        "edges": 215259,
+        "edges": 215442,
         "vendorFilesRead": 679,
         "edgesByConfidence": {
             "EXTRACTED": 155411,
-            "INFERRED": 58270,
-            "AMBIGUOUS": 1578
+            "INFERRED": 58295,
+            "AMBIGUOUS": 1736
         },
         "calls": {
             "total": 159031,
@@ -327,8 +327,8 @@
             "contextPairs": 13,
             "layerFirst": false
         },
-        "seconds": 12.84,
-        "peakMemoryMb": 572
+        "seconds": 12.53,
+        "peakMemoryMb": 578
     },
     {
         "name": "prestashop",
@@ -340,12 +340,12 @@
         "classLike": 7291,
         "methods": 32895,
         "external": 1094,
-        "edges": 184553,
+        "edges": 184550,
         "vendorFilesRead": 566,
         "edgesByConfidence": {
             "EXTRACTED": 126883,
-            "INFERRED": 55939,
-            "AMBIGUOUS": 1731
+            "INFERRED": 55425,
+            "AMBIGUOUS": 2242
         },
         "calls": {
             "total": 116618,
@@ -437,8 +437,8 @@
             "contextPairs": 293,
             "layerFirst": true
         },
-        "seconds": 11.83,
-        "peakMemoryMb": 498
+        "seconds": 11.96,
+        "peakMemoryMb": 500
     },
     {
         "name": "ecotone-quickstart",
@@ -454,8 +454,8 @@
         "vendorFilesRead": 58,
         "edgesByConfidence": {
             "EXTRACTED": 6147,
-            "INFERRED": 639,
-            "AMBIGUOUS": 3
+            "INFERRED": 632,
+            "AMBIGUOUS": 10
         },
         "calls": {
             "total": 1145,
@@ -534,7 +534,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.62,
+        "seconds": 0.67,
         "peakMemoryMb": 30
     },
     {
@@ -551,8 +551,8 @@
         "vendorFilesRead": 347,
         "edgesByConfidence": {
             "EXTRACTED": 14055,
-            "INFERRED": 8258,
-            "AMBIGUOUS": 688
+            "INFERRED": 8256,
+            "AMBIGUOUS": 690
         },
         "calls": {
             "total": 25144,
@@ -618,8 +618,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 3.06,
-        "peakMemoryMb": 112
+        "seconds": 3.13,
+        "peakMemoryMb": 114
     },
     {
         "name": "wordpress",
@@ -631,12 +631,12 @@
         "classLike": 840,
         "methods": 7580,
         "external": 117,
-        "edges": 42084,
+        "edges": 41915,
         "vendorFilesRead": 0,
         "edgesByConfidence": {
             "EXTRACTED": 19173,
-            "INFERRED": 21515,
-            "AMBIGUOUS": 1396
+            "INFERRED": 21084,
+            "AMBIGUOUS": 1658
         },
         "calls": {
             "total": 26382,
@@ -724,7 +724,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 5.85,
+        "seconds": 6,
         "peakMemoryMb": 113
     },
     {
@@ -890,7 +890,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.54,
+        "seconds": 0.55,
         "peakMemoryMb": 46
     }
 ]

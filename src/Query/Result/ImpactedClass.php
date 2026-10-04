@@ -21,6 +21,8 @@ final readonly class ImpactedClass
      *                               interface or a parent class (`OrderRepository::save` for `DbalOrderRepository::save`)
      * @param bool       $throughState reached through the state the change writes: it uses a method reading what the
      *                                 changed one writes (`hasErrors()` for `addError()`), not the change itself
+     * @param list<Edge> $sites        every relation from this class to what the change reaches: its calling methods,
+     *                                 with their source lines
      */
     public function __construct(
         public string $class,
@@ -31,6 +33,7 @@ final readonly class ImpactedClass
         public bool $followed = true,
         public ?string $through = null,
         public bool $throughState = false,
+        public array $sites = [],
     ) {
     }
 }

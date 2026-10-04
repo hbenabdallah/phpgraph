@@ -114,6 +114,56 @@ final class ImpactTest extends TestCase
         self::assertArrayNotHasKey('App\UseCase\ArchiveController', $impact, 'it calls the template method on another subclass');
     }
 
+    public function testStateReadersAreWeighedByTheConstantTheyTest(): void
+    {
+        $graph = $this->buildProject([
+            'src/Type.php' => 'namespace App; enum Type { case CONTEXT; case SURFACE; }',
+            'src/Log.php' => 'namespace App; final class Log { private array $entries = [];'
+                . ' public function addContext(): void { $this->entries[] = Type::CONTEXT; }'
+                . ' public function addSurface(): void { $this->entries[] = Type::SURFACE; }'
+                . ' public function hasContext(): bool { return in_array(Type::CONTEXT, $this->entries, true); }'
+                . ' public function hasSurface(): bool { return in_array(Type::SURFACE, $this->entries, true); }'
+                . ' public function count(): int { return count($this->entries); } }',
+        ])->graph;
+
+        self::assertTrue($this->hasEdge($graph, 'App\Log::hasContext', 'App\Log::addContext', Relation::ReadsStateOf, Confidence::Inferred), 'it tests what addContext() writes');
+        self::assertFalse($this->hasEdge($graph, 'App\Log::hasSurface', 'App\Log::addContext', Relation::ReadsStateOf), 'it tests what another writer writes');
+        self::assertTrue($this->hasEdge($graph, 'App\Log::count', 'App\Log::addContext', Relation::ReadsStateOf, Confidence::Ambiguous), 'it reads everything');
+    }
+
+    public function testImpactListsEveryCallSiteAndPrefersACallToTheState(): void
+    {
+        $graph = $this->buildProject(self::PROJECT + [
+            'src/Validation/Checker.php' => 'namespace App\Validation; final class Checker { public function check(Notification $n): void {'
+                . ' $n->hasErrors(); } public function record(Notification $n): void { $n->add("x"); $n->add("y"); } }',
+        ])->graph;
+        $impact = $this->impact($graph, 'App\Validation\Notification::add');
+
+        self::assertFalse($impact['App\Validation\Checker']->throughState, 'it calls add() itself');
+        $sites = array_map(static fn ($edge): string => $edge->source . ' -> ' . $edge->target, $impact['App\Validation\Checker']->sites);
+        self::assertContains('App\Validation\Checker::record -> App\Validation\Notification::add', $sites);
+        self::assertContains('App\Validation\Checker::check -> App\Validation\Notification::hasErrors', $sites);
+    }
+
+    public function testAStrategyIsHandledByWhatItSupports(): void
+    {
+        $graph = $this->buildProject([
+            'src/LineQuery.php' => 'namespace App; class LineQuery {}',
+            'src/LineRule.php' => 'namespace App; class LineRule { public function supports(object $input): bool { return $input instanceof LineQuery; } }',
+        ])->graph;
+
+        self::assertTrue($this->hasEdge($graph, 'App\LineQuery', 'App\LineRule', Relation::HandledBy, Confidence::Inferred));
+    }
+
+    public function testExplainCountsFileLinksAndPathFindsTheDependencyBackwards(): void
+    {
+        $presenter = new TextPresenter(new GraphQuery($this->buildProject(self::PROJECT)->graph));
+
+        self::assertMatchesRegularExpression('/<-- imports: \d+ files/', $presenter->explain('App\Validation\StockRule'));
+        $path = $presenter->path('App\Validation\StockRule', 'App\Validation\Validator');
+        self::assertStringContainsString('Validator depends on StockRule', $path);
+    }
+
     public function testCallEdgesCarryTheLinesOfTheirCallSites(): void
     {
         $graph = $this->buildProject([

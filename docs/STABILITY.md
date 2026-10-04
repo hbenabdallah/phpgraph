@@ -50,8 +50,8 @@ Format 2: `{"version": 2, "meta": {...}, "nodes": [...], "edges": [...]}`.
 - An edge: `source`, `target`, `relation`, `confidence`, and `lines` (`"12,40"`, the source lines) when known.
 - Relations: `defines`, `imports`, `extends`, `implements`, `uses_trait`, `has_method`, `overrides`, `instantiates`,
   `calls`, `references`, `dispatches`, `handled_by`, `contract`, `requests`, `receives`, `reads_state_of`.
-- Confidence: `EXTRACTED` (read in the code or the configuration), `INFERRED` (resolved from declared types),
-  `AMBIGUOUS` (a guess, labelled as such).
+- Confidence: `EXTRACTED` (read in the code or the configuration), `INFERRED` (resolved from declared types or
+  the shape of the code), `AMBIGUOUS` (a guess, labelled as such).
 
 A graph in another format is refused with a message asking to rebuild it; `serve` rebuilds it by itself, and also
 rebuilds a graph built by another version of phpgraph.

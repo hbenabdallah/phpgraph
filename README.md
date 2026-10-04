@@ -142,7 +142,7 @@ phpgraph mcp-config claude|codex|cursor|json [--docker image]
 | `has_method`, `overrides` | class → method, method → the method it overrides |
 | `instantiates`, `references` | `new Foo()`; parameter, return and property types, `catch`, `instanceof`, constants, attributes |
 | `calls` | method → resolved method, with the lines of the call sites |
-| `dispatches`, `handled_by` | sender → message or channel → handler; route → controller |
+| `dispatches`, `handled_by` | sender → message or channel → handler; route → controller; class tested by a `supports()` method → that strategy |
 | `contract` | a message class sent by one service → the same class handled by another |
 | `requests` | HTTP call → the route it reaches, in the same service or another |
 | `receives` | service → each service the container configuration injects into it (a tag, an id, the decorated service) |

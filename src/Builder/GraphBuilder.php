@@ -168,8 +168,8 @@ final class GraphBuilder
             foreach ($extraction->serviceTags as $tag) {
                 $containerTags[$service][] = $tag;
             }
-            foreach ($this->stateReaders($extraction->stateAccess) as [$reader, $writer]) {
-                $graph->addEdge(new Edge($id($reader), $id($writer), Relation::ReadsStateOf, Confidence::Inferred));
+            foreach ($this->stateReaders($extraction->stateAccess) as [$reader, $writer, $confidence]) {
+                $graph->addEdge(new Edge($id($reader), $id($writer), Relation::ReadsStateOf, $confidence));
             }
             foreach ($extraction->serviceArguments as $argument) {
                 $containerArguments[$service][] = $argument;
@@ -352,27 +352,49 @@ final class GraphBuilder
      * Within a class, the methods reading a property that another method changes outside the constructor: the
      * reader depends on what the writer does. Properties set only by the constructor (injected services) link nothing.
      *
-     * @param array<string, array{reads: list<string>, writes: list<string>}> $access method id => properties
+     * The class constants tell how much: when the writers of a property each write their own (`addContextViolation()`
+     * appends a `ViolationType::CONTEXT` record, `addSurfaceViolation()` a `SURFACE` one), a reader testing the
+     * writer's constant filters on what it writes (INFERRED); a reader testing only another writer's never sees it (no
+     * link); a reader testing none reads everything, and may or may not care (AMBIGUOUS).
      *
-     * @return list<array{string, string}> reader, writer
+     * @param array<string, array{reads: list<string>, writes: list<string>, constants?: list<string>}> $access method id => properties
+     *
+     * @return list<array{string, string, Confidence}> reader, writer, confidence
      */
     private function stateReaders(array $access): array
     {
         $byClass = [];
         foreach ($access as $method => $properties) {
             [$class, $name] = explode('::', $method, 2) + [1 => ''];
-            $byClass[$class][$method] = $properties + ['constructor' => strtolower($name) === '__construct'];
+            $byClass[$class][$method] = $properties + ['constructor' => strtolower($name) === '__construct', 'constants' => []];
         }
 
         $pairs = [];
         foreach ($byClass as $methods) {
-            foreach ($methods as $writer => $writes) {
-                if ($writes['constructor']) {
-                    continue;
+            $writers = array_filter($methods, static fn (array $method): bool => !$method['constructor'] && $method['writes'] !== []);
+            foreach ($writers as $writer => $writes) {
+                // Its own constants: those no other writer of the same properties uses.
+                $others = [];
+                foreach ($writers as $other => $otherWrites) {
+                    if ($other !== $writer && array_intersect($writes['writes'], $otherWrites['writes']) !== []) {
+                        array_push($others, ...$otherWrites['constants']);
+                    }
                 }
+                $own = array_diff($writes['constants'], $others);
+                $foreign = array_diff($others, $writes['constants']);
+
                 foreach ($methods as $reader => $reads) {
-                    if ($reader !== $writer && !$reads['constructor'] && array_intersect($writes['writes'], $reads['reads']) !== []) {
-                        $pairs[] = [$reader, $writer];
+                    if ($reader === $writer || $reads['constructor'] || array_intersect($writes['writes'], $reads['reads']) === []) {
+                        continue;
+                    }
+                    $confidence = match (true) {
+                        $own === [] => Confidence::Inferred,
+                        array_intersect($own, $reads['constants']) !== [] => Confidence::Inferred,
+                        array_intersect($foreign, $reads['constants']) !== [] => null,
+                        default => Confidence::Ambiguous,
+                    };
+                    if ($confidence !== null) {
+                        $pairs[] = [$reader, $writer, $confidence];
                     }
                 }
             }

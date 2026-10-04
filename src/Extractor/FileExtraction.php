@@ -29,8 +29,9 @@ final readonly class FileExtraction
      *                                             what a service receives from the container: the services of a tag
      *                                             (`tagged_iterator('app.rule')`) or one service (`service('app.mailer')`)
      * @param array<string, list<string>> $routePrefixes route loader (`api_platform`) => prefixes its import adds
-     * @param array<string, array{reads: list<string>, writes: list<string>}> $stateAccess
-     *                                             method id => the properties of `$this` it reads and changes
+     * @param array<string, array{reads: list<string>, writes: list<string>, constants?: list<string>}> $stateAccess
+     *                                             method id => the properties of `$this` it reads and changes, and the
+     *                                             class constants it uses
      * @param array<string, array{params: list<string>, facts: list<array<string, mixed>>}> $configurationHelpers
      *                                             service configuration written in helpers, as templates (ConfigurationHelpers)
      * @param list<array{caller: ?string, callee: string, args: list<array{?string, ?array<mixed>}>, line: int}> $configurationCalls

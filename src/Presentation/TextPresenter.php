@@ -51,13 +51,35 @@ final class TextPresenter
 
         $connections = $this->query->connections($node, $direction);
 
-        $lines[] = \sprintf('Connections (%d):', \count($connections));
-        foreach (\array_slice($connections, 0, $limit) as $connection) {
-            $other = $graph->node($connection->other);
-            $lines[] = $this->connectionLine($connection, $other);
+        // By direction and relation, the most telling first; file-level links (use statements, the declaring file)
+        // only counted: a class used everywhere would show nothing else.
+        $groups = [];
+        foreach ($connections as $connection) {
+            $groups[($connection->forward ? 'out' : 'in') . ':' . $connection->edge->relation->value][] = $connection;
         }
-        if (\count($connections) > $limit) {
-            $lines[] = \sprintf('  ... %d more', \count($connections) - $limit);
+        $order = static function (string $key): int {
+            [$side, $relation] = explode(':', $key, 2);
+            $position = array_search($relation, self::EXPLAIN_ORDER, true);
+
+            return ($side === 'out' ? 0 : 100) + ($position === false ? 50 : $position);
+        };
+        uksort($groups, static fn (string $a, string $b): int => $order($a) <=> $order($b));
+
+        $perGroup = max(1, intdiv($limit, 5));
+        $lines[] = \sprintf('Connections (%d), by relation:', \count($connections));
+        foreach ($groups as $key => $group) {
+            [$side, $relation] = explode(':', $key, 2);
+            if (\in_array($relation, ['imports', 'defines'], true)) {
+                $lines[] = \sprintf('  %s %s: %d %s', $side === 'out' ? '-->' : '<--', $relation, \count($group), $side === 'out' ? 'nodes' : 'files');
+                continue;
+            }
+            $lines[] = \sprintf('  %s %s (%d):', $side === 'out' ? '-->' : '<--', $relation, \count($group));
+            foreach (\array_slice($group, 0, $perGroup) as $connection) {
+                $lines[] = '  ' . $this->connectionLine($connection, $graph->node($connection->other));
+            }
+            if (\count($group) > $perGroup) {
+                $lines[] = \sprintf('      ... %d more: get_neighbors, or impact_of for what depends on it', \count($group) - $perGroup);
+            }
         }
 
         if ($direction !== Direction::Out && $node->kind === NodeKind::Method) {
@@ -120,7 +142,7 @@ final class TextPresenter
             return \sprintf('No path between "%s" and "%s".', $start->label, $end->label);
         }
 
-        $line = '  ' . $start->label;
+        $line = '  ' . ($path->reversed ? $end->label : $start->label);
         foreach ($path->hops as $hop) {
             $line .= $hop->forward
                 ? \sprintf(' --%s--> %s', $hop->edge->relation->value, $this->query->label($hop->other))
@@ -128,7 +150,7 @@ final class TextPresenter
         }
 
         $note = match ($path->mode) {
-            PathMode::Dependency => '',
+            PathMode::Dependency => $path->reversed ? \sprintf("\nNo dependency path from %s to %s: %s depends on %s, as shown.", $start->label, $end->label, $end->label, $start->label) : '',
             PathMode::Undirected => "\nNo dependency path: this one ignores edge direction.",
             PathMode::Any => "\nNo dependency path: this one ignores edge direction and goes through files or external nodes.",
         };
@@ -521,6 +543,19 @@ final class TextPresenter
     public const IMPACT_SECTIONS = ['direct', 'state', 'tests', 'helpers'];
 
     /**
+     * The relations of a node, the most telling first.
+     */
+    private const EXPLAIN_ORDER = [
+        'handled_by', 'calls', 'dispatches', 'requests', 'receives', 'reads_state_of', 'extends', 'implements', 'uses_trait',
+        'overrides', 'instantiates', 'references', 'contract', 'has_method', 'defines', 'imports',
+    ];
+
+    /**
+     * Call sites shown per class, unless every one is asked for.
+     */
+    private const IMPACT_SITES = 3;
+
+    /**
      * @param int     $limit   entries per section, 0 for all
      * @param ?string $section one of IMPACT_SECTIONS, null for all of them
      */
@@ -548,8 +583,10 @@ final class TextPresenter
         // of the direct dependents first (their first two namespace segments).
         $module = static fn (string $class): string => implode('\\', \array_slice(explode('\\', $class), 0, 2));
         $modules = array_fill_keys(array_map(static fn ($class): string => $module($class->class), $groups['direct']), true);
+        // Readers filtering on what it writes (INFERRED) before those reading everything (AMBIGUOUS), then by module.
+        $rank = static fn ($class): int => $class->confidence === \PhpGraph\Graph\Confidence::Ambiguous ? 1 : 0;
         foreach (['state', 'stateTests'] as $key) {
-            usort($groups[$key], static fn ($a, $b): int => [isset($modules[$module($b->class)]), $a->depth] <=> [isset($modules[$module($a->class)]), $b->depth]);
+            usort($groups[$key], static fn ($a, $b): int => [$rank($a), isset($modules[$module($b->class)]), $a->depth] <=> [$rank($b), isset($modules[$module($a->class)]), $b->depth]);
         }
 
         $lines = [
@@ -565,9 +602,24 @@ final class TextPresenter
                 \count($groups['helpers']),
                 $impact->truncated ? ' (stopped at the limit: more exist)' : '',
             ),
-            'Each class comes with the first relation reaching it, its source lines and the weakest confidence on the way. '
-            . \sprintf('Lists show %s entries: impact_of with limit 0 (CLI: --all) gives all, section (direct, state, tests, helpers) one list.', $limit === 0 ? 'all' : 'the first ' . $limit),
+            'Each class comes with the weakest confidence on the way, then its methods reaching the change and their source lines. '
+            . \sprintf(
+                'Lists show %s: impact_of with limit 0 (CLI: --all) gives every class and every call site, section (direct, state, tests, helpers) one list.',
+                $limit === 0 ? 'everything' : \sprintf('the first %d classes and %d call sites per class', $limit, self::IMPACT_SITES),
+            ),
         ];
+        $sites = function ($class) use ($limit): array {
+            $lines = [];
+            $shown = $limit === 0 ? $class->sites : \array_slice($class->sites, 0, self::IMPACT_SITES);
+            foreach ($shown as $edge) {
+                $lines[] = '      ' . $this->formatEdge($edge);
+            }
+            if (\count($class->sites) > \count($shown)) {
+                $lines[] = \sprintf('      ... %d more call sites', \count($class->sites) - \count($shown));
+            }
+
+            return $lines;
+        };
         $wanted = static fn (string $name): bool => $section === null || $section === $name;
         $slice = static fn (array $entries): array => $limit === 0 ? $entries : \array_slice($entries, 0, $limit);
         $more = static function (array $entries) use ($limit, &$lines): void {
@@ -586,16 +638,16 @@ final class TextPresenter
                 $lines[] = $level === 1 ? 'Direct dependents:' : \sprintf('%d relations away:', $level);
                 foreach ($slice($atDepth) as $class) {
                     $lines[] = \sprintf(
-                        '  - %s [%s]  via %s%s%s  %s',
+                        '  - %s [%s]%s%s  %s',
                         $this->query->label($class->class),
                         $class->confidence->value,
-                        $this->formatEdge($class->edge),
                         $class->through === null ? '' : ' (calls it through ' . $this->query->label($class->through) . ')',
                         $class->followed ? '' : ($class->edge->relation === \PhpGraph\Graph\Relation::Receives
                             ? ' (receives it among others: its users are not followed)'
                             : ' (inherited code shared with other subclasses: its callers are not followed)'),
                         $this->classLocation($class->class),
                     );
+                    array_push($lines, ...$sites($class));
                 }
                 $more($atDepth);
             }
@@ -603,18 +655,19 @@ final class TextPresenter
 
         if ($wanted('state') && $groups['state'] !== []) {
             $lines[] = '';
-            $lines[] = 'Possibly affected through the state it changes (INFERRED): they call a method reading what it writes '
-                . '(order, duplicates, count), whether or not they ever see what it records. Not followed further; those in '
-                . 'the modules of the direct dependents first:';
+            $lines[] = 'Possibly affected through the state it changes: they call a method reading what it writes. Those '
+                . 'reading what it records (the method tests the constant it writes, INFERRED) come first, then those reading '
+                . 'all of it (AMBIGUOUS), in the modules of the direct dependents first. Not followed further:';
             foreach ($slice($groups['state']) as $class) {
-                $lines[] = \sprintf('  - %s  via %s  %s', $this->query->label($class->class), $this->formatEdge($class->edge), $this->classLocation($class->class));
+                $lines[] = \sprintf('  - %s [%s]  %s', $this->query->label($class->class), $class->confidence->value, $this->classLocation($class->class));
+                array_push($lines, ...$sites($class));
             }
             $more($groups['state']);
         }
 
         foreach ([
             'tests' => ['tests', 'Tests to run:'],
-            'stateTests' => ['tests', 'Tests possibly affected through the state (they call a method reading it; those in the modules of the direct dependents first):'],
+            'stateTests' => ['tests', 'Tests possibly affected through the state (they call a method reading it; INFERRED ones, then the modules of the direct dependents, first):'],
             'helpers' => ['helpers', 'Test helpers on the way (fakers, fixtures, base classes):'],
         ] as $key => [$name, $title]) {
             if (!$wanted($name) || $groups[$key] === []) {
@@ -623,7 +676,10 @@ final class TextPresenter
             $lines[] = '';
             $lines[] = $title;
             foreach ($slice($groups[$key]) as $class) {
-                $lines[] = \sprintf('  - %s  %s', $this->query->label($class->class), $this->classLocation($class->class));
+                $lines[] = \sprintf('  - %s%s  %s', $this->query->label($class->class), $key === 'stateTests' ? ' [' . $class->confidence->value . ']' : '', $this->classLocation($class->class));
+                if ($key !== 'helpers') {
+                    array_push($lines, ...$sites($class));
+                }
             }
             $more($groups[$key]);
         }

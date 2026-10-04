@@ -388,6 +388,14 @@ final class GraphQuery
             if ($hops !== null) {
                 return new Path($from, $to, $hops, $mode);
             }
+            // No dependency from the first to the second: maybe the other way round, which tells more than a path
+            // ignoring directions.
+            if ($mode === PathMode::Dependency) {
+                $hops = $this->findPath($to, $from, $mode);
+                if ($hops !== null) {
+                    return new Path($from, $to, $hops, $mode, true);
+                }
+            }
         }
 
         return null;

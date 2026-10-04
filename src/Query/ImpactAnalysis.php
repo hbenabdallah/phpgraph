@@ -75,9 +75,16 @@ final class ImpactAnalysis
 
         /** @var array<string, ImpactedClass> $classes */
         $classes = [];
+        /** @var array<string, array<string, Edge>> $sites class => its edges to what the change reaches */
+        $sites = [];
         $truncated = false;
         $reach = function (string $dependent, Edge $edge, Confidence $reached, int $depth, bool $followed, ?string $through) use (&$classes, &$viaState, $root): ?bool {
             $class = $this->classOf($dependent);
+            // Reached through the state first, then by a call: it is a caller (UpdateEstimate::handle() calling
+            // notifyContextViolation()), whatever the order of the walk.
+            if (isset($classes[$class]) && $classes[$class]->throughState && !isset($viaState[$dependent]) && $class !== $root) {
+                unset($classes[$class]);
+            }
             if ($class === $root || isset($classes[$class])) {
                 return true;
             }
@@ -91,6 +98,8 @@ final class ImpactAnalysis
             $next = [];
             foreach ($frontier as $id) {
                 foreach ($this->dependents($id) as [$dependent, $edge, $edgeConfidence, $followed, $through]) {
+                    // Every call site, not only the first that reaches the class.
+                    $sites[$this->classOf($dependent)][$edge->key()] = $edge;
                     if (isset($confidence[$dependent]) || str_starts_with($dependent, 'file:') || !$this->graph->hasNode($dependent)) {
                         continue;
                     }
@@ -139,6 +148,9 @@ final class ImpactAnalysis
             $next = [];
             foreach ($frontier as $id) {
                 foreach ($this->dependents((string) $id) as [$dependent, $edge, $edgeConfidence, $followed, $through]) {
+                    if ($this->isTest($dependent)) {
+                        $sites[$this->classOf($dependent)][$edge->key()] = $edge;
+                    }
                     if (isset($confidence[$dependent]) || !$this->isTest($dependent)) {
                         continue;
                     }
@@ -171,7 +183,14 @@ final class ImpactAnalysis
             $frontier = $next;
         }
 
-        return new Impact($changed, $maxDepth, array_values($classes), $truncated);
+        $withSites = [];
+        foreach ($classes as $class => $impacted) {
+            $edges = array_values($sites[$class] ?? []);
+            usort($edges, static fn (Edge $a, Edge $b): int => [$a->source, $a->target] <=> [$b->source, $b->target]);
+            $withSites[] = new ImpactedClass($impacted->class, $impacted->depth, $impacted->edge, $impacted->confidence, $impacted->isTest, $impacted->followed, $impacted->through, $impacted->throughState, $edges);
+        }
+
+        return new Impact($changed, $maxDepth, $withSites, $truncated);
     }
 
     /**

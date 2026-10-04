@@ -142,7 +142,7 @@ Options de `build` : `-e` pour exclure des chemins (répétable), `--no-vendor` 
 | `has_method`, `overrides` | classe → méthode, méthode → la méthode qu'elle redéfinit |
 | `instantiates`, `references` | `new Foo()` ; types de paramètres, de retour et de propriétés, `catch`, `instanceof`, constantes, attributs |
 | `calls` | méthode → méthode résolue, avec les lignes des appels |
-| `dispatches`, `handled_by` | envoi → message ou canal → handler ; route → contrôleur |
+| `dispatches`, `handled_by` | envoi → message ou canal → handler ; route → contrôleur ; classe testée par une méthode `supports()` → cette stratégie |
 | `contract` | une classe de message envoyée par un service → la même classe traitée par un autre |
 | `requests` | appel HTTP → la route qu'il atteint, du même service ou d'un autre |
 | `receives` | service → chaque service que la configuration du conteneur lui injecte (un tag, un identifiant, le service décoré) |
