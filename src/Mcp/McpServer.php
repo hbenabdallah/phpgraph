@@ -21,8 +21,8 @@ final class McpServer
 
     private const INSTRUCTIONS = 'Knowledge graph of this PHP codebase, built by static analysis: deterministic facts, no guesses beyond '
         . 'what each confidence level says. Call overview first: it gives the stack, the structure and what the graph cannot see. '
-        . 'Then use outline before explaining a feature (its classes, families, flow, behaviour, wiring and tests in one answer: '
-        . 'read only the files it points to), query_graph to find code by topic, get_node or get_neighbors to read one class or method, and shortest_path '
+        . 'To explain a feature or how something works, call outline first, not query_graph (its classes, families, flow, behaviour, wiring and tests in one answer: '
+        . 'read only the files it points to). Use query_graph to find code by topic when you do not know where it is, get_node or get_neighbors to read one class or method, and shortest_path '
         . 'to see how two pieces of code are connected, impact_of before changing a class or a method. Relations are EXTRACTED (read in the code), INFERRED (resolved from '
         . 'declared types) or AMBIGUOUS (guessed from a unique method name). Routes (route:GET /orders) and message '
         . 'channels are nodes too; in a multi-service repository ids read service@Class and services meet through '
@@ -141,7 +141,9 @@ final class McpServer
             ],
             [
                 'name' => 'query_graph',
-                'description' => 'Find the code about a topic when you do not know the class names. Matches the words of the '
+                'description' => 'Find the code about a topic when you do not know the class names. To explain how a feature '
+                    . 'works ("explain the notification validation system"), call outline instead: it answers in one call what '
+                    . 'query_graph and several get_node calls would. Matches the words of the '
                     . 'question against the words of class, method and function names (validated finds Validator, prices finds '
                     . 'PriceCalculator; rare words weigh more than common ones; not semantic search: use words likely to appear '
                     . 'in names, such as "stock availability" or "invoice payment"), then returns up to 6 best matches, the other '
@@ -215,7 +217,9 @@ final class McpServer
             ],
             [
                 'name' => 'outline',
-                'description' => 'Before reading the code of a feature you are asked to explain: its structural outline, enough to '
+                'description' => 'Call this first, instead of query_graph, whenever you are asked to explain, describe or document '
+                    . 'a feature or how something works ("explain the notification validation system", "how does stock '
+                    . 'reservation work"), before reading any code. Returns its structural outline, enough to '
                     . 'read only the few files with non-obvious logic. From the classes the topic names, the cluster they '
                     . 'form, by namespace and layer, each with its kind, the first sentence of its docblock, its public '
                     . 'signatures, constants and enum cases; the interfaces and base classes around it with their number of '

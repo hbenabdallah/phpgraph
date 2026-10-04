@@ -121,6 +121,7 @@ final class HttpTest extends TestCase
         self::assertSame(['GET /courses', 'GET /courses', 'PUT /courses/{id}', 'GET /students'], $seeds('endpoints'));
         self::assertContains('App\Mooc\PutCourseController::__invoke', array_map(static fn ($node): string => $node->id, $query->subgraph('mooc courses routes')->nodes));
         self::assertSame(['PutCourseController'], $seeds('PutCourseController'), 'other questions find the class, not also its methods');
+        self::assertStringNotContainsString('call outline', (new TextPresenter($query))->query('mooc courses routes'), 'a route question is no feature to explain');
     }
 
     public function testTheOverviewListsRoutesAndTheControllersFoundNowhere(): void

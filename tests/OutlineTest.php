@@ -119,6 +119,7 @@ final class OutlineTest extends TestCase
         self::assertStringContainsString('ContextValidator receives 3 ContextRuleInterface (tagged_iterator {billing,sales}.context_rule)', $text);
         self::assertStringNotContainsString('[receives', $text, 'no edge per member of the list');
         self::assertStringNotContainsString('StockRule', $text, 'a rule stands in its family');
+        self::assertStringEndsWith('To explain this feature, call outline "notification validation": its classes, flow, behaviour, wiring and tests in one answer.', $text);
     }
 
     public function testExplainCountsTheTestsByModule(): void

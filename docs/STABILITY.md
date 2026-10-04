@@ -12,8 +12,8 @@ rely on what this page lists: it changes only in a major version (2.0.0), announ
 | `build [path]` | `-o, --output`, `-e, --exclude` (repeatable), `--depth`, `--no-vendor`, `--no-cache` |
 | `serve [path]` | `-o, --output`, `-g, --graph`, `-e, --exclude`, `--no-vendor` |
 | `overview` | `-g, --graph` |
-| `query <question>` | `--depth`, `--budget`, `-g, --graph` |
-| `explain <name>` | `-d, --direction` (`in`, `out`, `both`), `-g, --graph` |
+| `query <question>` | `--depth`, `-l, --limit`, `-g, --graph` |
+| `explain <name>` | `--direction` (`in`, `out`, `both`), `-g, --graph` |
 | `path <from> <to>` | `-g, --graph` |
 | `outline <topic>` | `-f, --format` (`text`, `full`, `json`), `-g, --graph` |
 | `impact <name>` | `-d, --depth`, `-l, --limit`, `-a, --all`, `-s, --section` (`direct`, `routes`, `state`, `tests`, `state-tests`, `helpers`), `-f, --format` (`text`, `full`, `json`), `-g, --graph` |
@@ -75,7 +75,8 @@ Never breaking the above, a minor version (1.1.0) may:
 - find more: new edges, new routes, new handlers, calls resolved that were not; an edge's confidence may rise;
 - add relations, node kinds, MCP tools, parameters, command options, `phpgraph.yaml` keys, `meta` fields;
 - change the text of answers (`overview`, `impact`, `query`): it is written for an agent to read, not for a program to
-  parse. Programs read `graph.json`, or `impact --format json`, whose keys only grow.
+  parse. Programs read `graph.json`, or `impact --format json`, whose keys only grow;
+- change the JSON of `outline --format json` (and of the `outline` tool), new in 1.0.0: it becomes stable in the minor version that says so.
 
 A patch version (1.0.1) fixes what is wrong: an edge that should not exist may disappear.
 

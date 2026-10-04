@@ -3,7 +3,7 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
-## Unreleased
+## 1.0.0 (2026-10-04)
 
 ### Added
 - `outline` (command and MCP tool): the structural outline of a feature named in words, enough for an agent to read
@@ -19,6 +19,8 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 - `query` adds to the classes it names the classes of the feature around them (about the question or working with
   them), and sums up an injected list once on the class receiving it (`ContextValidator receives 34
   ContextRuleInterface`) instead of an edge per member; a member of a family the answer holds is left to it.
+- `query` ends with a pointer to `outline` (not for a route question), and the MCP descriptions of `outline` and
+  `query_graph` say to call `outline` first when asked to explain a feature.
 - `explain` and `get_node` count the tests using a node by module instead of listing them.
 - `impact` lists the tests one path per line under their module, gives the other chains of a route (`+1 other chain`,
   listed with `--all`), and names the application classes on the way nothing outside tests uses.
@@ -72,6 +74,9 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 - A version tag with a suffix (`v1.0.0-rc.1`) is published as a pre-release, and does not move the `latest` Docker tag.
 
 ### Changed
+- `query --budget` is now `-l, --limit`, the name `query_graph` and `impact` already use.
+- `explain` loses the short option `-d`, which meant `--depth` on `impact`: write `--direction`.
+- The JSON of `outline` is not yet covered by the stability promise: it may change in a minor version.
 - `impact` follows a template method of a parent class only to the callers holding the subclass (the processor holding
   the use case), and no longer lists the tests of every other subclass through it.
 - `reads_state_of` is weighed by the class constants: when the writers of a property each write their own constant

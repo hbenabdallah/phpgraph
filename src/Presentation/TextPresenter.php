@@ -240,6 +240,12 @@ final class TextPresenter
             $lines[] = \sprintf('  ... %d more', \count($edges) - $edgeLimit);
         }
 
+        // An agent asked to explain a feature reads the outline, not this list of names.
+        if (array_filter($subgraph->seeds, static fn (Node $node): bool => $node->kind !== NodeKind::Route) !== []) {
+            $lines[] = '';
+            $lines[] = \sprintf('To explain this feature, call outline "%s": its classes, flow, behaviour, wiring and tests in one answer.', $question);
+        }
+
         return implode("\n", $lines);
     }
 

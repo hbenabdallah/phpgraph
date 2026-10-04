@@ -19,7 +19,7 @@ final class ExplainCommand extends AbstractGraphCommand
     {
         $this
             ->addArgument('name', InputArgument::REQUIRED, 'Short or fully qualified name')
-            ->addOption('direction', 'd', InputOption::VALUE_REQUIRED, 'in, out or both', 'both');
+            ->addOption('direction', null, InputOption::VALUE_REQUIRED, 'in, out or both', 'both');
         $this->addGraphOption();
     }
 

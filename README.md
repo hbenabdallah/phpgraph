@@ -125,7 +125,7 @@ phpgraph build [path]                        # phpgraph-out/graph.json and GRAPH
 phpgraph overview                            # stack, structure and gaps
 phpgraph impact "OrderRepository::save"      # what depends on it, and the tests to run (--all, --section tests, --format json)
 phpgraph check                               # layer rules, for CI: exit code 1 on a new violation
-phpgraph explain "PlaceOrderHandler" [-d in] # a node and its relations
+phpgraph explain "PlaceOrderHandler"         # a node and its relations (--direction in|out)
 phpgraph path "StockChecker" "DbalOrderRepository"
 phpgraph query "how is stock checked"
 phpgraph outline "notification validation"   # the outline of a feature (--format full|json)

@@ -19,7 +19,7 @@ final class QueryCommand extends AbstractGraphCommand
         $this
             ->addArgument('question', InputArgument::REQUIRED, 'Question or keywords')
             ->addOption('depth', null, InputOption::VALUE_REQUIRED, 'Traversal depth', '2')
-            ->addOption('budget', null, InputOption::VALUE_REQUIRED, 'Maximum number of nodes', '40');
+            ->addOption('limit', 'l', InputOption::VALUE_REQUIRED, 'Maximum number of nodes', '40');
         $this->addGraphOption();
     }
 
@@ -28,7 +28,7 @@ final class QueryCommand extends AbstractGraphCommand
         $output->writeln($this->loadPresenter($input)->query(
             (string) $input->getArgument('question'),
             max(1, (int) $input->getOption('depth')),
-            max(1, (int) $input->getOption('budget')),
+            max(1, (int) $input->getOption('limit')),
         ), OutputInterface::OUTPUT_RAW);
 
         return Command::SUCCESS;
