@@ -234,14 +234,31 @@ Deux petits projets microservices complètent le corpus : [deux services Laravel
 
 ### Avec un agent
 
-Mesuré sur un projet Symfony/DDD privé de 4 800 fichiers, 3 exécutions par configuration, le même agent ([Sherpa](https://github.com/hbenabdallah/sherpa)) avec et sans phpgraph 1.0.0 :
+Mesuré sur un projet Symfony/DDD privé de 4 800 fichiers, 3 exécutions par configuration, le même agent ([Sherpa](https://github.com/hbenabdallah/sherpa)) avec et sans phpgraph 1.0.2 :
 
 | Type de question | Avec phpgraph | Qualité |
 |---|---|---|
-| Impact ou refactoring (`impact_of`) | −35 % de tokens, −41 % de temps, −51 % d'appels d'outils | meilleure |
-| Expliquer une fonctionnalité (`outline`) | −20 % de tokens, −21 % de temps, −39 % d'appels d'outils | identique |
+| Impact ou refactoring (`impact_of`) | −42 % de tokens, −50 % de temps, −59 % d'appels d'outils | identique ou meilleure |
+| Expliquer une fonctionnalité (`outline`) | −25 % de tokens, −34 % de temps, −49 % d'appels d'outils ; −31 % de tokens avec l'outline par défaut | identique |
 
 Les plages des exécutions avec et sans phpgraph ne se chevauchent pas.
+
+### Comparé à d'autres graphes de code
+
+Sylius (le commit du corpus), octobre 2026, sans LLM : phpgraph 1.0.2, [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp) 0.11.0 et [graphify](https://github.com/safishamsi/graphify) 0.9.76 (`--code-only`), sur la même machine, dans Docker. Les appels ont été comparés site par site (fichier, ligne, méthode), et des échantillons des différences vérifiés dans le code.
+
+| | phpgraph | codebase-memory-mcp | graphify |
+|---|---:|---:|---:|
+| Build | 10 s | 17 s | 32 s |
+| Sites d'appel reliés à une méthode du projet | 22 870 | 32 274 | 4 005 |
+| dont résolus par les types | 22 747 | 4 314 | — |
+| Appelants de `OrderItemQuantityModifierInterface::modify()` trouvés (17 dans le code) | 17, aucun faux | 11, 2 faux | 0, 1 faux |
+| Handlers Messenger reliés à leur message | 206 | 0 | 0 |
+| Injections du conteneur, routes | 1 360, 188 | 0, 1 (fausse) | 0, 0 |
+
+- codebase-memory-mcp est d'accord avec phpgraph sur 99,7 % des appels qu'il résout par les types. Ses autres arêtes sont devinées par le nom de la méthode (confiance de 0,04 à 0,44) : là où les deux relient le même appel, ils divergent sur 9 400 sites, et ses 11 300 arêtes en plus sont surtout des appels vers `vendor/` rattachés à une méthode du projet de même nom (19 sur 20 vérifiées).
+- graphify relie `$this->other->foo()` à `foo()` de la classe courante : juste pour `$this->foo()`, faux pour les 10 différences vérifiées sur 10.
+- Ce qu'ils ont et que phpgraph n'a pas : d'autres langages, la recherche plein texte et vectorielle, les requêtes Cypher (codebase-memory-mcp), une visualisation interactive et des documents dans le graphe (graphify).
 
 ## FAQ
 

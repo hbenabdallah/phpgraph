@@ -243,6 +243,23 @@ Measured on a private 4,800-file Symfony/DDD project, 3 runs per setup, the same
 
 The ranges of the runs with and without phpgraph do not overlap.
 
+### Compared with other code graphs
+
+Sylius (the corpus commit), October 2026, without any LLM: phpgraph 1.0.2, [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp) 0.11.0 and [graphify](https://github.com/safishamsi/graphify) 0.9.76 (`--code-only`), on the same machine, in Docker. The calls were compared site by site (file, line, method), and samples of the differences were checked in the code.
+
+| | phpgraph | codebase-memory-mcp | graphify |
+|---|---:|---:|---:|
+| Build | 10 s | 17 s | 32 s |
+| Call sites linked to a project method | 22,870 | 32,274 | 4,005 |
+| of which resolved from types | 22,747 | 4,314 | — |
+| Callers of `OrderItemQuantityModifierInterface::modify()` found (17 in the code) | 17, no false one | 11, 2 false | 0, 1 false |
+| Messenger handlers linked to their message | 206 | 0 | 0 |
+| Container injections, routes | 1,360, 188 | 0, 1 (false) | 0, 0 |
+
+- codebase-memory-mcp agrees with phpgraph on 99.7 % of the calls it resolves from types. The rest of its edges are guessed from the method name (confidence 0.04 to 0.44): where both link the same call, they disagree on 9,400 sites, and its 11,300 extra edges are mostly calls into `vendor/` attached to a project method of the same name (19 of 20 checked).
+- graphify links `$this->other->foo()` to `foo()` of the current class: right for `$this->foo()`, wrong for the 10 of 10 differences checked.
+- What they have and phpgraph has not: other languages, full-text and vector search, Cypher queries (codebase-memory-mcp), an interactive visualisation and documents in the graph (graphify).
+
 ## FAQ
 
 **Does phpgraph send my code anywhere?** No. It runs locally, makes no network call and uses no LLM.
