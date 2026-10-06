@@ -6,15 +6,15 @@ phpgraph could not type, the main target of type inference work. Arrows compare 
 
 | Project | Files | Failed | Duplicates | Classes | Methods | Edges | Vendor files read | Seconds | Memory MB |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4184 | 105 | 0.50 | 26 |
-| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140306 | 591 | 8.80 | 474 |
-| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 217418 | 687 | 13.77 | 614 |
-| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 184998 | 592 | 12.93 | 540 |
-| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6789 | 59 | 0.65 | 32 |
-| bookstack | 1513 | 0 | 0 | 698 | 4076 | 23020 | 353 | 3.60 | 124 |
-| wordpress | 1899 | 0 | 50 | 840 | 7580 | 41952 | 0 | 6.64 | 127 |
-| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 97 | 0.45 | 38 |
-| art-gallery | 266 | 0 | 0 | 140 | 148 | 1692 | 80 | 0.70 | 46 |
+| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4184 | 105 | 0.62 | 26 |
+| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140306 | 591 | 9.03 | 486 |
+| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 217418 | 687 | 14.21 | 630 |
+| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 184998 | 592 | 14.47 | 554 |
+| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6789 | 59 | 0.70 | 32 |
+| bookstack | 1513 | 0 | 0 | 698 | 4076 | 23020 | 353 | 3.55 | 126 |
+| wordpress | 1899 | 0 | 50 | 840 | 7580 | 41952 | 0 | 6.82 | 127 |
+| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 97 | 0.44 | 38 |
+| art-gallery | 266 | 0 | 0 | 140 | 148 | 1692 | 80 | 0.63 | 46 |
 
 ## Method calls in application code
 

@@ -94,7 +94,7 @@
             "contextPairs": 14,
             "layerFirst": false
         },
-        "seconds": 0.5,
+        "seconds": 0.62,
         "peakMemoryMb": 26
     },
     {
@@ -211,8 +211,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 8.8,
-        "peakMemoryMb": 474
+        "seconds": 9.03,
+        "peakMemoryMb": 486
     },
     {
         "name": "akeneo-pim",
@@ -327,8 +327,8 @@
             "contextPairs": 13,
             "layerFirst": false
         },
-        "seconds": 13.77,
-        "peakMemoryMb": 614
+        "seconds": 14.21,
+        "peakMemoryMb": 630
     },
     {
         "name": "prestashop",
@@ -437,8 +437,8 @@
             "contextPairs": 293,
             "layerFirst": true
         },
-        "seconds": 12.93,
-        "peakMemoryMb": 540
+        "seconds": 14.47,
+        "peakMemoryMb": 554
     },
     {
         "name": "ecotone-quickstart",
@@ -534,7 +534,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.65,
+        "seconds": 0.7,
         "peakMemoryMb": 32
     },
     {
@@ -618,8 +618,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 3.6,
-        "peakMemoryMb": 124
+        "seconds": 3.55,
+        "peakMemoryMb": 126
     },
     {
         "name": "wordpress",
@@ -724,7 +724,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 6.64,
+        "seconds": 6.82,
         "peakMemoryMb": 127
     },
     {
@@ -809,7 +809,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.45,
+        "seconds": 0.44,
         "peakMemoryMb": 38
     },
     {
@@ -890,7 +890,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.7,
+        "seconds": 0.63,
         "peakMemoryMb": 46
     }
 ]
