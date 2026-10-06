@@ -319,6 +319,22 @@ final class ExtractionTest extends TestCase
         self::assertTrue((new JsonGraphStorage())->load($path)->hasNode('App\Order'));
     }
 
+    public function testAParameterPassedOnUntouchedIsRecordedButNotOneShadowedOrReassigned(): void
+    {
+        $extraction = (new \PhpGraph\Extractor\PhpFileExtractor())->extract('<?php namespace App; class UseCase {'
+            . ' public function __construct(private Pipeline $pipeline, private Builder $builder) {}'
+            . ' public function a(Query $query): void { $this->pipeline->run($query, function () use ($query) { $this->builder->setUp(query: $query); }); }'
+            . ' public function b(Query $query): void { $this->pipeline->run($query, function (Query $query) { $this->builder->setUp($query); }); }'
+            . ' public function c(Query $query): void { $this->pipeline->run($query, function () { $this->builder->setUp($query); }); }'
+            . ' public function d(Query $query): void { $this->pipeline->run($query); $query = new Query(); $this->builder->setUp($query); }'
+            . ' public function e(Query $query): void { $this->builder->setUp(1, $query); $this->pipeline->run($query); }'
+            . ' public function f(Query $query): void { Factory::make($query); } }', 'a.php');
+
+        $passes = array_map(static fn (array $pass): string => $pass[0] . ' ' . $pass[1] . ' ' . $pass[3] . ' ' . $pass[4], $extraction->parameterPasses);
+        self::assertSame(['App\UseCase::a query run 0', 'App\UseCase::a query setUp query', 'App\UseCase::b query run 0', 'App\UseCase::c query run 0', 'App\UseCase::d query run 0', 'App\UseCase::e query setUp 1', 'App\UseCase::e query run 0'], $passes, 'captured by use; not a closure parameter, not uncaptured, not reassigned; only a parameter given to a held service (not f)');
+        self::assertSame('pipeline:App\Pipeline,builder:App\Builder', $extraction->methodParameters['App\UseCase::__construct']);
+    }
+
     /**
      * @param array<string, string> $files
      */

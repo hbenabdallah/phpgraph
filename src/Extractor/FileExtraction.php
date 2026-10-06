@@ -44,10 +44,15 @@ final readonly class FileExtraction
      * @param array<string, array{method: string, types: list<string>|true|null}> $guards class => its guard method
      *                                             (`supports(object $input): bool`) and the classes it accepts: all
      *                                             (`return true`), or unknown when the body is not a plain `instanceof` test
-     * @param list<array{string, string, int, list<?string>}> $callArguments calls to a service held in a property,
-     *                                             `$this->pipeline->run($query)`: caller, method, line, the class of each
-     *                                             positional argument when known, empty for a closure or a literal
+     * @param list<array{string, string, int, list<?string>, list<?string>}> $callArguments calls to a service held in a
+     *                                             property, `$this->pipeline->run($query)`: caller, method, line, the class
+     *                                             of each positional argument when known (empty for a closure or a
+     *                                             literal), the caller's parameter each argument is when passed untouched
      * @param array<string, list<string>> $propertyHolds class => the classes its properties may hold, collections included
+     * @param array<string, string> $methodParameters method id => its parameters, `name:Class,other:` (no class: empty)
+     * @param list<array{string, string, TypeExpr, string, int|string}> $parameterPasses a method passing one of its
+     *                                             parameters untouched to a call: caller, parameter, receiver, method,
+     *                                             position or name of the argument
      */
     public function __construct(
         public array $nodes,
@@ -74,6 +79,8 @@ final readonly class FileExtraction
         public array $guards = [],
         public array $callArguments = [],
         public array $propertyHolds = [],
+        public array $methodParameters = [],
+        public array $parameterPasses = [],
     ) {
     }
 }

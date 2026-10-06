@@ -131,8 +131,12 @@ final class GraphBuilder
         $propertyTypes = [];
         /** @var array<string, array{method: string, types: list<string>|true|null}> $guards */
         $guards = [];
-        /** @var array<string, list<array{string, int, list<?string>}>> $callArguments */
+        /** @var array<string, list<array{string, int, list<?string>, list<?string>}>> $callArguments */
         $callArguments = [];
+        /** @var array<string, list<array{string, ?string}>> $methodParameters */
+        $methodParameters = [];
+        /** @var array<string, list<array{string, TypeExpr, string, int|string}>> $parameterPasses */
+        $parameterPasses = [];
         /** @var array<string, list<string>> $propertyHolds */
         $propertyHolds = [];
         /** @var array<string, string> $constants */
@@ -179,8 +183,11 @@ final class GraphBuilder
             foreach ($extraction->guards as $class => $guard) {
                 $guards[$id($class)] ??= ['method' => $guard['method'], 'types' => \is_array($guard['types']) ? array_map($id, $guard['types']) : $guard['types']];
             }
-            foreach ($extraction->callArguments as [$caller, $method, $line, $arguments]) {
-                $callArguments[$id($caller)][] = [strtolower($method), $line, array_map(static fn (?string $class): ?string => $class === null || $class === '' ? $class : $id($class), $arguments)];
+            foreach ($extraction->callArguments as [$caller, $method, $line, $arguments, $parameters]) {
+                $callArguments[$id($caller)][] = [strtolower($method), $line, array_map(static fn (?string $class): ?string => $class === null || $class === '' ? $class : $id($class), $arguments), $parameters];
+            }
+            foreach ($extraction->parameterPasses as [$caller, $parameter, $receiver, $method, $argument]) {
+                $parameterPasses[$id($caller)][] = [$parameter, $receiver->map($id), $method, $argument];
             }
             foreach ($extraction->propertyHolds as $class => $holds) {
                 $propertyHolds[$id($class)] = array_map($id, $holds);
@@ -324,7 +331,26 @@ final class GraphBuilder
         }
         $container = new ContainerServices($root, $configurationFiles, $serviceMap, $containerDefinitions, $containerTags, $previous->configuration ?? [], $containerArguments);
         $handlers = [...(new TaggedHandlers($graph, $names, $types, $parameterTypes))->facts($container), ...$handlers];
-        $inputGuards = new InputGuards($graph, $types, $guards, $callArguments, $propertyHolds, $parameterTypes);
+        // The signatures of the methods a parameter is passed on to only: those InputGuards reads.
+        $passedTo = [];
+        foreach ($parameterPasses as $passes) {
+            foreach ($passes as $pass) {
+                $passedTo[strtolower($pass[2])] = true;
+            }
+        }
+        foreach ($passedTo === [] ? [] : $extractions as $path => $extraction) {
+            $id = static fn (string $name): string => $names->canonical($name, $serviceMap->serviceOf((string) $path));
+            foreach ($extraction->methodParameters as $method => $signature) {
+                if (isset($passedTo[strtolower((string) substr((string) strrchr($method, ':'), 1))])) {
+                    $methodParameters[$id($method)] = array_map(static function (string $parameter) use ($id): array {
+                        [$name, $type] = explode(':', $parameter, 2) + [1 => ''];
+
+                        return [$name, $type === '' ? null : $id($type)];
+                    }, explode(',', $signature));
+                }
+            }
+        }
+        $inputGuards = new InputGuards($graph, $types, $guards, $callArguments, $propertyHolds, $parameterTypes, $methodParameters, $parameterPasses);
         $injections = (new ServiceInjections($graph, $names, $container, new TaggedClasses($graph, $names, $types, $container), $inputGuards))->resolve();
         $bus = (new BusResolver($graph, $names, $types, $constants))->resolve($handlers, $dispatches);
         // Paths held in class constants, now that every file is read.

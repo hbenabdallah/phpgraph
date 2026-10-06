@@ -223,15 +223,16 @@ final class GraphQueryTest extends TestCase
             return $routes;
         };
 
-        self::assertSame(['POST /estimates', 'POST /estimates/archive', 'POST /orders'], $routes('App\Shared\MaterialResolver::resolve'), 'the preview passes a PreviewQuery: the material rule supports creation and update only');
+        self::assertSame(['POST /estimates', 'POST /estimates/archive', 'POST /estimates/revise', 'POST /orders'], $routes('App\Shared\MaterialResolver::resolve'), 'the preview passes a PreviewQuery: the material rule supports creation and update only');
         $text = $presenter->impact('App\Shared\MaterialResolver::resolve', 3, 0, 'routes');
         self::assertMatchesRegularExpression('/POST \/estimates ← .*\(tagged_iterator estimate\.context_rule\) ← MaterialRule::apply\(\)/', $text, 'one validator class for two contexts: the chain goes through the rule of its own');
         self::assertMatchesRegularExpression('/POST \/orders ← .*\(tagged_iterator order\.context_rule\) ← OrderMaterialRule::apply\(\)/', $text);
         self::assertMatchesRegularExpression('/POST \/estimates\/archive ← .*\(tagged_iterator estimate\.context_rule, supports\(\) not resolved\) ← MaterialRule::apply\(\)/', $text, 'a QueryInterface only: the rule may run');
+        self::assertMatchesRegularExpression('/POST \/estimates\/revise ← .*\(tagged_iterator estimate\.context_rule\) ← MaterialRule::apply\(\)/', $text, 'a QueryInterface passed on as an UpdateEstimateQueryInterface: an UpdateEstimateQuery');
 
         self::assertSame(['POST /estimates', 'POST /estimates/archive'], $routes('App\Shared\LineChecker::check'), 'a rule on the lines a query holds (@var Line[]), met by the walk');
 
-        self::assertSame(['POST /estimates', 'POST /estimates/archive', 'POST /estimates/preview'], $routes('App\Shared\UrgencyChecker::check'), 'a guard with && is not read: the rule is kept');
+        self::assertSame(['POST /estimates', 'POST /estimates/archive', 'POST /estimates/preview', 'POST /estimates/revise'], $routes('App\Shared\UrgencyChecker::check'), 'a guard with && is not read: the rule is kept');
         self::assertStringContainsString('(tagged_iterator estimate.context_rule, supports() not resolved) ← UrgencyRule::apply()', $presenter->impact('App\Shared\UrgencyChecker::check', 3, 0, 'routes'));
     }
 

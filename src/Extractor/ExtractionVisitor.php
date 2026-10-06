@@ -129,7 +129,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<string, array{method: string, types: list<string>|true|null}> */
     private array $guards = [];
 
-    /** @var list<array{string, string, int, list<?string>}> */
+    /** @var list<array{string, string, int, list<?string>, list<?string>}> */
     private array $callArguments = [];
 
     /** @var array<string, list<string>> */
@@ -140,6 +140,18 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
     /** @var array<string, true> variables of the current callable assigned after its start */
     private array $reassigned = [];
+
+    /** @var list<array<string, true>> the parameters of the method still visible in each closure being read, innermost last */
+    private array $visibleParameters = [];
+
+    /** @var array<string, string> */
+    private array $methodParameters = [];
+
+    /** @var int the first of the current callable's entries in $parameterPasses */
+    private int $passesStart = 0;
+
+    /** @var list<array{string, string, TypeExpr, string, int|string}> */
+    private array $parameterPasses = [];
 
     public function __construct(private readonly string $path)
     {
@@ -183,6 +195,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->guards,
             $this->callArguments,
             $this->propertyHolds,
+            $this->methodParameters,
+            $this->parameterPasses,
         );
     }
 
@@ -310,6 +324,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         if ($node instanceof Expr\Closure || $node instanceof Expr\ArrowFunction) {
             $this->localTypes = array_pop($this->outerScopes) ?? [];
             array_pop($this->closures);
+            array_pop($this->visibleParameters);
         }
 
         if ($node instanceof Stmt) {
@@ -325,9 +340,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
         if ($node instanceof Stmt\ClassMethod || $node instanceof Stmt\Function_) {
             $this->configuration->leaveCallable();
+            $this->keepUsefulPasses();
             $this->parameterElements = [];
             $this->documentedParameters = [];
             $this->reassigned = [];
+            $this->visibleParameters = [];
             $this->parameters = [];
             $this->closures = [];
             $this->currentCallable = null;
@@ -454,6 +471,18 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
         $elements = $node->getAttribute(DocTypeResolver::ELEMENT_TYPES);
         $this->parameterElements = \is_array($elements) ? array_filter($elements, 'is_string') : [];
+        if ($kind === NodeKind::Method) {
+            // `name:Class,other:` kept as a string: one per method of the project, most of them never looked at.
+            $types = array_map(fn (AstNode\Param $param): string => (string) $this->singleType($param->type), $node->params);
+            if (array_filter($types) !== []) {
+                $this->methodParameters[$id] = implode(',', array_map(
+                    static fn (AstNode\Param $param, string $type): string => ($param->var instanceof Expr\Variable && \is_string($param->var->name) ? $param->var->name : '') . ':' . $type,
+                    $node->params,
+                    $types,
+                ));
+            }
+            $this->passesStart = \count($this->parameterPasses);
+        }
         $documented = $node->getAttribute(DocTypeResolver::PARAM_TYPES);
         $this->documentedParameters = \is_array($documented) ? array_map(fn (string $type): string => (string) $this->documentedClass($type), array_filter($documented, 'is_string')) : [];
         $this->reassigned = [];
@@ -562,6 +591,24 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     {
         $this->outerScopes[] = $this->localTypes;
         $this->closures[] = $this->closureArguments[spl_object_id($node)] ?? end($this->closures) ?: null;
+
+        // The method's parameters a closure still sees: those it captures (all, for an arrow function), not shadowed.
+        $visible = end($this->visibleParameters) ?: array_fill_keys(array_keys($this->parameters), true);
+        if ($node instanceof Expr\Closure) {
+            $captured = [];
+            foreach ($node->uses as $use) {
+                if (\is_string($use->var->name) && !$use->byRef && isset($visible[$use->var->name])) {
+                    $captured[$use->var->name] = true;
+                }
+            }
+            $visible = $captured;
+        }
+        foreach ($node->params as $param) {
+            if ($param->var instanceof Expr\Variable && \is_string($param->var->name)) {
+                unset($visible[$param->var->name]);
+            }
+        }
+        $this->visibleParameters[] = $visible;
 
         if ($node instanceof Expr\Closure) {
             $inherited = [];
@@ -701,6 +748,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             }
             // Outside any method (a configuration file's closure, a script), the file calls it: Wiring::wire($services, ...).
             $caller = $this->currentCallable ?? ($this->currentClass === null ? $this->fileId : null);
+            if ($node->name instanceof Identifier && $this->currentCallable !== null) {
+                $this->onPassedParameters($this->currentCallable, TypeExpr::named($class), $node->name->toString(), $node->args);
+            }
             if ($node->name instanceof Identifier && $caller !== null) {
                 $this->pending[] = new PendingCall($caller, TypeExpr::named($class), $node->name->toString(), true, $node->getStartLine(), $this->namedArguments($node->args), $this->closure());
                 $this->onClosureArguments($node->args);
@@ -714,6 +764,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         if (($node instanceof Expr\MethodCall || $node instanceof Expr\NullsafeMethodCall) && $node->name instanceof Identifier) {
             if ($this->currentCallable !== null && $this->thisProperty($node->var) !== null) {
                 $this->onServiceCallArguments($this->currentCallable, $node->name->toString(), $node->getStartLine(), $node->args);
+            }
+            $receiver = $this->currentCallable === null ? null : $this->typeOf($node->var);
+            if ($receiver !== null) {
+                $this->onPassedParameters((string) $this->currentCallable, $receiver, $node->name->toString(), $node->args);
             }
             if ($this->currentCallable !== null) {
                 $this->pending[] = new PendingCall(
@@ -1029,15 +1083,17 @@ final class ExtractionVisitor extends NodeVisitorAbstract
      */
     private function onServiceCallArguments(string $caller, string $method, int $line, array $args): void
     {
-        $types = [];
+        $types = $parameters = [];
         foreach ($args as $arg) {
             if (!$arg instanceof AstNode\Arg || $arg->name !== null || $arg->unpack) {
                 break;
             }
             $value = $arg->value;
             $type = null;
-            if ($value instanceof Expr\Variable && \is_string($value->name) && isset($this->parameters[$value->name]) && !isset($this->reassigned[$value->name])) {
-                $type = $this->documentedParameters[$value->name] ?? null;
+            $parameter = $this->untouchedParameter($value);
+            $parameters[] = $parameter;
+            if ($parameter !== null) {
+                $type = $this->documentedParameters[$parameter] ?? null;
             }
             $type ??= $this->typeOf($value)?->className;
             // Not an object to inspect: a closure, a literal.
@@ -1045,9 +1101,59 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                 || $value instanceof Expr\Array_ || $value instanceof Expr\ConstFetch;
             $types[] = $type ?? ($notAnInput ? '' : null);
         }
-        if (array_filter($types, static fn (?string $type): bool => $type !== null && $type !== '') !== []) {
-            $this->callArguments[] = [$caller, $method, $line, $types];
+        if (array_filter($types, static fn (?string $type): bool => $type !== null && $type !== '') !== [] || array_filter($parameters) !== []) {
+            $this->callArguments[] = [$caller, $method, $line, $types, $parameters];
         }
+    }
+
+    /**
+     * A parameter passed on untouched, `$this->builder->setUp(query: $query)`: the parameter of the callee says more
+     * about it (`CreateEstimateQueryInterface` for a `QueryInterface $query`).
+     *
+     * @param array<AstNode\Arg|AstNode\ArgPlaceholder|AstNode\VariadicPlaceholder> $args
+     */
+    private function onPassedParameters(string $caller, TypeExpr $receiver, string $method, array $args): void
+    {
+        foreach ($args as $position => $arg) {
+            if (!$arg instanceof AstNode\Arg || $arg->unpack) {
+                continue;
+            }
+            $parameter = $this->untouchedParameter($arg->value);
+            if ($parameter !== null) {
+                $this->parameterPasses[] = [$caller, $parameter, $receiver, $method, $arg->name?->toString() ?? $position];
+            }
+        }
+    }
+
+    /**
+     * Only the parameters passed on that the method also gives a held service: the input of a pipeline.
+     */
+    private function keepUsefulPasses(): void
+    {
+        $given = [];
+        foreach ($this->callArguments as [$caller, , , , $parameters]) {
+            if ($caller === $this->currentCallable) {
+                $given += array_flip(array_filter($parameters, 'is_string'));
+            }
+        }
+        $passes = \array_slice($this->parameterPasses, $this->passesStart);
+        $this->parameterPasses = [
+            ...\array_slice($this->parameterPasses, 0, $this->passesStart),
+            ...array_filter($passes, static fn (array $pass): bool => isset($given[$pass[1]])),
+        ];
+    }
+
+    /**
+     * The name of the method's parameter an expression is, when never assigned since and seen from here.
+     */
+    private function untouchedParameter(Expr $value): ?string
+    {
+        if (!$value instanceof Expr\Variable || !\is_string($value->name) || !isset($this->parameters[$value->name]) || isset($this->reassigned[$value->name])) {
+            return null;
+        }
+        $visible = end($this->visibleParameters);
+
+        return $visible === false || isset($visible[$value->name]) ? $value->name : null;
     }
 
     /**

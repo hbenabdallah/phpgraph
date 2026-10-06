@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpGraph\Builder;
 
+use PhpGraph\Extractor\TypeExpr;
 use PhpGraph\Graph\Graph;
 use PhpGraph\Graph\NodeKind;
 use PhpGraph\Graph\Relation;
@@ -14,8 +15,9 @@ use PhpGraph\Graph\Relation;
  * use case passing another query to the shared pipeline: the preview use case does not run the rules of creation.
  *
  * The input is the classes of the arguments the use case passes to the service it holds by id, with the classes their
- * properties hold, recursively (a validator walking the input meets its lines); an argument of an interface may be
- * any of its implementations, which leaves their rules unresolved. A guard is trusted only when the
+ * properties hold, recursively (a validator walking the input meets its lines). An argument typed by an interface may
+ * be any project class implementing it and the types of the parameters it is passed on to: the rules running for
+ * some of them only are unresolved. A guard is trusted only when the
  * project calls it on the members (`RuleExecution::canRun()` calling `ContextRuleInterface::supports()`).
  *
  * Conservative: a guard or an input it cannot read keeps the member, as unresolved.
@@ -43,11 +45,17 @@ final class InputGuards
 
     /**
      * @param array<string, array{method: string, types: list<string>|true|null}> $guards        class => its guard
-     * @param array<string, list<array{string, int, list<?string>}>>         $callArguments method id => calls to a held
-     *                                                                                      service: lowercase method,
-     *                                                                                      line, argument classes
+     * @param array<string, list<array{string, int, list<?string>, list<?string>}>> $callArguments method id => calls to a
+     *                                                                                      held service: lowercase method,
+     *                                                                                      line, argument classes, the
+     *                                                                                      caller's parameters they are
      * @param array<string, list<string>>                                    $propertyHolds class => what its properties hold
      * @param array<string, string>                                          $parameterTypes method id => class of its first parameter
+     * @param array<string, list<array{string, ?string}>>                    $methodParameters method id => name and class
+     *                                                                                      of each parameter
+     * @param array<string, list<array{string, TypeExpr, string, int|string}>> $parameterPasses method id => its parameters
+     *                                                                                      passed on untouched: parameter,
+     *                                                                                      receiver, method, argument
      */
     public function __construct(
         private readonly Graph $graph,
@@ -56,6 +64,8 @@ final class InputGuards
         private readonly array $callArguments,
         private readonly array $propertyHolds,
         private readonly array $parameterTypes,
+        private readonly array $methodParameters = [],
+        private readonly array $parameterPasses = [],
     ) {
     }
 
@@ -86,7 +96,8 @@ final class InputGuards
     }
 
     /**
-     * Whether the member can run for what $holder passes to the service of class $held it holds.
+     * Whether the member can run for what $holder passes to the service of class $held it holds: kept when it runs for
+     * some argument whatever its class at run time, dropped when it runs for none, unresolved otherwise.
      *
      * @return self::KEEP|self::DROP|self::UNRESOLVED
      */
@@ -99,31 +110,36 @@ final class InputGuards
         if ($guard['types'] === null) {
             return self::UNRESOLVED;
         }
-        $roots = $this->inputs($holder, $held);
-        if ($roots === null) {
+        $arguments = $this->inputs($holder, $held);
+        if ($arguments === null) {
             return self::UNRESOLVED;
         }
-        // What the arguments hold, and what they may hold: a `QueryInterface` is one of its implementations at run time.
-        $possible = $roots;
-        foreach (array_keys($roots) as $root) {
-            foreach ($this->descendants()[$root] ?? [] as $class) {
-                $possible[$class] = true;
+
+        $decision = self::DROP;
+        foreach ($arguments as $constraints) {
+            $outcome = $this->outcome($guard['types'], $constraints);
+            if ($outcome === self::KEEP) {
+                return self::KEEP;
+            }
+            if ($outcome === self::UNRESOLVED) {
+                $decision = self::UNRESOLVED;
             }
         }
 
-        return $this->accepts($guard['types'], $this->reachable($roots), $this->reachable($possible));
+        return $decision;
     }
 
     /**
-     * The classes $holder passes to the methods of $held. Null when a call passes an argument of unknown class, or
-     * when no call is found.
+     * What $holder passes to the methods of $held: for each argument, the classes it is known to be, its type and the
+     * types of the parameters it is passed on to (`QueryInterface $query` given to `setUp(CreateEstimateQueryInterface
+     * $query)`). Null when an argument is of unknown class, or when no call is found.
      *
-     * @return array<string, true>|null
+     * @return list<list<string>>|null
      */
     private function inputs(string $holder, string $held): ?array
     {
         $lineage = array_flip($this->types->lineage($held));
-        $roots = [];
+        $arguments = [];
         $found = false;
         foreach ($this->methodsOf($holder) as $method) {
             foreach ($this->graph->incident($method) as $item) {
@@ -134,19 +150,25 @@ final class InputGuards
                 $name = strtolower((string) substr(strrchr($item['other'], ':') ?: '', 1));
                 $lines = $edge->lines();
                 $matched = false;
-                foreach ($this->callArguments[$method] ?? [] as [$called, $line, $arguments]) {
+                foreach ($this->callArguments[$method] ?? [] as [$called, $line, $classes, $parameters]) {
                     if ($called !== $name || !\in_array($line, $lines, true)) {
                         continue;
                     }
                     $matched = true;
-                    foreach ($arguments as $position => $class) {
+                    foreach ($classes as $position => $class) {
                         $class ??= $position === 0 ? $this->parameterTypes[$item['other']] ?? null : null;
-                        if ($class === null) {
+                        if ($class === '') {
+                            continue;
+                        }
+                        $parameter = $parameters[$position] ?? null;
+                        $constraints = array_values(array_unique([
+                            ...($class === null ? [] : [$class]),
+                            ...($parameter === null ? [] : $this->passedAs($method, $parameter)),
+                        ]));
+                        if ($constraints === []) {
                             return null;
                         }
-                        if ($class !== '') {
-                            $roots[$class] = true;
-                        }
+                        $arguments[] = $constraints;
                     }
                 }
                 if (!$matched) {
@@ -156,7 +178,109 @@ final class InputGuards
             }
         }
 
-        return $found ? $roots : null;
+        return $found ? $arguments : null;
+    }
+
+    /**
+     * The classes of the parameters a method's parameter is passed on to, untouched.
+     *
+     * @return list<string>
+     */
+    private function passedAs(string $method, string $parameter): array
+    {
+        $classes = [];
+        foreach ($this->parameterPasses[$method] ?? [] as [$passed, $receiver, $called, $argument]) {
+            $class = $passed === $parameter ? $this->types->resolve($receiver) : null;
+            $callee = $class === null ? null : $this->types->findMethod($class, strtolower($called));
+            foreach ($callee === null ? [] : $this->methodParameters[$callee] ?? [] as $position => [$name, $type]) {
+                if ($type !== null && ($argument === $position || $argument === $name)) {
+                    $classes[] = $type;
+                }
+            }
+        }
+
+        return $classes;
+    }
+
+    /**
+     * For one argument: kept when the member runs whatever the class of the argument, dropped when it never does,
+     * unresolved otherwise. The argument is any project class meeting all its constraints (a `QueryInterface` that is a
+     * `CreateEstimateQueryInterface`: `CreateEstimateQuery`), with what its properties hold.
+     *
+     * @param list<string> $accepted
+     * @param list<string> $constraints
+     *
+     * @return self::KEEP|self::DROP|self::UNRESOLVED
+     */
+    private function outcome(array $accepted, array $constraints): string
+    {
+        $candidates = $this->candidates($constraints);
+        if ($candidates === []) {
+            return self::UNRESOLVED;
+        }
+        $outcomes = [];
+        foreach ($candidates as $candidate) {
+            $outcomes[$this->runsFor($accepted, $candidate)] = true;
+        }
+
+        return \count($outcomes) === 1 ? (string) array_key_first($outcomes) : self::UNRESOLVED;
+    }
+
+    /**
+     * The classes an argument may be at run time: those of the project extending or implementing all its constraints.
+     * A constraint the project does not declare (a dependency's class) is taken as is.
+     *
+     * @param list<string> $constraints
+     *
+     * @return list<string>
+     */
+    private function candidates(array $constraints): array
+    {
+        $known = array_values(array_filter($constraints, fn (string $class): bool => $this->graph->hasNode($class)));
+        if ($known === []) {
+            return [$constraints[0]];
+        }
+        $candidates = [];
+        $base = $known[0];
+        $classes = [...($this->graph->node($base)?->kind === NodeKind::PhpClass ? [$base] : []), ...$this->descendants()[$base] ?? []];
+        foreach ($classes as $class) {
+            if (array_diff($known, $this->types->lineage($class)) === []) {
+                $candidates[] = $class;
+            }
+        }
+
+        return $candidates;
+    }
+
+    /**
+     * Whether a member accepting $accepted runs for an input of class $class: on it, or on what its properties hold.
+     * Unresolved when only a wider type is held (a property typed by an interface), or an accepted class is unknown.
+     *
+     * @param list<string> $accepted
+     *
+     * @return self::KEEP|self::DROP|self::UNRESOLVED
+     */
+    private function runsFor(array $accepted, string $class): string
+    {
+        $held = $this->reachable([$class => true]);
+        $decision = self::DROP;
+        foreach ($accepted as $type) {
+            if (!$this->graph->hasNode($type)) {
+                $decision = self::UNRESOLVED;
+                continue;
+            }
+            $lineage = $this->types->lineage($type);
+            foreach (array_keys($held) as $input) {
+                if (\in_array($type, $this->types->lineage((string) $input), true)) {
+                    return self::KEEP;
+                }
+                if ($input !== $class && \in_array($input, $lineage, true)) {
+                    $decision = self::UNRESOLVED;
+                }
+            }
+        }
+
+        return $decision;
     }
 
     /**
@@ -185,40 +309,6 @@ final class InputGuards
         }
 
         return $seen;
-    }
-
-    /**
-     * Kept when an input is an accepted class or extends one; unresolved when an input is only wider (the use case
-     * passes a `QueryInterface`, the rule accepts `CreateEstimateQuery`), when only what a subclass of an input holds
-     * matches, or when an accepted class is unknown to the project; dropped otherwise.
-     *
-     * @param list<string>        $accepted
-     * @param array<string, true> $inputs   the arguments and what their properties hold
-     * @param array<string, true> $possible the same, with the subclasses of the arguments
-     *
-     * @return self::KEEP|self::DROP|self::UNRESOLVED
-     */
-    private function accepts(array $accepted, array $inputs, array $possible): string
-    {
-        $decision = self::DROP;
-        foreach ($accepted as $class) {
-            if (!$this->graph->hasNode($class)) {
-                $decision = self::UNRESOLVED;
-                continue;
-            }
-            $lineage = $this->types->lineage($class);
-            foreach (array_keys($possible) as $input) {
-                $narrower = \in_array($class, $this->types->lineage((string) $input), true);
-                if ($narrower && isset($inputs[$input])) {
-                    return self::KEEP;
-                }
-                if ($narrower || \in_array($input, $lineage, true)) {
-                    $decision = self::UNRESOLVED;
-                }
-            }
-        }
-
-        return $decision;
     }
 
     /**
