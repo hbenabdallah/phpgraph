@@ -41,6 +41,13 @@ final readonly class FileExtraction
      *                                             `$violation->type`: an enum read so is linked to the method
      * @param array<string, list<array{int, string}>> $invokedParameters method id => the parameters it calls,
      *                                             `$apply(...)`, by position and name: a closure passed there runs in it
+     * @param array<string, array{method: string, types: list<string>|true|null}> $guards class => its guard method
+     *                                             (`supports(object $input): bool`) and the classes it accepts: all
+     *                                             (`return true`), or unknown when the body is not a plain `instanceof` test
+     * @param list<array{string, string, int, list<?string>}> $callArguments calls to a service held in a property,
+     *                                             `$this->pipeline->run($query)`: caller, method, line, the class of each
+     *                                             positional argument when known, empty for a closure or a literal
+     * @param array<string, list<string>> $propertyHolds class => the classes its properties may hold, collections included
      */
     public function __construct(
         public array $nodes,
@@ -64,6 +71,9 @@ final readonly class FileExtraction
         public array $propertyReads = [],
         public array $returnElements = [],
         public array $invokedParameters = [],
+        public array $guards = [],
+        public array $callArguments = [],
+        public array $propertyHolds = [],
     ) {
     }
 }

@@ -33,6 +33,7 @@ final class ServiceInjections
         private readonly NameCanonicalizer $names,
         private readonly ContainerServices $container,
         private readonly TaggedClasses $tagged,
+        private readonly ?InputGuards $guards = null,
     ) {
     }
 
@@ -105,6 +106,9 @@ final class ServiceInjections
      * `impact` keeps the rules of one bounded context to the use cases wired to them. Only injections by id are
      * followed: autowiring by type and locators of a whole tag do not narrow anything.
      *
+     * A member whose guard rejects what a use case passes (`supports()` testing another query) is not held by that use
+     * case; one whose guard or input cannot be read is held, marked unresolved.
+     *
      * @return int edges added
      */
     private function transitive(): int
@@ -122,13 +126,15 @@ final class ServiceInjections
             if ($argument['tag'] === null || $argument['locator']) {
                 continue;
             }
+            $service = $argument['service'];
+            /** @var array<string, string> $holders holder id => the id it injects on the way */
             $holders = [];
             for ($queue = [$argument['id']], $depth = 0; $queue !== [] && $depth < self::MAX_DEPTH; ++$depth) {
                 $next = [];
                 foreach ($queue as $id) {
-                    foreach (array_keys($injectedBy[$argument['service']][$id] ?? []) as $holder) {
+                    foreach (array_keys($injectedBy[$service][$id] ?? []) as $holder) {
                         if (!isset($holders[$holder]) && \count($holders) < self::MAX_HOLDERS) {
-                            $holders[$holder] = true;
+                            $holders[(string) $holder] = $id;
                             $next[] = (string) $holder;
                         }
                     }
@@ -136,21 +142,54 @@ final class ServiceInjections
                 $queue = $next;
             }
             $members = $holders === [] ? [] : $this->tagged->named($argument['tag']);
-            foreach (array_keys($holders) as $holder) {
-                $class = $this->classOf((string) $holder, $argument['service']);
-                if ($class === null) {
-                    continue;
-                }
-                foreach ($members as $member) {
-                    if ($member !== $class && !$this->hasEdge($class, $member)) {
-                        $this->graph->addEdge(new Edge($class, $member, Relation::Receives, Confidence::Inferred, '', 'through ' . $argument['id']));
-                        ++$edges;
+            foreach ($members as $member) {
+                $decisions = $this->decisions($member, $holders, $injectedBy[$service] ?? [], $service);
+                foreach ($holders as $holder => $injected) {
+                    $class = $this->classOf((string) $holder, $service);
+                    $decision = $decisions[$holder] ?? InputGuards::KEEP;
+                    if ($class === null || $member === $class || $decision === InputGuards::DROP || $this->hasEdge($class, $member)) {
+                        continue;
                     }
+                    $via = 'through ' . $argument['id'];
+                    if ($decision === InputGuards::UNRESOLVED) {
+                        $via .= ', ' . ($this->guards?->guardOf($member)['method'] ?? 'guard') . '() not resolved';
+                    }
+                    $this->graph->addEdge(new Edge($class, $member, Relation::Receives, Confidence::Inferred, '', $via));
+                    ++$edges;
                 }
             }
         }
 
         return $edges;
+    }
+
+    /**
+     * What the guard of a member says for each holder at the top of the chain (not injected by id further): the use
+     * cases, which pass the input. A member no use case can run keeps them all: dead or not, the graph cannot tell.
+     *
+     * @param array<string, string>               $holders    holder id => the id it injects
+     * @param array<string, array<string, true>>  $injectedBy service id => the ids injecting it
+     *
+     * @return array<string, string> holder id => decision
+     */
+    private function decisions(string $member, array $holders, array $injectedBy, string $service): array
+    {
+        if ($this->guards?->guardOf($member) === null) {
+            return [];
+        }
+        $decisions = [];
+        foreach ($holders as $holder => $injected) {
+            $class = $this->classOf((string) $holder, $service);
+            $held = $this->classOf($injected, $service);
+            if (!isset($injectedBy[$holder]) && $class !== null && $held !== null) {
+                $decisions[$holder] = $this->guards->decide($member, $class, $held);
+            }
+        }
+        if ($decisions !== [] && array_diff($decisions, [InputGuards::DROP]) === []) {
+            return [];
+        }
+
+        return $decisions;
     }
 
     private function classOf(string $id, string $service): ?string

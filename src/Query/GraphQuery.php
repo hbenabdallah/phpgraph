@@ -233,6 +233,27 @@ final class GraphQuery
         return $this->graph;
     }
 
+    /**
+     * The guard a class of $holders holds $member despite, unable to tell whether it runs for what that class passes
+     * (`supports`), or null: the member of a tagged list, entered from a route's chain.
+     *
+     * @param list<string> $holders nodes, methods or classes
+     */
+    public function unresolvedGuard(array $holders, string $member): ?string
+    {
+        foreach ($holders as $node) {
+            foreach ($this->graph->incident(explode('::', $node)[0]) as $item) {
+                $via = $item['edge']->via();
+                if ($item['forward'] && $item['other'] === $member && $item['edge']->relation === Relation::Receives
+                    && preg_match('/, (\w+)\(\) not resolved$/', $via, $match) === 1) {
+                    return $match[1];
+                }
+            }
+        }
+
+        return null;
+    }
+
     public function architecture(): Architecture
     {
         return $this->architecture ??= (new LayerRules($this->graph))->check();

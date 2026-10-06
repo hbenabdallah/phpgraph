@@ -129,6 +129,12 @@ final class GraphBuilder
         $returnElements = [];
         $invokedParameters = [];
         $propertyTypes = [];
+        /** @var array<string, array{method: string, types: list<string>|true|null}> $guards */
+        $guards = [];
+        /** @var array<string, list<array{string, int, list<?string>}>> $callArguments */
+        $callArguments = [];
+        /** @var array<string, list<string>> $propertyHolds */
+        $propertyHolds = [];
         /** @var array<string, string> $constants */
         $constants = [];
         $routes = [];
@@ -169,6 +175,15 @@ final class GraphBuilder
             }
             foreach ($extraction->propertyTypes as $property => $type) {
                 $propertyTypes[$this->qualifiedMember($property, $id)] ??= $id($type);
+            }
+            foreach ($extraction->guards as $class => $guard) {
+                $guards[$id($class)] ??= ['method' => $guard['method'], 'types' => \is_array($guard['types']) ? array_map($id, $guard['types']) : $guard['types']];
+            }
+            foreach ($extraction->callArguments as [$caller, $method, $line, $arguments]) {
+                $callArguments[$id($caller)][] = [strtolower($method), $line, array_map(static fn (?string $class): ?string => $class === null || $class === '' ? $class : $id($class), $arguments)];
+            }
+            foreach ($extraction->propertyHolds as $class => $holds) {
+                $propertyHolds[$id($class)] = array_map($id, $holds);
             }
             foreach ($extraction->routes as $route) {
                 $routes[] = [$route, $service, $id];
@@ -309,7 +324,8 @@ final class GraphBuilder
         }
         $container = new ContainerServices($root, $configurationFiles, $serviceMap, $containerDefinitions, $containerTags, $previous->configuration ?? [], $containerArguments);
         $handlers = [...(new TaggedHandlers($graph, $names, $types, $parameterTypes))->facts($container), ...$handlers];
-        $injections = (new ServiceInjections($graph, $names, $container, new TaggedClasses($graph, $names, $types, $container)))->resolve();
+        $inputGuards = new InputGuards($graph, $types, $guards, $callArguments, $propertyHolds, $parameterTypes);
+        $injections = (new ServiceInjections($graph, $names, $container, new TaggedClasses($graph, $names, $types, $container), $inputGuards))->resolve();
         $bus = (new BusResolver($graph, $names, $types, $constants))->resolve($handlers, $dispatches);
         // Paths held in class constants, now that every file is read.
         $routes = array_map(fn (array $route): array => [

@@ -399,9 +399,12 @@ final class ImpactReport
             $label = $this->target($node, '');
             $next = $chain[$index + 1] ?? null;
             if ($next !== null) {
+                $member = explode('::', $next)[0];
                 foreach ($graph->incident(explode('::', $node)[0]) as $item) {
-                    if ($item['forward'] && $item['other'] === explode('::', $next)[0] && $item['edge']->relation === Relation::Receives && $item['edge']->via() !== '') {
-                        $label .= ' (' . $item['edge']->via() . ')';
+                    if ($item['forward'] && $item['other'] === $member && $item['edge']->relation === Relation::Receives && $item['edge']->via() !== '') {
+                        // Held by the use case of the chain although its guard could not be read: it may not run.
+                        $guard = $this->query->unresolvedGuard(\array_slice($chain, 0, $index), $member);
+                        $label .= ' (' . $item['edge']->via() . ($guard === null ? '' : ', ' . $guard . '() not resolved') . ')';
                         break;
                     }
                 }

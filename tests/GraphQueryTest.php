@@ -207,6 +207,34 @@ final class GraphQueryTest extends TestCase
         self::assertStringContainsString('ContextValidator::executeRules() (tagged_iterator sales.context_rule)', $text);
     }
 
+    public function testAGuardedRuleReachesOnlyTheUseCasesPassingWhatItSupports(): void
+    {
+        $query = new GraphQuery((new \PhpGraph\Builder\GraphBuilder())->build(__DIR__ . '/Fixtures/guarded-rules')->graph);
+        $presenter = new \PhpGraph\Presentation\TextPresenter($query);
+        $routes = static function (string $name) use ($query): array {
+            $routes = [];
+            foreach ($query->impactOf($query->resolve($name) ?? self::fail('No node ' . $name))->classes as $class) {
+                if (str_starts_with($class->class, 'route:')) {
+                    $routes[] = $query->label($class->class);
+                }
+            }
+            sort($routes);
+
+            return $routes;
+        };
+
+        self::assertSame(['POST /estimates', 'POST /estimates/archive', 'POST /orders'], $routes('App\Shared\MaterialResolver::resolve'), 'the preview passes a PreviewQuery: the material rule supports creation and update only');
+        $text = $presenter->impact('App\Shared\MaterialResolver::resolve', 3, 0, 'routes');
+        self::assertMatchesRegularExpression('/POST \/estimates ← .*\(tagged_iterator estimate\.context_rule\) ← MaterialRule::apply\(\)/', $text, 'one validator class for two contexts: the chain goes through the rule of its own');
+        self::assertMatchesRegularExpression('/POST \/orders ← .*\(tagged_iterator order\.context_rule\) ← OrderMaterialRule::apply\(\)/', $text);
+        self::assertMatchesRegularExpression('/POST \/estimates\/archive ← .*\(tagged_iterator estimate\.context_rule, supports\(\) not resolved\) ← MaterialRule::apply\(\)/', $text, 'a QueryInterface only: the rule may run');
+
+        self::assertSame(['POST /estimates', 'POST /estimates/archive'], $routes('App\Shared\LineChecker::check'), 'a rule on the lines a query holds (@var Line[]), met by the walk');
+
+        self::assertSame(['POST /estimates', 'POST /estimates/archive', 'POST /estimates/preview'], $routes('App\Shared\UrgencyChecker::check'), 'a guard with && is not read: the rule is kept');
+        self::assertStringContainsString('(tagged_iterator estimate.context_rule, supports() not resolved) ← UrgencyRule::apply()', $presenter->impact('App\Shared\UrgencyChecker::check', 3, 0, 'routes'));
+    }
+
     public function testForeachOverADocumentedCollectionTypesItsElements(): void
     {
         $graph = (new \PhpGraph\Builder\GraphBuilder())->build(__DIR__ . '/Fixtures/validation-pipeline')->graph;

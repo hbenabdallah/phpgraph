@@ -325,6 +325,13 @@ final class ImpactAnalysis
                     break;
                 }
             }
+            $chains = $this->chains($handler, $changed->id, $callers);
+            // The first parent of a shared method may come from another context: the validator reached first through
+            // the rule of the customer orders is not on the way of the estimate route.
+            if (!$this->holdsItsMembers($chain) && $chains !== []) {
+                usort($chains, static fn (array $a, array $b): int => \count($a) <=> \count($b));
+                $chain = $chains[0];
+            }
             unset($classes[(string) $route]);
             $classes[(string) $route] = new ImpactedClass(
                 (string) $route,
@@ -339,7 +346,7 @@ final class ImpactAnalysis
                 $chain,
                 false,
                 null,
-                $this->otherChains($handler, $changed->id, $callers, $chain),
+                $this->otherChains($chains, $chain),
             );
         }
 
@@ -376,30 +383,27 @@ final class ImpactAnalysis
     }
 
     /**
-     * The other ways from a route's handler down to the change, through calls (not the state): PUT /estimate reaches
+     * The ways from a route's handler down to the change, through calls (not the state): PUT /estimate reaches
      * notifyContextViolation() directly, and through the validation pipeline and its rules too.
      *
      * @param array<string, array<string, true>> $callers
-     * @param list<string>                       $first   the chain already shown
      *
      * @return list<list<string>>
      */
-    private function otherChains(string $handler, string $changed, array $callers, array $first): array
+    private function chains(string $handler, string $changed, array $callers): array
     {
         /** @var list<list<string>> $chains */
         $chains = [];
         // Every simple path is exponential on a dense graph: the walk stops after a fixed number of steps.
         $steps = 0;
         /** @param list<string> $path */
-        $walk = function (string $node, array $path) use (&$walk, &$chains, &$steps, $changed, $callers, $first): void {
-            if (\count($chains) >= self::MAX_CHAINS || \count($path) > 30 || ++$steps > self::MAX_CHAIN_STEPS) {
+        $walk = function (string $node, array $path) use (&$walk, &$chains, &$steps, $changed, $callers): void {
+            if (\count($chains) > self::MAX_CHAINS || \count($path) > 30 || ++$steps > self::MAX_CHAIN_STEPS) {
                 return;
             }
             $path[] = $node;
             if ($node === $changed) {
-                if ($path !== $first) {
-                    $chains[] = $path;
-                }
+                $chains[] = array_values($path);
 
                 return;
             }
@@ -410,8 +414,7 @@ final class ImpactAnalysis
                 }
                 // A tagged member is on the way only when a class of the chain holds it: the estimate use case runs
                 // the estimate rules, not those of the customer orders.
-                $holders = $this->ownHolders($this->classOf($from));
-                if ($holders !== [] && array_filter($path, fn (string $step): bool => isset($holders[$this->classOf($step)])) === []) {
+                if (!$this->heldOnTheWay($from, $path)) {
                     continue;
                 }
                 $walk($from, $path);
@@ -419,17 +422,56 @@ final class ImpactAnalysis
         };
         $walk($handler, []);
 
-        // One per way through, not one per rule on it: chains differing only at their last steps are the same way.
+        return $chains;
+    }
+
+    /**
+     * The chains besides the one shown: one per way through, not one per rule on it (chains differing only at their
+     * last steps are the same way).
+     *
+     * @param list<list<string>> $chains
+     * @param list<string>       $first  the chain already shown
+     *
+     * @return list<list<string>>
+     */
+    private function otherChains(array $chains, array $first): array
+    {
         /** @var array<string, list<string>> $distinct */
         $distinct = [];
         foreach ($chains as $chain) {
-            $distinct[implode('>', \array_slice($chain, 0, 4))] ??= $chain;
+            if ($chain !== $first) {
+                $distinct[implode('>', \array_slice($chain, 0, 4))] ??= $chain;
+            }
         }
         unset($distinct[implode('>', \array_slice($first, 0, 4))]);
-        /** @var list<list<string>> $others */
-        $others = array_values($distinct);
 
-        return $others;
+        return \array_slice(array_values($distinct), 0, self::MAX_CHAINS);
+    }
+
+    /**
+     * Whether a step's tagged class, if any, is held by a class of the path before it.
+     *
+     * @param array<string> $path
+     */
+    private function heldOnTheWay(string $step, array $path): bool
+    {
+        $holders = $this->ownHolders($this->classOf($step));
+
+        return $holders === [] || array_filter($path, fn (string $node): bool => isset($holders[$this->classOf($node)])) !== [];
+    }
+
+    /**
+     * @param list<string> $chain from the handler down to the change
+     */
+    private function holdsItsMembers(array $chain): bool
+    {
+        foreach ($chain as $index => $step) {
+            if ($index > 0 && !$this->heldOnTheWay($step, \array_slice($chain, 0, $index))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

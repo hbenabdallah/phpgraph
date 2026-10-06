@@ -23,6 +23,11 @@ use PhpParser\NodeVisitorAbstract;
 
 final class ExtractionVisitor extends NodeVisitorAbstract
 {
+    /**
+     * Methods a strategy declares what it accepts with, lowercase: `supports(object $input): bool`.
+     */
+    private const GUARDS = ['supports', 'canhandle', 'accepts', 'canprocess', 'issupported'];
+
     private readonly string $fileId;
 
     /** @var list<Node> */
@@ -121,6 +126,21 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<string, list<array{int, string}>> */
     private array $invokedParameters = [];
 
+    /** @var array<string, array{method: string, types: list<string>|true|null}> */
+    private array $guards = [];
+
+    /** @var list<array{string, string, int, list<?string>}> */
+    private array $callArguments = [];
+
+    /** @var array<string, list<string>> */
+    private array $propertyHolds = [];
+
+    /** @var array<string, string> parameters of the current callable => their class in `@param` */
+    private array $documentedParameters = [];
+
+    /** @var array<string, true> variables of the current callable assigned after its start */
+    private array $reassigned = [];
+
     public function __construct(private readonly string $path)
     {
         $this->fileId = 'file:' . $path;
@@ -160,6 +180,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->propertyReads,
             $this->returnElements,
             $this->invokedParameters,
+            $this->guards,
+            $this->callArguments,
+            $this->propertyHolds,
         );
     }
 
@@ -275,6 +298,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
         if ($node instanceof Expr\Assign || $node instanceof Expr\AssignRef) {
             if ($node->var instanceof Expr\Variable && \is_string($node->var->name)) {
+                $this->reassigned[$node->var->name] = true;
                 $this->assignLocal($node->var->name, $this->typeOf($node->expr));
             } else {
                 $this->forgetAssigned($node->var);
@@ -302,6 +326,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         if ($node instanceof Stmt\ClassMethod || $node instanceof Stmt\Function_) {
             $this->configuration->leaveCallable();
             $this->parameterElements = [];
+            $this->documentedParameters = [];
+            $this->reassigned = [];
             $this->parameters = [];
             $this->closures = [];
             $this->currentCallable = null;
@@ -376,6 +402,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
         $this->propertyTypes = $this->collectPropertyTypes($node);
         $this->propertyElements = $this->collectPropertyElements($node);
+        $holds = $this->collectPropertyHolds($node);
+        if ($holds !== []) {
+            $this->propertyHolds[$fqcn] = $holds;
+        }
         foreach ($this->propertyTypes as $property => $type) {
             $this->declaredPropertyTypes[$fqcn . '::' . $property] = $type;
         }
@@ -424,6 +454,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
         $elements = $node->getAttribute(DocTypeResolver::ELEMENT_TYPES);
         $this->parameterElements = \is_array($elements) ? array_filter($elements, 'is_string') : [];
+        $documented = $node->getAttribute(DocTypeResolver::PARAM_TYPES);
+        $this->documentedParameters = \is_array($documented) ? array_map(fn (string $type): string => (string) $this->documentedClass($type), array_filter($documented, 'is_string')) : [];
+        $this->reassigned = [];
         $this->configuration->enterCallable($id, $node->params, array_values(array_map(fn (AstNode\Param $param): ?string => $this->singleType($param->type), $node->params)));
         $this->localTypes = [];
         $this->pinned = [];
@@ -442,6 +475,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
         if ($kind === NodeKind::Method && $this->currentClass !== null && str_starts_with(strtolower($node->name->toString()), 'supports')) {
             $this->onSupports($this->currentClass, $node);
+        }
+        if ($node instanceof Stmt\ClassMethod && $this->currentClass !== null && \in_array(strtolower($node->name->toString()), self::GUARDS, true)) {
+            $this->onGuard($this->currentClass, $node);
         }
 
         if ($kind === NodeKind::Method && $this->currentClass !== null && strtolower($node->name->toString()) === '__construct') {
@@ -606,6 +642,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     private function forgetAssigned(?AstNode $target): void
     {
         if ($target instanceof Expr\Variable && \is_string($target->name)) {
+            $this->reassigned[$target->name] = true;
             $this->assignLocal($target->name, null);
         } elseif ($target instanceof Expr\List_ || $target instanceof Expr\Array_) {
             foreach ($target->items as $item) {
@@ -675,6 +712,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         if (($node instanceof Expr\MethodCall || $node instanceof Expr\NullsafeMethodCall) && $node->name instanceof Identifier) {
+            if ($this->currentCallable !== null && $this->thisProperty($node->var) !== null) {
+                $this->onServiceCallArguments($this->currentCallable, $node->name->toString(), $node->getStartLine(), $node->args);
+            }
             if ($this->currentCallable !== null) {
                 $this->pending[] = new PendingCall(
                     $this->currentCallable,
@@ -930,6 +970,83 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * A guard method, `supports(object $input): bool`, and what it accepts. Only the plain forms are read: `return
+     * $input instanceof A;`, a `||` of such tests, or `return true;`. Anything else (`&&`, a call, a property, several
+     * statements) leaves the accepted classes unknown: whoever relies on them keeps every input.
+     */
+    private function onGuard(string $class, Stmt\ClassMethod $method): void
+    {
+        $parameter = $method->params[0] ?? null;
+        $type = $parameter?->type;
+        $accepts = $type === null || ($type instanceof Identifier && \in_array($type->toLowerString(), ['object', 'mixed'], true));
+        $returnsBool = $method->returnType instanceof Identifier && $method->returnType->toLowerString() === 'bool';
+        if ($parameter === null || $method->stmts === null || !$accepts || !$returnsBool || !$parameter->var instanceof Expr\Variable || !\is_string($parameter->var->name)) {
+            return;
+        }
+
+        $types = null;
+        $statement = \count($method->stmts) === 1 ? $method->stmts[0] : null;
+        if ($statement instanceof Stmt\Return_ && $statement->expr instanceof Expr\ConstFetch && $statement->expr->name->toLowerString() === 'true') {
+            $types = true;
+        } elseif ($statement instanceof Stmt\Return_ && $statement->expr !== null) {
+            $types = $this->instanceofTests($statement->expr, $parameter->var->name);
+        }
+        $this->guards[$class] ??= ['method' => $method->name->toString(), 'types' => $types];
+    }
+
+    /**
+     * The classes of `$x instanceof A || $x instanceof B`, or null for any other expression.
+     *
+     * @return list<string>|null
+     */
+    private function instanceofTests(Expr $expr, string $variable): ?array
+    {
+        if ($expr instanceof Expr\BinaryOp\BooleanOr) {
+            $left = $this->instanceofTests($expr->left, $variable);
+            $right = $this->instanceofTests($expr->right, $variable);
+
+            return $left === null || $right === null ? null : array_values(array_unique([...$left, ...$right]));
+        }
+        if ($expr instanceof Expr\Instanceof_ && $expr->expr instanceof Expr\Variable && $expr->expr->name === $variable && $expr->class instanceof Name) {
+            $class = $this->resolveName($expr->class);
+
+            return $class === null ? null : [$class];
+        }
+
+        return null;
+    }
+
+    /**
+     * The classes of the positional arguments passed to a service held in a property: what a use case gives its
+     * pipeline (`$this->pipeline->run($query)`), its `@param` class when the parameter is passed untouched; empty for
+     * what cannot be an object to inspect, null when unknown.
+     *
+     * @param array<AstNode\Arg|AstNode\ArgPlaceholder|AstNode\VariadicPlaceholder> $args
+     */
+    private function onServiceCallArguments(string $caller, string $method, int $line, array $args): void
+    {
+        $types = [];
+        foreach ($args as $arg) {
+            if (!$arg instanceof AstNode\Arg || $arg->name !== null || $arg->unpack) {
+                break;
+            }
+            $value = $arg->value;
+            $type = null;
+            if ($value instanceof Expr\Variable && \is_string($value->name) && isset($this->parameters[$value->name]) && !isset($this->reassigned[$value->name])) {
+                $type = $this->documentedParameters[$value->name] ?? null;
+            }
+            $type ??= $this->typeOf($value)?->className;
+            // Not an object to inspect: a closure, a literal.
+            $notAnInput = $value instanceof Expr\Closure || $value instanceof Expr\ArrowFunction || $value instanceof AstNode\Scalar
+                || $value instanceof Expr\Array_ || $value instanceof Expr\ConstFetch;
+            $types[] = $type ?? ($notAnInput ? '' : null);
+        }
+        if (array_filter($types, static fn (?string $type): bool => $type !== null && $type !== '') !== []) {
+            $this->callArguments[] = [$caller, $method, $line, $types];
         }
     }
 
@@ -1565,6 +1682,42 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         return $elements;
+    }
+
+    /**
+     * The classes the properties of a class may hold: their native types (each of a union), the class or the elements
+     * documented (`@var Line[]`, `@param MaterialLines $lines` on a promoted `mixed` parameter).
+     *
+     * @return list<string>
+     */
+    private function collectPropertyHolds(Stmt\ClassLike $node): array
+    {
+        $holds = [];
+        $documented = function (mixed $types, string $name) use (&$holds): void {
+            $type = \is_array($types) ? $types[$name] ?? null : null;
+            if (\is_string($type) && $type !== TypeExpr::STATIC) {
+                $holds[] = (string) $this->documentedClass($type);
+            }
+        };
+        foreach ($node->stmts as $statement) {
+            if ($statement instanceof Stmt\Property) {
+                array_push($holds, ...$this->typeNames($statement->type));
+                $varTypes = $statement->getAttribute(DocTypeResolver::VAR_TYPES);
+                $documented(\is_array($varTypes) && $varTypes !== [] ? ['' => $varTypes[''] ?? reset($varTypes)] : null, '');
+                $documented($statement->getAttribute(DocTypeResolver::ELEMENT_TYPES), '');
+            } elseif ($statement instanceof Stmt\ClassMethod && strtolower($statement->name->toString()) === '__construct') {
+                foreach ($statement->params as $param) {
+                    if ($param->flags === 0 || !$param->var instanceof Expr\Variable || !\is_string($param->var->name)) {
+                        continue;
+                    }
+                    array_push($holds, ...$this->typeNames($param->type));
+                    $documented($statement->getAttribute(DocTypeResolver::PARAM_TYPES), $param->var->name);
+                    $documented($statement->getAttribute(DocTypeResolver::ELEMENT_TYPES), $param->var->name);
+                }
+            }
+        }
+
+        return array_values(array_unique($holds));
     }
 
     /**

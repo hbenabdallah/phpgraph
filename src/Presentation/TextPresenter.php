@@ -849,7 +849,8 @@ final class TextPresenter
                 $member = explode('::', $next)[0];
                 foreach ($graph->incident($holder) as $item) {
                     if ($item['forward'] && $item['other'] === $member && $item['edge']->relation === \PhpGraph\Graph\Relation::Receives && $item['edge']->via() !== '') {
-                        $label .= ' (' . $item['edge']->via() . ')';
+                        $guard = $this->query->unresolvedGuard(\array_slice($chain, 0, $index), $member);
+                        $label .= ' (' . $item['edge']->via() . ($guard === null ? '' : ', ' . $guard . '() not resolved') . ')';
                         break;
                     }
                 }

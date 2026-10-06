@@ -33,6 +33,12 @@ final class DocTypeResolver extends NodeVisitorAbstract
     public const ELEMENT_TYPES = 'phpgraph.elementTypes';
 
     /**
+     * array<string, string>: the class of a parameter, by name (`@param CreateOrderQuery $query`), narrower than its
+     * native type at times (`QueryInterface $query`).
+     */
+    public const PARAM_TYPES = 'phpgraph.paramTypes';
+
+    /**
      * string: the class of the elements of the collection a method returns (`@return list<Violation>`).
      */
     public const RETURN_ELEMENT = 'phpgraph.returnElement';
@@ -74,18 +80,28 @@ final class DocTypeResolver extends NodeVisitorAbstract
                     $node->setAttribute(self::RETURN_ELEMENT, $element);
                 }
             }
-            $elements = [];
+            $elements = $types = [];
             foreach (preg_split('/\R/', $doc) ?: [] as $line) {
                 if (preg_match('/@(?:phpstan-|psalm-)?param\s+(.+)/', $line, $match) === 1) {
                     $token = $this->firstType(trim($match[1]));
+                    if (preg_match('/^\s*(?:\.\.\.)?\$(\w+)/', substr(trim($match[1]), \strlen($token)), $variable) !== 1) {
+                        continue;
+                    }
                     $element = $this->elementType($token, $this->templates($doc));
-                    if ($element !== null && preg_match('/^\s*(?:\.\.\.)?\$(\w+)/', substr(trim($match[1]), \strlen($token)), $variable) === 1) {
+                    if ($element !== null) {
                         $elements[$variable[1]] = $element;
+                    }
+                    $type = $this->resolve($token, $this->templates($doc));
+                    if ($type !== null && $type !== TypeExpr::STATIC) {
+                        $types[$variable[1]] = $type;
                     }
                 }
             }
             if ($elements !== []) {
                 $node->setAttribute(self::ELEMENT_TYPES, $elements);
+            }
+            if ($types !== []) {
+                $node->setAttribute(self::PARAM_TYPES, $types);
             }
 
             return null;
