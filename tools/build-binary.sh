@@ -39,9 +39,10 @@ if [ "$os" != windows ]; then
     EXTENSIONS="$EXTENSIONS,pcntl,posix"
 fi
 
-# On Linux the runtime is built against musl, in Alpine: this script runs again in a container.
+# On Linux the runtime is built against musl, in Alpine: this script runs again in a container. Host network: containers
+# cannot reach a local DNS resolver such as systemd-resolved (127.0.0.53).
 if [ "$os" = linux ] && [ ! -f /etc/alpine-release ]; then
-    exec docker run --rm -e GITHUB_TOKEN -v "$ROOT":/phpgraph -w /phpgraph alpine:3.20 \
+    exec docker run --rm --network host -e GITHUB_TOKEN -v "$ROOT":/phpgraph -w /phpgraph alpine:3.20 \
         sh -c "apk add --no-cache bash curl >/dev/null && tools/build-binary.sh && chown -R $(id -u):$(id -g) build"
 fi
 
