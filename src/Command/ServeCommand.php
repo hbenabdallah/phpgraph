@@ -36,6 +36,8 @@ final class ServeCommand extends Command
     {
         // stdout carries the JSON-RPC stream: a PHP warning printed there would corrupt it.
         ini_set('display_errors', 'stderr');
+        // Its stdin may be a socket (Node gives its children socketpairs): waiting for the next request never times out.
+        ini_set('default_socket_timeout', '-1');
         $graph = $input->getOption('graph');
         if (\is_string($graph)) {
             (new McpServer(new GraphQueryProvider($graph), Version::get()))->run();

@@ -86,6 +86,55 @@ final class McpServerTest extends TestCase
         self::assertTrue($response['result']['isError']);
     }
 
+    public function testOutlivesTheSocketTimeout(): void
+    {
+        // Node (Claude Code) gives its children a socketpair as stdin: a read there gives up after the socket timeout.
+        $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        self::assertIsArray($sockets);
+        [$server, $client] = $sockets;
+        stream_set_timeout($server, 1);
+
+        // The client waits past the timeout, sends a ping, then closes its end when it exits.
+        $ping = json_encode(['jsonrpc' => '2.0', 'id' => 7, 'method' => 'ping']);
+        $process = proc_open(
+            [PHP_BINARY, '-r', sprintf('sleep(2); fwrite(STDOUT, %s);', var_export($ping . "\n", true))],
+            [0 => ['file', '/dev/null', 'r'], 1 => $client, 2 => STDERR],
+            $pipes,
+        );
+        self::assertIsResource($process);
+        fclose($client);
+
+        $output = fopen('php://memory', 'w+');
+        self::assertIsResource($output);
+        $started = microtime(true);
+        $this->server()->run($server, $output);
+        $elapsed = microtime(true) - $started;
+        proc_close($process);
+
+        self::assertGreaterThan(1.5, $elapsed, 'the session lasted until the client closed');
+        rewind($output);
+        self::assertSame(['jsonrpc' => '2.0', 'id' => 7, 'result' => []], json_decode((string) stream_get_contents($output), true));
+    }
+
+    public function testStopsAtTheEndOfItsInput(): void
+    {
+        $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        self::assertIsArray($sockets);
+        [$server, $client] = $sockets;
+        stream_set_timeout($server, 1);
+        fwrite($client, json_encode(['jsonrpc' => '2.0', 'id' => 8, 'method' => 'ping']) . "\n");
+        fclose($client);
+
+        $output = fopen('php://memory', 'w+');
+        self::assertIsResource($output);
+        $started = microtime(true);
+        $this->server()->run($server, $output);
+
+        self::assertLessThan(1.0, microtime(true) - $started, 'it stops at the end of the stream, without waiting');
+        rewind($output);
+        self::assertSame(['jsonrpc' => '2.0', 'id' => 8, 'result' => []], json_decode((string) stream_get_contents($output), true));
+    }
+
     /**
      * @param array<string, mixed> $request
      *

@@ -41,7 +41,18 @@ final class McpServer
      */
     public function run($input = STDIN, $output = STDOUT): void
     {
-        while (($line = fgets($input)) !== false) {
+        while (true) {
+            $line = fgets($input);
+            if ($line === false) {
+                // On a socket (Node, hence Claude Code, gives its children socketpairs), fgets also gives up after the
+                // stream timeout: only the end of the stream ends the session.
+                if (feof($input)) {
+                    return;
+                }
+
+                continue;
+            }
+
             $line = trim($line);
             if ($line === '') {
                 continue;
