@@ -284,7 +284,7 @@ Sylius (the corpus commit), October 2026, without any LLM: phpgraph 1.0.2, [code
 
 ## Contributing
 
-Issues and pull requests are welcome. See [CONTRIBUTING.md](https://github.com/hbenabdallah/phpgraph/blob/main/CONTRIBUTING.md): `composer check` must pass (php-cs-fixer, PHPStan level 8, PHPUnit), and changes to the analysis are judged on the corpus. Without PHP installed, `bin/dev composer check` runs everything in Docker.
+Issues and pull requests are welcome. See [CONTRIBUTING.md](https://github.com/hbenabdallah/phpgraph/blob/main/CONTRIBUTING.md): `composer check` must pass (php-cs-fixer, PHPStan level max, PHPUnit), and changes to the analysis are judged on the corpus. Without PHP installed, `bin/dev composer check` runs everything in Docker.
 
 What stays stable across versions (commands, MCP tools, the `graph.json` format) is listed in [docs/STABILITY.md](https://github.com/hbenabdallah/phpgraph/blob/main/docs/STABILITY.md); changes are in the [changelog](https://github.com/hbenabdallah/phpgraph/blob/main/CHANGELOG.md).
 

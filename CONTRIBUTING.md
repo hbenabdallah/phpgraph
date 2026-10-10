@@ -4,7 +4,7 @@ Contributions are welcome: issues, fixes, new detectors, corpus projects.
 
 ## Before a pull request
 
-- `composer check` must pass (php-cs-fixer, PHPStan level 8, PHPUnit). Without PHP installed: `bin/dev composer check`.
+- `composer check` must pass (php-cs-fixer, PHPStan level max, PHPUnit). Without PHP installed: `bin/dev composer check`.
 - A change of the analysis is judged on the measurement corpus: run `composer corpus:measure` before and after, and give the numbers in the pull request.
 - One test per new construct or detector, next to the existing ones.
 

@@ -15,7 +15,8 @@ use PhpParser\NodeVisitorAbstract;
  * statements in force, as node attributes. Runs right after NameResolver, which owns the name context.
  *
  * The plain attributes keep a single class: `Foo`, `?Foo`, `Foo|null`, `Foo|false`, `Collection<Foo>` (as
- * Collection), `self`, `static` or `$this` (as TypeExpr::STATIC). Unions, arrays, scalars and template parameters are dropped there.
+ * Collection), `self`, `static` or `$this` (as TypeExpr::STATIC). Unions, arrays, scalars and template parameters
+ * are dropped there.
  * The generic attributes keep the arguments apart, as GenericType strings: the class's templates, what it gives its
  * parents (`@extends`, `@template-extends`), and the `@return`, `@var` and `@param` types that say more than a class.
  */
