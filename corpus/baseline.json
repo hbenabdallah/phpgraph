@@ -88,13 +88,27 @@
                 "tag codely.database_connection into CodelyTv\\Shared\\Infrastructure\\Doctrine\\DatabaseConnections"
             ]
         },
+        "apiSchemas": {
+            "documents": 0,
+            "operations": 0,
+            "implemented": 0,
+            "notImplemented": [],
+            "routesCovered": 0,
+            "undocumentedCount": 0,
+            "undocumented": [],
+            "rpcs": 0,
+            "rpcsImplemented": 0,
+            "rpcsNotImplemented": [],
+            "otherApis": 0,
+            "requests": 0
+        },
         "services": 0,
         "architecture": {
             "layerViolations": 0,
             "contextPairs": 14,
             "layerFirst": false
         },
-        "seconds": 0.58,
+        "seconds": 0.49,
         "peakMemoryMb": 28
     },
     {
@@ -205,14 +219,28 @@
                 "service sylius.repository.zone_member into sylius.checker.country_provinces_deletion"
             ]
         },
+        "apiSchemas": {
+            "documents": 0,
+            "operations": 0,
+            "implemented": 0,
+            "notImplemented": [],
+            "routesCovered": 0,
+            "undocumentedCount": 0,
+            "undocumented": [],
+            "rpcs": 0,
+            "rpcsImplemented": 0,
+            "rpcsNotImplemented": [],
+            "otherApis": 0,
+            "requests": 0
+        },
         "services": 0,
         "architecture": {
             "layerViolations": 0,
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 8.96,
-        "peakMemoryMb": 530
+        "seconds": 9.07,
+        "peakMemoryMb": 532
     },
     {
         "name": "akeneo-pim",
@@ -220,16 +248,16 @@
         "filesParsed": 8416,
         "filesFailed": 0,
         "duplicates": 1,
-        "nodes": 56888,
+        "nodes": 56890,
         "classLike": 8447,
         "methods": 38595,
         "external": 888,
-        "edges": 217443,
+        "edges": 217451,
         "vendorFilesRead": 686,
         "edgesByConfidence": {
             "EXTRACTED": 155411,
-            "INFERRED": 60362,
-            "AMBIGUOUS": 1670
+            "INFERRED": 60369,
+            "AMBIGUOUS": 1671
         },
         "calls": {
             "total": 159034,
@@ -296,7 +324,7 @@
         "http": {
             "routes": 464,
             "routesWithHandler": 386,
-            "requests": 2,
+            "requests": 3,
             "requestsToProject": 0,
             "requestsToServices": 0,
             "routesToDependencies": 2,
@@ -321,13 +349,27 @@
                 "service liip_imagine.filter.manager into Akeneo\\Category\\Infrastructure\\FileSystem\\PreviewGenerator\\BinaryImageGenerator"
             ]
         },
+        "apiSchemas": {
+            "documents": 1,
+            "operations": 0,
+            "implemented": 0,
+            "notImplemented": [],
+            "routesCovered": 0,
+            "undocumentedCount": 0,
+            "undocumented": [],
+            "rpcs": 0,
+            "rpcsImplemented": 0,
+            "rpcsNotImplemented": [],
+            "otherApis": 1,
+            "requests": 3
+        },
         "services": 0,
         "architecture": {
             "layerViolations": 33,
             "contextPairs": 13,
             "layerFirst": false
         },
-        "seconds": 14.66,
+        "seconds": 13.37,
         "peakMemoryMb": 652
     },
     {
@@ -431,13 +473,27 @@
                 "service doctrine.dbal.default_connection into PrestaShop\\PrestaShop\\Adapter\\AttributeGroup\\Repository\\AttributeGroupRepository"
             ]
         },
+        "apiSchemas": {
+            "documents": 0,
+            "operations": 0,
+            "implemented": 0,
+            "notImplemented": [],
+            "routesCovered": 0,
+            "undocumentedCount": 0,
+            "undocumented": [],
+            "rpcs": 0,
+            "rpcsImplemented": 0,
+            "rpcsNotImplemented": [],
+            "otherApis": 0,
+            "requests": 0
+        },
         "services": 0,
         "architecture": {
             "layerViolations": 23,
             "contextPairs": 293,
             "layerFirst": true
         },
-        "seconds": 13.29,
+        "seconds": 13.03,
         "peakMemoryMb": 576
     },
     {
@@ -528,13 +584,27 @@
             "unlinkedCount": 0,
             "unlinked": []
         },
+        "apiSchemas": {
+            "documents": 0,
+            "operations": 0,
+            "implemented": 0,
+            "notImplemented": [],
+            "routesCovered": 0,
+            "undocumentedCount": 0,
+            "undocumented": [],
+            "rpcs": 0,
+            "rpcsImplemented": 0,
+            "rpcsNotImplemented": [],
+            "otherApis": 0,
+            "requests": 0
+        },
         "services": 47,
         "architecture": {
             "layerViolations": 7,
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.64,
+        "seconds": 0.71,
         "peakMemoryMb": 34
     },
     {
@@ -612,13 +682,27 @@
             "unlinkedCount": 0,
             "unlinked": []
         },
+        "apiSchemas": {
+            "documents": 0,
+            "operations": 0,
+            "implemented": 0,
+            "notImplemented": [],
+            "routesCovered": 0,
+            "undocumentedCount": 0,
+            "undocumented": [],
+            "rpcs": 0,
+            "rpcsImplemented": 0,
+            "rpcsNotImplemented": [],
+            "otherApis": 0,
+            "requests": 0
+        },
         "services": 0,
         "architecture": {
             "layerViolations": 0,
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 3.6,
+        "seconds": 3.49,
         "peakMemoryMb": 130
     },
     {
@@ -718,13 +802,27 @@
             "unlinkedCount": 0,
             "unlinked": []
         },
+        "apiSchemas": {
+            "documents": 0,
+            "operations": 0,
+            "implemented": 0,
+            "notImplemented": [],
+            "routesCovered": 0,
+            "undocumentedCount": 0,
+            "undocumented": [],
+            "rpcs": 0,
+            "rpcsImplemented": 0,
+            "rpcsNotImplemented": [],
+            "otherApis": 0,
+            "requests": 0
+        },
         "services": 0,
         "architecture": {
             "layerViolations": 0,
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 6.71,
+        "seconds": 6.09,
         "peakMemoryMb": 133
     },
     {
@@ -803,13 +901,27 @@
             "unlinkedCount": 0,
             "unlinked": []
         },
+        "apiSchemas": {
+            "documents": 0,
+            "operations": 0,
+            "implemented": 0,
+            "notImplemented": [],
+            "routesCovered": 0,
+            "undocumentedCount": 0,
+            "undocumented": [],
+            "rpcs": 0,
+            "rpcsImplemented": 0,
+            "rpcsNotImplemented": [],
+            "otherApis": 0,
+            "requests": 0
+        },
         "services": 3,
         "architecture": {
             "layerViolations": 0,
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.44,
+        "seconds": 0.42,
         "peakMemoryMb": 38
     },
     {
@@ -884,13 +996,27 @@
             "unlinkedCount": 0,
             "unlinked": []
         },
+        "apiSchemas": {
+            "documents": 0,
+            "operations": 0,
+            "implemented": 0,
+            "notImplemented": [],
+            "routesCovered": 0,
+            "undocumentedCount": 0,
+            "undocumented": [],
+            "rpcs": 0,
+            "rpcsImplemented": 0,
+            "rpcsNotImplemented": [],
+            "otherApis": 0,
+            "requests": 0
+        },
         "services": 5,
         "architecture": {
             "layerViolations": 0,
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.63,
+        "seconds": 0.58,
         "peakMemoryMb": 46
     },
     {
@@ -899,15 +1025,15 @@
         "filesParsed": 366,
         "filesFailed": 0,
         "duplicates": 0,
-        "nodes": 1773,
+        "nodes": 1787,
         "classLike": 291,
         "methods": 737,
         "external": 361,
-        "edges": 4991,
+        "edges": 5019,
         "vendorFilesRead": 242,
         "edgesByConfidence": {
             "EXTRACTED": 4309,
-            "INFERRED": 659,
+            "INFERRED": 687,
             "AMBIGUOUS": 23
         },
         "calls": {
@@ -974,13 +1100,27 @@
             "unlinkedCount": 0,
             "unlinked": []
         },
+        "apiSchemas": {
+            "documents": 0,
+            "operations": 0,
+            "implemented": 0,
+            "notImplemented": [],
+            "routesCovered": 0,
+            "undocumentedCount": 0,
+            "undocumented": [],
+            "rpcs": 14,
+            "rpcsImplemented": 14,
+            "rpcsNotImplemented": [],
+            "otherApis": 0,
+            "requests": 0
+        },
         "services": 6,
         "architecture": {
             "layerViolations": 0,
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.84,
+        "seconds": 0.79,
         "peakMemoryMb": 32
     },
     {
@@ -989,15 +1129,15 @@
         "filesParsed": 260,
         "filesFailed": 0,
         "duplicates": 0,
-        "nodes": 796,
+        "nodes": 841,
         "classLike": 112,
         "methods": 323,
         "external": 49,
-        "edges": 1974,
+        "edges": 2019,
         "vendorFilesRead": 129,
         "edgesByConfidence": {
             "EXTRACTED": 1745,
-            "INFERRED": 208,
+            "INFERRED": 253,
             "AMBIGUOUS": 21
         },
         "calls": {
@@ -1053,13 +1193,35 @@
             "unlinkedCount": 0,
             "unlinked": []
         },
+        "apiSchemas": {
+            "documents": 1,
+            "operations": 45,
+            "implemented": 45,
+            "notImplemented": [],
+            "routesCovered": 52,
+            "undocumentedCount": 7,
+            "undocumented": [
+                "services/booking-service: GET / (services/booking-service/routes/web.php:5)",
+                "services/hotel-service: GET / (services/hotel-service/routes/web.php:5)",
+                "services/inventory-service: GET / (services/inventory-service/routes/web.php:5)",
+                "services/notification-service: GET / (services/notification-service/routes/web.php:5)",
+                "services/payment-service: GET / (services/payment-service/routes/web.php:5)",
+                "services/search-service: GET / (services/search-service/routes/web.php:5)",
+                "services/user-service: GET / (services/user-service/routes/web.php:5)"
+            ],
+            "rpcs": 0,
+            "rpcsImplemented": 0,
+            "rpcsNotImplemented": [],
+            "otherApis": 0,
+            "requests": 0
+        },
         "services": 8,
         "architecture": {
             "layerViolations": 0,
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 1.09,
+        "seconds": 1.13,
         "peakMemoryMb": 48
     }
 ]

@@ -32,6 +32,9 @@ final class HttpResolver
     /** @var array<string, array{list<string>, list<string>, string}> route id => [methods, path segments, service] */
     private array $routes = [];
 
+    /** @var list<array{string, ?string, list<string>, bool, bool}> calls reaching no route: source, method, path segments, sure, in tests */
+    private array $unmatched = [];
+
     public function __construct(
         private readonly Graph $graph,
         private readonly NameCanonicalizer $names,
@@ -86,6 +89,7 @@ final class HttpResolver
             }
 
             $matches = $this->matches($request);
+            $sameMethodless = [];
             // The path of a route, but not its method: the call means it, and would fail as written.
             if ($matches === [] && $request->httpMethod !== null) {
                 $sameMethodless = $this->matches($request, false);
@@ -98,6 +102,9 @@ final class HttpResolver
             }
             $confidence = \count($matches) === 1 && $throughClient && $request->literal ? Confidence::Inferred : Confidence::Ambiguous;
             $source = $this->names->canonical($request->source);
+            if ($matches === [] && $sameMethodless === []) {
+                $this->unmatched[] = [$source, $request->httpMethod, $this->segments($request->path), $throughClient && $request->literal, $inTests];
+            }
             foreach (\array_slice($matches, 0, self::MAX_MATCHES) as $route) {
                 $this->graph->addEdge(new Edge($source, $route, Relation::Requests, $confidence));
             }
@@ -125,6 +132,27 @@ final class HttpResolver
             \count($missing),
             \array_slice(array_values($missing), 0, 10),
         );
+    }
+
+    /**
+     * The HTTP calls reaching no route of the project: another API's, perhaps described by a document.
+     *
+     * @return list<array{string, ?string, list<string>, bool, bool}> source, method, path segments, written in full
+     *                                                                 through a client, in test code
+     */
+    public function unmatchedRequests(): array
+    {
+        return $this->unmatched;
+    }
+
+    /**
+     * The routes resolved: id => their methods, path segments and service.
+     *
+     * @return array<string, array{list<string>, list<string>, string}>
+     */
+    public function routes(): array
+    {
+        return $this->routes;
     }
 
     /**
@@ -187,7 +215,7 @@ final class HttpResolver
                 continue;
             }
             foreach ($segments as $index => $segment) {
-                if (!$this->segmentMatches($routeSegments[$index], $segment)) {
+                if (!self::segmentMatches($routeSegments[$index], $segment)) {
                     continue 2;
                 }
             }
@@ -205,7 +233,7 @@ final class HttpResolver
         return \count(array_filter($this->routes[$route][1], static fn (string $segment): bool => str_contains($segment, '{')));
     }
 
-    private function segmentMatches(string $route, string $call): bool
+    public static function segmentMatches(string $route, string $call): bool
     {
         if ($call === '*' || $route === $call || preg_match('/^\{[^}]*\}$/', $route) === 1) {
             return true;

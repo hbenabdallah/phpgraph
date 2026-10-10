@@ -18,16 +18,16 @@ final class RouteExtractor
     private const HTTP_VERBS = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head'];
 
     /**
-     * Laravel resource routes: action => [method, path suffix].
+     * Laravel resource routes: action => [method, path suffix], `{}` standing for the resource's parameter.
      */
     private const RESOURCE_ACTIONS = [
         'index' => ['GET', ''],
         'create' => ['GET', '/create'],
         'store' => ['POST', ''],
-        'show' => ['GET', '/{id}'],
-        'edit' => ['GET', '/{id}/edit'],
-        'update' => ['PUT|PATCH', '/{id}'],
-        'destroy' => ['DELETE', '/{id}'],
+        'show' => ['GET', '/{}'],
+        'edit' => ['GET', '/{}/edit'],
+        'update' => ['PUT|PATCH', '/{}'],
+        'destroy' => ['DELETE', '/{}'],
     ];
 
     /** @var list<RouteFact> */
@@ -145,6 +145,22 @@ final class RouteExtractor
     }
 
     /**
+     * The parameter Laravel names after a resource: `photos` gives `photo`, `categories` `category`, `user-roles`
+     * `user_role`.
+     */
+    private static function singular(string $name): string
+    {
+        $name = str_replace('-', '_', basename($name));
+
+        return match (true) {
+            str_ends_with($name, 'ies') => substr($name, 0, -3) . 'y',
+            preg_match('/(ss|x|ch|sh)es$/', $name) === 1 => substr($name, 0, -2),
+            str_ends_with($name, 's') && !str_ends_with($name, 'ss') => substr($name, 0, -1),
+            default => $name,
+        };
+    }
+
+    /**
      * Laravel: Route::get('/orders', [OrderController::class, 'index']), Route::match(['GET', 'POST'], ...),
      * Route::resource('photos', PhotoController::class).
      *
@@ -163,11 +179,19 @@ final class RouteExtractor
             if ($path === null || $controller === null) {
                 return;
             }
+            // `hotels.rooms`, a nested resource: /hotels/{hotel}/rooms/{room}, each parameter the singular of its name.
+            $names = explode('.', trim($path, '/'));
+            $last = (string) array_pop($names);
+            $base = '';
+            foreach ($names as $name) {
+                $base .= '/' . $name . '/{' . self::singular($name) . '}';
+            }
+            $base .= '/' . $last;
             foreach (self::RESOURCE_ACTIONS as $action => [$methods, $suffix]) {
                 if ($verb === 'apiresource' && \in_array($action, ['create', 'edit'], true)) {
                     continue;
                 }
-                $this->addLaravelRoute(explode('|', $methods), $path . $suffix, $controller, $action, $line);
+                $this->addLaravelRoute(explode('|', $methods), $base . str_replace('{}', '{' . self::singular($last) . '}', $suffix), $controller, $action, $line);
             }
 
             return;
@@ -327,6 +351,10 @@ final class RouteExtractor
                 $expr->parts,
             )),
             $expr instanceof Expr\BinaryOp\Concat => self::pattern($expr->left) . self::pattern($expr->right),
+            // sprintf('/apps/%s/challenge', $id): each conversion is computed.
+            $expr instanceof Expr\FuncCall && $expr->name instanceof AstNode\Name && strtolower($expr->name->toString()) === 'sprintf'
+                && ($expr->args[0] ?? null) instanceof AstNode\Arg && $expr->args[0]->value instanceof Scalar\String_
+                => str_replace("\0", '%', (string) preg_replace('/%(?:\d+\$)?[-+ 0\'#]*\d*(?:\.\d+)?[bcdeEfFgGosuxX]/', '*', str_replace('%%', "\0", $expr->args[0]->value->value))),
             default => '*',
         };
     }

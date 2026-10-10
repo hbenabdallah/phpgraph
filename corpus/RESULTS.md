@@ -6,17 +6,17 @@ phpgraph could not type, the main target of type inference work. Arrows compare 
 
 | Project | Files | Failed | Duplicates | Classes | Methods | Edges | Vendor files read | Seconds | Memory MB |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4184 | 102 | 0.54 | 28 |
-| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140464 | 602 | 9.10 | 530 |
-| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 217443 | 686 | 14.42 | 652 |
-| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 185138 | 588 | 13.75 | 576 |
-| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6789 | 61 | 0.68 | 34 |
-| bookstack | 1513 | 0 | 0 | 698 | 4076 | 23025 | 358 | 3.83 | 130 |
-| wordpress | 1899 | 0 | 50 | 840 | 7580 | 41975 | 0 | 6.52 | 133 |
-| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 97 | 0.44 | 38 |
-| art-gallery | 266 | 0 | 0 | 140 | 148 | 1692 | 80 | 0.60 | 46 |
-| ticket-booking | 366 | 0 | 0 | 291 | 737 | 4991 | 242 | 0.84 | 32 |
-| stayhub | 260 | 0 | 0 | 112 | 323 | 1974 | 129 | 1.25 | 48 |
+| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4184 | 102 | 0.49 | 28 |
+| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140464 | 602 | 9.07 | 532 |
+| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 217451 | 686 | 13.37 | 652 |
+| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 185138 | 588 | 13.03 | 576 |
+| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6789 | 61 | 0.71 | 34 |
+| bookstack | 1513 | 0 | 0 | 698 | 4076 | 23025 | 358 | 3.49 | 130 |
+| wordpress | 1899 | 0 | 50 | 840 | 7580 | 41975 | 0 | 6.09 | 133 |
+| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 97 | 0.42 | 38 |
+| art-gallery | 266 | 0 | 0 | 140 | 148 | 1692 | 80 | 0.58 | 46 |
+| ticket-booking | 366 | 0 | 0 | 291 | 737 | 5019 | 242 | 0.79 | 32 |
+| stayhub | 260 | 0 | 0 | 112 | 323 | 2019 | 129 | 1.13 | 48 |
 
 ## Method calls in application code
 
@@ -98,7 +98,7 @@ Routes and the controllers handling them; HTTP calls of application code reachin
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | php-ddd-example | 0 | 13 | 12 | 0 | 1 | 0 | 0 | 0 | 0 |
 | sylius | 0 | 188 | 41 | 13 | 0 | 0 | 0 | 0 | 0 |
-| akeneo-pim | 0 | 464 | 386 | 2 | 0 | 2 | 0 | 0 | 0 |
+| akeneo-pim | 0 | 464 | 386 | 2 | 0 | 3 | 0 | 0 | 0 |
 | prestashop | 0 | 774 | 773 | 1 | 0 | 0 | 0 | 0 | 0 |
 | ecotone-quickstart | 47 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | bookstack | 0 | 340 | 340 | 0 | 0 | 0 | 0 | 0 | 0 |
@@ -107,6 +107,25 @@ Routes and the controllers handling them; HTTP calls of application code reachin
 | art-gallery | 5 | 39 | 35 | 0 | 0 | 1 | 0 | 0 | 1 |
 | ticket-booking | 6 | 13 | 13 | 0 | 0 | 0 | 0 | 0 | 0 |
 | stayhub | 8 | 52 | 38 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+## API schemas
+
+OpenAPI operations linked to the routes declaring their method and path, protobuf rpcs to the classes implementing them;
+documents no route implements describe another API: the calls of application code to it are linked.
+
+| Project | OpenAPI documents | Operations | Implemented by a route | Routes described | Routes in no document | Other APIs | Calls to them | Rpcs | Implemented |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| php-ddd-example | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| sylius | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| akeneo-pim | 1 | 0 | 0 | 0 | 0 | 1 | 3 | 0 | 0 |
+| prestashop | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| ecotone-quickstart | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| bookstack | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| wordpress | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| laravel-rabbitmq-microservices | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| art-gallery | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| ticket-booking | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 14 | 14 |
+| stayhub | 1 | 45 | 45 | 52 | 7 | 0 | 0 | 0 | 0 |
 
 ## Container injections
 

@@ -16,6 +16,9 @@ final class SourceFiles
 
     public const CONFIG = 'phpgraph.yaml';
 
+    /** @var array<string, bool> path => whether it is an OpenAPI document, read once */
+    private static array $openApi = [];
+
     /**
      * The extensions of the source files in other languages, by language.
      */
@@ -29,7 +32,7 @@ final class SourceFiles
     /**
      * PHP sources, the composer.json files locating vendor/ directories, the YAML routing files (Symfony): those whose
      * path mentions routes or routing, and the YAML and XML files of a config directory, where Symfony declares its
-     * services.
+     * services; the API schemas: OpenAPI (Swagger) documents in YAML or JSON, and protobuf files.
      *
      * @param list<string> $excludePatterns
      */
@@ -44,13 +47,23 @@ final class SourceFiles
             ->name('*.yaml')
             ->name('*.yml')
             ->name('*.xml')
+            ->name('*.json')
+            ->name('*.proto')
             ->notName('*.blade.php')
             ->exclude(self::DEFAULT_EXCLUDES)
             // The project's own .gitignore rules, not those of a repository above it (see ProjectGitignore).
             ->filter(static fn (SplFileInfo $file): bool => !$gitignore->isIgnored($file->getPathname()))
-            ->filter(static fn (SplFileInfo $file): bool => !self::isConfiguration($file->getFilename())
-                || self::isRouting($file->getRelativePathname())
-                || self::isInConfigDirectory($file->getRelativePathname()))
+            ->filter(static function (SplFileInfo $file): bool {
+                $name = $file->getFilename();
+                if (str_ends_with($name, '.json')) {
+                    return $name === 'composer.json' || self::isOpenApi($file->getPathname());
+                }
+
+                return !self::isConfiguration($name)
+                    || self::isRouting($file->getRelativePathname())
+                    || self::isInConfigDirectory($file->getRelativePathname())
+                    || self::isOpenApi($file->getPathname());
+            })
             ->sortByName();
 
         foreach ($excludePatterns as $pattern) {
@@ -101,6 +114,19 @@ final class SourceFiles
     public static function countPhpFiles(string $root): int
     {
         return Finder::create()->files()->in($root)->name('*.php')->exclude(self::DEFAULT_EXCLUDES)->ignoreDotFiles(false)->count();
+    }
+
+    /**
+     * An OpenAPI or Swagger document: a YAML or JSON file starting with its `openapi` or `swagger` key.
+     */
+    public static function isOpenApi(string $path): bool
+    {
+        if (!isset(self::$openApi[$path])) {
+            $head = @file_get_contents($path, false, null, 0, 4096);
+            self::$openApi[$path] = \is_string($head) && preg_match('/^[\s{]*["\']?(openapi|swagger)["\']?\s*:/m', $head) === 1;
+        }
+
+        return self::$openApi[$path];
     }
 
     public static function isYaml(string $name): bool

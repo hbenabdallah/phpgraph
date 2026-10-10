@@ -25,6 +25,12 @@ enum NodeKind: string
      */
     case Route = 'route';
 
+    /**
+     * An operation of an API schema: a method on a path of an OpenAPI document (`GET /hotels/{hotel}`), or an rpc of
+     * a protobuf service (`CinemaService.Reserve`). The contract a route or a class implements.
+     */
+    case Operation = 'operation';
+
     public function isClassLike(): bool
     {
         return match ($this) {

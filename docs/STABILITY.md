@@ -45,15 +45,18 @@ Format 2: `{"version": 2, "meta": {...}, "nodes": [...], "edges": [...]}`.
 
 - A node: `id`, `label`, `kind`, `file` (relative path or null), `line` (or null), and `service` in a multi-service
   repository.
-- Node kinds: `file`, `class`, `interface`, `trait`, `enum`, `method`, `function`, `external`, `channel`, `route`.
+- Node kinds: `file`, `class`, `interface`, `trait`, `enum`, `method`, `function`, `external`, `channel`, `route`,
+  `operation` (since 1.2.0).
 - Node ids: `App\Domain\Order` for a class, `App\Domain\Order::place` for a method, `file:src/Order.php` for a file,
-  `route:<routing file>#<METHODS> <path>` for a route, `channel:<name>` for a channel; prefixed with `service@` in a
+  `route:<routing file>#<METHODS> <path>` for a route, `channel:<name>` for a channel,
+  `operation:<document>#<METHOD> <path>` or `operation:<proto file>#<package>.<Service>/<rpc>` for an operation of an API schema; prefixed with `service@` in a
   multi-service repository (`billing@App\Domain\Order`).
 - An edge: `source`, `target`, `relation`, `confidence`, and when known `lines` (`"12,40"`, the source lines) and
   `via` (what carries it: `tagged_iterator app.rule`, `tagged_locator app.use_case`, `through <service id>` or `service <id>` (one of several services of a class) on a
   `receives` edge; `closure of <method>` on a `calls` edge from a method running a closure it receives; `named: severity, path` on a call written with named arguments).
 - Relations: `defines`, `imports`, `extends`, `implements`, `uses_trait`, `has_method`, `overrides`, `instantiates`,
-  `calls`, `references`, `dispatches`, `handled_by`, `contract`, `requests`, `receives`, `reads_state_of`.
+  `calls`, `references`, `dispatches`, `handled_by`, `contract`, `requests`, `receives`, `reads_state_of`,
+  `implemented_by` (since 1.2.0).
 - Confidence: `EXTRACTED` (read in the code or the configuration), `INFERRED` (resolved from declared types or
   the shape of the code), `AMBIGUOUS` (a guess, labelled as such).
 

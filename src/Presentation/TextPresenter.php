@@ -588,6 +588,45 @@ final class TextPresenter
             array_push($lines, '', ...$this->routeList($overview->routes));
         }
 
+        $schemas = $summary?->apiSchemas;
+        if ($schemas !== null && !$schemas->isEmpty()) {
+            $lines[] = '';
+            $lines[] = '## API schemas';
+            $lines[] = 'Operations of OpenAPI documents and protobuf services (node operation:...): operation --implemented_by--> the route or method serving it.';
+            if ($schemas->documents > $schemas->otherApis) {
+                $lines[] = \sprintf(
+                    '- %d OpenAPI document%s of this code, %d operations: %d implemented by a route of the project (same method and path), %d not.',
+                    $schemas->documents - $schemas->otherApis,
+                    $schemas->documents - $schemas->otherApis > 1 ? 's' : '',
+                    $schemas->operations,
+                    $schemas->implemented,
+                    $schemas->operations - $schemas->implemented,
+                );
+                if ($schemas->notImplemented !== []) {
+                    $lines[] = '  Documented, no route found (a gateway rewriting paths, a route the build did not read, or a gap): '
+                        . implode(', ', $schemas->notImplemented) . ($schemas->operations - $schemas->implemented > \count($schemas->notImplemented) ? ', ...' : '') . '.';
+                }
+                if ($schemas->undocumentedCount > 0) {
+                    $lines[] = \sprintf('- %d of the %d routes of the services they describe are in no document: %s%s.', $schemas->undocumentedCount, $schemas->routesCovered, implode(', ', $schemas->undocumented), $schemas->undocumentedCount > \count($schemas->undocumented) ? ', ...' : '');
+                }
+            }
+            if ($schemas->otherApis > 0) {
+                $lines[] = \sprintf(
+                    '- %d OpenAPI document%s of another API (no route implements any of it): %d HTTP call%s of application code linked to its operations (caller --requests--> operation).',
+                    $schemas->otherApis,
+                    $schemas->otherApis > 1 ? 's' : '',
+                    $schemas->requests,
+                    $schemas->requests === 1 ? '' : 's',
+                );
+            }
+            if ($schemas->rpcs > 0) {
+                $lines[] = \sprintf('- %d rpc methods of protobuf services: %d implemented by a class of the project (through the generated interface).', $schemas->rpcs, $schemas->rpcsImplemented);
+                if ($schemas->rpcsNotImplemented !== []) {
+                    $lines[] = '  Not implemented here (another repository, or a client only): ' . implode(', ', $schemas->rpcsNotImplemented) . ($schemas->rpcs - $schemas->rpcsImplemented > \count($schemas->rpcsNotImplemented) ? ', ...' : '') . '.';
+                }
+            }
+        }
+
         $injections = $summary?->injections;
         if ($injections !== null && $injections->injections > 0) {
             $lines[] = '';
@@ -651,7 +690,7 @@ final class TextPresenter
             }
         }
         $lines[] = '- Not modelled: calls to global functions, dynamic calls ($obj->$name(), __call), routes declared in XML, '
-            . 'services built at runtime (compiler passes, bundle extensions, ids computed in code), and API schemas (OpenAPI, protobuf).';
+            . 'services built at runtime (compiler passes, bundle extensions, ids computed in code), and API schemas other than OpenAPI and protobuf (GraphQL, AsyncAPI).';
 
         return implode("\n", $lines);
     }

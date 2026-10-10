@@ -57,9 +57,18 @@ final class GraphBuilder
         $composerFiles = [];
         $routingFiles = [];
         $configurationFiles = [];
+        $schemaFiles = [];
 
         foreach ($finder as $file) {
             $relativePath = str_replace('\\', '/', $file->getRelativePathname());
+
+            // API schemas: read once every file is known, to link their operations to what implements them.
+            if (str_ends_with($file->getFilename(), '.proto')
+                || ($file->getFilename() !== 'composer.json' && !str_ends_with($file->getFilename(), '.php') && SourceFiles::isOpenApi($file->getPathname()))
+            ) {
+                $schemaFiles[] = $relativePath;
+                continue;
+            }
 
             if (SourceFiles::isConfiguration($file->getFilename())) {
                 if (SourceFiles::isYaml($file->getFilename()) && SourceFiles::isRouting($relativePath)) {
@@ -392,7 +401,9 @@ final class GraphBuilder
             }
         }
         $routes = $this->withLoaderPrefixes($routes, $routePrefixes);
-        $http = (new HttpResolver($graph, $names, $types, $container))->resolve($routes, $requests);
+        $httpResolver = new HttpResolver($graph, $names, $types, $container);
+        $http = $httpResolver->resolve($routes, $requests);
+        $apiSchemas = (new ApiSchemas($graph))->resolve($root, $schemaFiles, $httpResolver->routes(), $serviceMap, $httpResolver->unmatchedRequests());
         $this->addExternalNodes($graph);
 
         return new BuildResult(
@@ -413,6 +424,7 @@ final class GraphBuilder
             // An empty graph of a directory holding PHP code: every file was excluded, say so instead of serving it.
             $extractions === [] && $failures === [] ? SourceFiles::countPhpFiles($root) : 0,
             $injections,
+            $apiSchemas,
         );
     }
 

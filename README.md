@@ -41,6 +41,7 @@ phpgraph parses the whole project once (with [`nikic/php-parser`](https://github
 - **HTTP**: routes (Symfony attributes, YAML and PHP routing files, API Platform resources, Laravel route files, controllers named by container service id) linked to controllers, and HTTP calls linked to the routes they reach. A route whose controller class exists neither in the project nor in `vendor/` is reported with its routing file.
 - **Dependency injection**: what the Symfony container configuration injects beyond constructor types, every service of a tag (`tagged_iterator`, `#[AutowireIterator]`) or a service named by id, from PHP, YAML or XML configuration, including helpers called with literal arguments (`Wiring::wire($services, 'sales', ...)`, evaluated, never run): a validator is linked to the rules it receives. A rule declaring what it accepts (`supports(object $input): bool { return $input instanceof CreateEstimateQuery; }`, also `canHandle`, `accepts`…) is kept out of the use cases passing another input to the shared pipeline, the classes the input's properties hold included. An input typed by an interface is any project class implementing it and the parameter types it is passed on to (`QueryInterface $query` given to `setUp(CreateEstimateQueryInterface $query)`: a `CreateEstimateQuery`); a guard it cannot read, or a rule running for some of these classes only, is kept, marked `supports() not resolved`.
 - **Microservices**: one id space per service, and links between services through their contracts: shared message classes, routing keys, HTTP routes.
+- **API schemas**: the operations of OpenAPI (Swagger) documents linked to the routes implementing them, or, for a document of another API, to the HTTP calls of its client; the rpcs of protobuf services linked to the classes implementing their generated interface. What is documented and not implemented, and the routes no document describes, are reported.
 - **Zero-configuration MCP server**: built on first use, rebuilt incrementally when the code changes (about 3 s per edit on an 8,400-file project).
 
 ## Quick start
@@ -146,7 +147,8 @@ phpgraph mcp-config claude|codex|cursor|json [--docker image]
 | `calls` | method → resolved method, with the lines of the call sites; a method running a closure it receives (`$apply(...)`) calls what the closure calls, INFERRED, `via` `closure of <the method writing it>` |
 | `dispatches`, `handled_by` | sender → message or channel → handler; route → controller; class tested by a `supports()` method → that strategy |
 | `contract` | a message class sent by one service → the same class handled by another |
-| `requests` | HTTP call → the route it reaches, in the same service or another |
+| `requests` | HTTP call → the route it reaches, in the same service or another, or the operation of another API's OpenAPI document |
+| `implemented_by` | API schema operation (`operation:`) → the route with its method and path (OpenAPI), or the method of a class implementing the generated service (protobuf) |
 | `receives` | service → each service the container configuration injects into it (a tag, an id, the decorated service); `via` says which: `service sales.pipeline` for one of several services of a class |
 | `reads_state_of` | method → a method of the same class changing a property it reads, outside the constructor (`hasErrors()` → `add()`), INFERRED |
 
@@ -189,11 +191,12 @@ phpgraph check                       # fail on new ones only
 <details>
 <summary><b>Microservices</b></summary>
 
-A repository holding two or more independent Composer applications is split into services. Packages of a monorepo stay in their project: a package the root autoloads, declares as a path repository or `replace`s is a part, not a service. Ids then carry their service, `billing@App\Domain\Order`, and a name never resolves into another service: services meet through contracts.
+A repository holding two or more independent Composer applications is split into services. Packages of a monorepo stay in their project: a package the root autoloads, declares as a path repository or `replace`s is a part, not a service; a library the services require (a path repository, or its package name) is their common code. Ids then carry their service, `billing@App\Domain\Order`, and a name never resolves into another service: services meet through contracts.
 
 - the same message class sent by one service and handled by another: `contract`;
 - a routing key (`sendWithRouting('order.place', …)`, `#[CommandHandler('ticket.create')]`, a named event): a `channel:` node shared by all services;
-- an HTTP call to a route of another service: `requests`. A call whose path matches a route declared for other HTTP methods only is reported: it would fail as written.
+- an HTTP call to a route of another service: `requests`. A call whose path matches a route declared for other HTTP methods only is reported: it would fail as written;
+- an API schema: the `operation:` nodes of an OpenAPI document (`GET /api/hotels/{hotel}`) or of a protobuf service (`CinemaService.Reserve`), `implemented_by` the routes or classes serving them. A document at the root of the repository describes every service (an API gateway), one in a service that service only.
 
 An optional `phpgraph.yaml` names the services when detection does not fit:
 
@@ -230,7 +233,7 @@ phpgraph is developed against a corpus of open-source projects pinned to a commi
 | [BookStack](https://github.com/BookStackApp/BookStack) | Laravel | 1,513 | 2.8 s | 88.5 % |
 | [WordPress](https://github.com/WordPress/WordPress) | no framework, hooks | 1,899 | 5.3 s | 91.5 % |
 
-Four microservices projects complete the corpus: [two Laravel services over RabbitMQ](https://github.com/mostafaaminflakes/Using-RabbitMQ-in-Microservices), linked by 4 message contracts; [four Laravel services over HTTP](https://github.com/omarihab99/Art-Gallery), where phpgraph found a `POST` sent to a `GET`-only route; [Spiral's ticket booking](https://github.com/spiral/ticket-booking), services calling each other through gRPC services declared in `.proto` files; and [StayHub](https://github.com/ahmedibrahimyassindev/StayHub), seven Laravel services behind an API gateway described by an OpenAPI file. The last two measure API schemas as contracts, which phpgraph does not read yet. Zero parse failures on about 26,600 files. The details per project, including messages, routes and services, are in [`corpus/RESULTS.md`](https://github.com/hbenabdallah/phpgraph/blob/main/corpus/RESULTS.md).
+Four microservices projects complete the corpus: [two Laravel services over RabbitMQ](https://github.com/mostafaaminflakes/Using-RabbitMQ-in-Microservices), linked by 4 message contracts; [four Laravel services over HTTP](https://github.com/omarihab99/Art-Gallery), where phpgraph found a `POST` sent to a `GET`-only route; [Spiral's ticket booking](https://github.com/spiral/ticket-booking), services calling each other through gRPC services declared in `.proto` files; and [StayHub](https://github.com/ahmedibrahimyassindev/StayHub), seven Laravel services behind an API gateway described by an OpenAPI file. The last two measure API schemas as contracts: all 45 operations of StayHub's document and all 14 rpcs of ticket-booking are linked to what implements them. Zero parse failures on about 26,600 files. The details per project, including messages, routes and services, are in [`corpus/RESULTS.md`](https://github.com/hbenabdallah/phpgraph/blob/main/corpus/RESULTS.md).
 
 ### With an agent
 
@@ -279,7 +282,7 @@ Sylius (the corpus commit), October 2026, without any LLM: phpgraph 1.0.2, [code
 - Generics are read from docblocks (`@template`, `@extends Repository<Order>`, `@return Collection<int, Item>`, `ScalarNodeDefinition<$this>`), in the project and in `vendor/`: a template is bound by the type of the receiver and the parents passing it on, and a `foreach` walks the elements of any typed collection. Conditional return types (`T is 'array' ? A : B`) and templates of a method (`@param class-string<T>`) are not evaluated.
 - Chains stop at magic methods and at dependencies without a usable return type. PHP's own classes (`DateTime`, `ArrayObject`, `SplObjectStorage`, `PDO`...) are known from signatures generated once (`tools/internal-classes.php`); those of the `intl` and `mysqli` extensions are not.
 - Without an installed `vendor/`, call chains stop at the first dependency.
-- Services built at runtime (compiler passes, bundle extensions, ids computed from values only known at runtime), XML routes, API Platform resources declared in XML or YAML, and API schemas (OpenAPI, protobuf) are not read; injections that cannot be linked are listed by `overview`.
+- Services built at runtime (compiler passes, bundle extensions, ids computed from values only known at runtime), XML routes, API Platform resources declared in XML or YAML, and API schemas other than OpenAPI and protobuf (GraphQL, AsyncAPI) are not read; an OpenAPI path rewritten by a gateway is not followed; injections that cannot be linked are listed by `overview`.
 - Two services declaring a message class of the same name are assumed to share it.
 
 ## Contributing

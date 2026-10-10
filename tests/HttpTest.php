@@ -49,17 +49,17 @@ final class HttpTest extends TestCase
             'routes/web.php' => 'use App\Http\Controllers\BookController; use App\Http\Controllers\ShowHome; use App\Http\Controllers\PhotoController; use Illuminate\Support\Facades\Route;'
                 . ' Route::get("/", ShowHome::class);'
                 . ' Route::middleware("auth")->group(function () { Route::prefix("shelf")->group(function () { Route::get("/books", [BookController::class, "index"]); Route::match(["GET", "POST"], "/books/new", [BookController::class, "store"]); }); });'
-                . ' Route::resource("photos", PhotoController::class);',
+                . ' Route::resource("photos", PhotoController::class); Route::apiResource("hotels.rooms", PhotoController::class); Route::apiResource("categories", PhotoController::class);',
             'routes/api.php' => 'use Illuminate\Support\Facades\Route; Route::get("/books", "App\Http\Controllers\BookController@index");',
         ])->graph;
 
         $routes = $this->routes($graph);
-        foreach (['GET /', 'GET /shelf/books', 'GET|POST /shelf/books/new', 'GET /api/books', 'GET /photos/{id}', 'DELETE /photos/{id}'] as $expected) {
+        foreach (['GET /', 'GET /shelf/books', 'GET|POST /shelf/books/new', 'GET /api/books', 'GET /photos/{photo}', 'DELETE /photos/{photo}', 'GET /hotels/{hotel}/rooms', 'PUT|PATCH /hotels/{hotel}/rooms/{room}', 'GET /categories/{category}'] as $expected) {
             self::assertContains($expected, $routes);
         }
         self::assertTrue($this->hasEdge($graph, 'route:routes/web.php#GET /shelf/books', 'App\Http\Controllers\BookController::index', Relation::HandledBy));
         self::assertTrue($this->hasEdge($graph, 'route:routes/api.php#GET /api/books', 'App\Http\Controllers\BookController::index', Relation::HandledBy));
-        self::assertTrue($this->hasEdge($graph, 'route:routes/web.php#GET /photos/{id}', 'App\Http\Controllers\PhotoController::show', Relation::HandledBy));
+        self::assertTrue($this->hasEdge($graph, 'route:routes/web.php#GET /photos/{photo}', 'App\Http\Controllers\PhotoController::show', Relation::HandledBy), 'the parameter named as Laravel names it');
     }
 
     public function testYamlRoutingFilesWithPrefixedImports(): void

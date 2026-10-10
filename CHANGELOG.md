@@ -3,6 +3,27 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## Unreleased
+
+### Added
+- API schemas, read as files, never run: the operations of OpenAPI (Swagger) documents in YAML or JSON, and the rpcs
+  of protobuf services, are `operation:` nodes. An operation is `implemented_by` the route with its method and path
+  (placeholders match whatever their names; the server's or base path is the prefix), or by the methods of the
+  classes implementing the interface generated for its service (generated clients left out; the interface method,
+  whose callers are the clients, is referenced). A document at the root describes every service (an API gateway),
+  one in a service that service only. A document no route implements describes another API: the HTTP calls of its
+  client are linked to its operations (`requests`). `overview` reports what is documented and not implemented, and
+  the routes no document describes. StayHub: 45 of 45 operations linked; ticket-booking: 14 of 14 rpcs.
+- HTTP calls whose path is built by `sprintf('/apps/%s/challenge', $id)` are read (`/apps/*/challenge`).
+
+### Fixed
+- A library the services of a repository require (a path repository, or its package name) is their common code, not
+  a service: its classes are found from every service. ticket-booking: 34% of application calls resolved instead of
+  18%, its gRPC services and their implementations linked.
+- Laravel resource routes have the paths Laravel gives them: `Route::apiResource('hotels.rooms', ...)` is
+  `/hotels/{hotel}/rooms/{room}` (it was `/hotels.rooms/{id}`), a parameter named after its resource
+  (`/photos/{photo}`).
+
 ## 1.1.0 (2026-10-10)
 
 ### Added

@@ -208,6 +208,7 @@ function measureOne(array $project): array
         'bus' => $result->bus->toArray(),
         'http' => $result->http->toArray(),
         'injections' => $result->injections->toArray(),
+        'apiSchemas' => $result->apiSchemas->toArray(),
         'services' => count($result->services),
         'architecture' => (static function () use ($graph): array {
             $architecture = (new GraphQuery($graph))->architecture();
@@ -397,6 +398,35 @@ function render(array $results, array $baseline): string
             number($h, 'requestsToProject'),
             number($h, 'requestsToServices'),
             number($h, 'methodMismatchCount'),
+        );
+    }
+    $lines[] = '';
+    $lines[] = '## API schemas';
+    $lines[] = '';
+    $lines[] = 'OpenAPI operations linked to the routes declaring their method and path, protobuf rpcs to the classes implementing them;';
+    $lines[] = 'documents no route implements describe another API: the calls of application code to it are linked.';
+    $lines[] = '';
+    $lines[] = '| Project | OpenAPI documents | Operations | Implemented by a route | Routes described | Routes in no document | Other APIs | Calls to them | Rpcs | Implemented |';
+    $lines[] = '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|';
+    foreach ($results as $r) {
+        $x = value($r, 'apiSchemas');
+        $b = value($baseline, text($r, 'name'), 'apiSchemas');
+        $lines[] = sprintf(
+            '| %s | %d | %d | %d%s | %d | %d%s | %d | %d%s | %d | %d%s |',
+            text($r, 'name'),
+            number($x, 'documents'),
+            number($x, 'operations'),
+            number($x, 'implemented'),
+            delta(number($x, 'implemented'), maybe($b, 'implemented')),
+            number($x, 'routesCovered'),
+            number($x, 'undocumentedCount'),
+            delta(number($x, 'undocumentedCount'), maybe($b, 'undocumentedCount'), true),
+            number($x, 'otherApis'),
+            number($x, 'requests'),
+            delta(number($x, 'requests'), maybe($b, 'requests')),
+            number($x, 'rpcs'),
+            number($x, 'rpcsImplemented'),
+            delta(number($x, 'rpcsImplemented'), maybe($b, 'rpcsImplemented')),
         );
     }
     $lines[] = '';

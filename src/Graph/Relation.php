@@ -40,4 +40,10 @@ enum Relation: string
      * the state that method writes. `hasErrors()` reads what `addViolation()` appends. INFERRED.
      */
     case ReadsStateOf = 'reads_state_of';
+
+    /**
+     * An operation of an API schema and what implements it: the route declaring its method and path (INFERRED,
+     * matched by them), or the method of a class implementing the service generated from a protobuf file.
+     */
+    case ImplementedBy = 'implemented_by';
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpGraph\Project;
 
+use PhpGraph\Builder\ApiSchemaStats;
 use PhpGraph\Builder\BuildResult;
 use PhpGraph\Builder\BusStats;
 use PhpGraph\Builder\CallStats;
@@ -42,6 +43,7 @@ final readonly class ProjectSummary
         public int $phpFilesNotRead = 0,
         public InjectionStats $injections = new InjectionStats(),
         public array $otherLanguages = [],
+        public ApiSchemaStats $apiSchemas = new ApiSchemaStats(),
     ) {
     }
 
@@ -70,6 +72,7 @@ final readonly class ProjectSummary
             $result->phpFilesNotRead,
             $result->injections,
             $otherLanguages,
+            $result->apiSchemas,
         );
     }
 
@@ -113,6 +116,7 @@ final readonly class ProjectSummary
             $int('phpFilesNotRead'),
             InjectionStats::fromArray($list('injections')),
             $otherLanguages,
+            ApiSchemaStats::fromArray($list('apiSchemas')),
         );
     }
 
@@ -140,6 +144,7 @@ final readonly class ProjectSummary
             'phpFilesNotRead' => $this->phpFilesNotRead,
             'injections' => $this->injections->toArray(),
             'otherLanguages' => $this->otherLanguages,
+            'apiSchemas' => $this->apiSchemas->toArray(),
         ];
     }
 }

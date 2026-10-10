@@ -26,9 +26,9 @@ final class McpServer
         . 'To explain a feature or how something works, call outline first, not query_graph (its classes, families, flow, behaviour, wiring and tests in one answer: '
         . 'read only the files it points to). Use query_graph to find code by topic when you do not know where it is, get_node or get_neighbors to read one class or method, and shortest_path '
         . 'to see how two pieces of code are connected, impact_of before changing a class or a method. Relations are EXTRACTED (read in the code), INFERRED (resolved from '
-        . 'declared types) or AMBIGUOUS (guessed from a unique method name). Routes (route:GET /orders) and message '
-        . 'channels are nodes too; in a multi-service repository ids read service@Class and services meet through '
-        . 'contracts (shared message classes, channels, HTTP routes). The graph rebuilds itself when the code changes.';
+        . 'declared types) or AMBIGUOUS (guessed from a unique method name). Routes (route:GET /orders), message '
+        . 'channels and API schema operations (OpenAPI, protobuf) are nodes too; in a multi-service repository ids read service@Class and services meet through '
+        . 'contracts (shared message classes, channels, HTTP routes, API schemas). The graph rebuilds itself when the code changes.';
 
     public function __construct(
         private readonly GraphQueryProvider $provider,
@@ -133,7 +133,7 @@ final class McpServer
         $integer = static fn (string $description): array => ['type' => 'integer', 'description' => $description];
 
         $name = $text('Short name (OrderRepository), fully qualified name (App\\Sales\\Domain\\OrderRepository), method '
-            . '(OrderRepository::save), route (POST /orders) or channel (ticket.create). In a multi-service repository, '
+            . '(OrderRepository::save), route (POST /orders), channel (ticket.create) or API schema operation (GET /api/hotels/{hotel}, CinemaService.Reserve). In a multi-service repository, '
             . 'prefix with the service: billing@OrderRepository.');
 
         return [
@@ -148,7 +148,7 @@ final class McpServer
                     . 'not modelled at all; the dependencies breaking the layer rules (domain must not depend on '
                     . 'infrastructure...) and between bounded contexts; the services of a multi-service repository; HTTP '
                     . 'routes (entry points): each route with method, path, controller and routing file when there are up to '
-                    . '30, else counts by path prefix; routes whose controller class exists nowhere; HTTP calls; messages, their handlers and what is left unlinked. Test code is '
+                    . '30, else counts by path prefix; routes whose controller class exists nowhere; HTTP calls; the API schemas (OpenAPI documents, protobuf services) with what implements them, what is documented and not implemented, and the routes no document describes; messages, their handlers and what is left unlinked. Test code is '
                     . 'counted apart.',
                 'inputSchema' => ['type' => 'object', 'properties' => new \stdClass()],
             ],
