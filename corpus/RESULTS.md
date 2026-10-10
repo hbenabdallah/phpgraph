@@ -6,15 +6,15 @@ phpgraph could not type, the main target of type inference work. Arrows compare 
 
 | Project | Files | Failed | Duplicates | Classes | Methods | Edges | Vendor files read | Seconds | Memory MB |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4184 | 102 | 0.51 | 28 |
-| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140460 | 602 | 8.97 | 530 |
-| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 217443 | 686 | 14.71 | 652 |
-| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 185117 | 588 | 13.37 | 576 |
-| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6789 | 61 | 0.67 | 34 |
-| bookstack | 1513 | 0 | 0 | 698 | 4076 | 23025 | 358 | 4.34 | 130 |
-| wordpress | 1899 | 0 | 50 | 840 | 7580 | 41955 | 0 | 7.60 | 133 |
+| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4184 | 102 | 0.58 | 28 |
+| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140464 | 602 | 8.96 | 530 |
+| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 217443 | 686 | 14.66 | 652 |
+| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 185138 | 588 | 13.29 | 576 |
+| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6789 | 61 | 0.64 | 34 |
+| bookstack | 1513 | 0 | 0 | 698 | 4076 | 23025 | 358 | 3.60 | 130 |
+| wordpress | 1899 | 0 | 50 | 840 | 7580 | 41975 | 0 | 6.71 | 133 |
 | laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 97 | 0.44 | 38 |
-| art-gallery | 266 | 0 | 0 | 140 | 148 | 1692 | 80 | 0.59 | 46 |
+| art-gallery | 266 | 0 | 0 | 140 | 148 | 1692 | 80 | 0.63 | 46 |
 
 ## Method calls in application code
 
@@ -28,7 +28,7 @@ The main indicator: test code (see `TestFiles`) is left out.
 | prestashop | 75968 | 52.9% | 2.4% | 36.2% | 8.5% | 2.6% |
 | ecotone-quickstart | 948 | 25.1% | 0.2% | 68.5% | 6.2% | 5.8% |
 | bookstack | 7464 | 44.2% | 4.0% | 40.3% | 11.5% | 6.7% |
-| wordpress | 26448 | 79.5% | 9.2% | 2.7% | 8.6% | 0.6% |
+| wordpress | 26448 | 79.6% | 9.1% | 2.7% | 8.5% | 0.6% |
 | laravel-rabbitmq-microservices | 136 | 1.5% | 3.7% | 75.0% | 19.9% | 7.4% |
 | art-gallery | 586 | 4.1% | 0.2% | 68.8% | 27.0% | 9.6% |
 
@@ -41,7 +41,7 @@ Mocks and specs make test code harder to type; read it apart.
 | php-ddd-example | 680 | 69.0% | 1.5% | 24.9% | 4.7% | 0.0% |
 | sylius | 82913 | 22.2% | 0.1% | 51.3% | 26.3% | 25.9% |
 | akeneo-pim | 125181 | 35.0% | 1.2% | 34.8% | 29.0% | 11.5% |
-| prestashop | 40938 | 47.5% | 0.5% | 45.4% | 6.6% | 3.6% |
+| prestashop | 40938 | 47.5% | 0.5% | 45.4% | 6.5% | 3.6% |
 | ecotone-quickstart | 415 | 13.5% | 0.2% | 85.3% | 1.0% | 1.0% |
 | bookstack | 18033 | 31.6% | 3.0% | 49.7% | 15.7% | 8.7% |
 | wordpress | 0 | - | - | - | - | - |
@@ -57,10 +57,10 @@ Application and test code together.
 | php-ddd-example | 1346 | 68.0% | 1.0% | 27.9% | 3.1% | 0.3% |
 | sylius | 102600 | 22.4% | 0.1% | 55.5% | 22.0% | 21.4% |
 | akeneo-pim | 159034 | 38.6% | 1.1% | 35.1% | 25.2% | 10.0% |
-| prestashop | 116906 | 51.0% | 1.8% | 39.4% | 7.8% | 3.0% |
+| prestashop | 116906 | 51.0% | 1.7% | 39.4% | 7.8% | 3.0% |
 | ecotone-quickstart | 1363 | 21.6% | 0.2% | 73.6% | 4.6% | 4.3% |
 | bookstack | 25497 | 35.3% | 3.3% | 46.9% | 14.5% | 8.1% |
-| wordpress | 26448 | 79.5% | 9.2% | 2.7% | 8.6% | 0.6% |
+| wordpress | 26448 | 79.6% | 9.1% | 2.7% | 8.5% | 0.6% |
 | laravel-rabbitmq-microservices | 146 | 1.4% | 3.4% | 74.0% | 21.2% | 6.8% |
 | art-gallery | 661 | 3.6% | 0.2% | 71.1% | 25.1% | 8.5% |
 
@@ -124,6 +124,6 @@ Handlers and sends linked to their message class, by confidence; then what could
 | prestashop | 547 | 493 | 25 | 240 | 0 | 9 | 4 | 93 | 0 |
 | ecotone-quickstart | 193 | 0 | 0 | 192 | 0 | 1 | 2 | 68 | 148 |
 | bookstack | 0 | 1 | 0 | 1 | 2 | 0 | 0 | 0 | 0 |
-| wordpress | 0 | 1195 | 0 | 3233 | 27 | 331 | 2189 | 184 | 0 |
+| wordpress | 0 | 1195 | 0 | 3234 | 27 | 330 | 2191 | 184 | 0 |
 | laravel-rabbitmq-microservices | 0 | 9 | 0 | 4 | 0 | 0 | 0 | 1 | 4 |
 | art-gallery | 0 | 0 | 0 | 0 | 0 | 16 | 0 | 0 | 0 |

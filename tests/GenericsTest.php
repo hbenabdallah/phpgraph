@@ -101,6 +101,16 @@ final class GenericsTest extends TestCase
         self::assertTrue($this->hasEdge($result->graph, 'App\Payment::all', 'App\Order::pay', Relation::Calls, Confidence::Inferred));
     }
 
+    public function testAFalseInADocumentedReturnIsLeftOut(): void
+    {
+        $result = $this->buildProject([
+            'src/Theme.php' => 'namespace App; class Theme { /** @return Theme|false */ public function parent() { return false; } public function errors(): bool { return false; } }',
+            'src/Upgrader.php' => 'namespace App; class Upgrader { public function check(Theme $theme): bool { return $theme->parent()->errors(); } }',
+        ]);
+
+        self::assertTrue($this->hasEdge($result->graph, 'App\Upgrader::check', 'App\Theme::errors', Relation::Calls, Confidence::Inferred), 'WordPress writes it so');
+    }
+
     /**
      * @param array<string, string> $files
      */
