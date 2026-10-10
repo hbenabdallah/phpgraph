@@ -41,6 +41,11 @@ final class GraphQuery
     private const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'];
 
     /**
+     * Words asking for every route rather than naming a topic: "all routes", "list the endpoints".
+     */
+    private const ROUTE_QUANTIFIERS = ['all', 'every', 'each', 'list', 'tous', 'toutes', 'tout', 'liste', 'lister'];
+
+    /**
      * Relations that a dependency path may walk backwards: from an abstraction to what implements it,
      * and from a method to the class that owns it.
      */
@@ -619,7 +624,7 @@ final class GraphQuery
 
         $methods = array_map('strtoupper', array_values(array_intersect($terms, self::HTTP_METHODS)));
         $pathWords = array_merge(...array_map(fn (array $segments): array => $this->terms(implode(' ', $segments)), [[], ...$paths]));
-        $words = array_values(array_diff($terms, self::ROUTE_WORDS, self::HTTP_METHODS, $pathWords));
+        $words = array_values(array_diff($terms, self::ROUTE_WORDS, self::HTTP_METHODS, self::ROUTE_QUANTIFIERS, $pathWords));
 
         $scored = [];
         foreach ($this->routes() as $route) {

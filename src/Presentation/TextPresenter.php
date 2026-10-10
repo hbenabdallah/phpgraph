@@ -198,8 +198,32 @@ final class TextPresenter
             'Nodes (' . \count($subgraph->nodes) . '):',
         ];
 
+        // A method of a listed class sits on its class's line: its file is the class's, its has_method edge implied.
+        $listed = [];
         foreach ($subgraph->nodes as $node) {
-            $lines[] = \sprintf('  - %s [%s] %s', $node->label, $node->kind->value, $this->location($node));
+            $listed[$node->id] = true;
+        }
+        $methods = [];
+        foreach ($subgraph->nodes as $node) {
+            $class = explode('::', $node->id)[0];
+            if ($node->kind === NodeKind::Method && $class !== $node->id && isset($listed[$class])) {
+                $name = substr($node->label, (int) strrpos($node->label, '::') + 2);
+                $methods[$class][] = $node->line === null ? $name : \sprintf('%s L%d', $name, $node->line);
+            }
+        }
+        foreach ($subgraph->nodes as $node) {
+            $class = explode('::', $node->id)[0];
+            if ($node->kind === NodeKind::Method && $class !== $node->id && isset($listed[$class])) {
+                continue;
+            }
+            $line = \sprintf('  - %s [%s] %s', $node->label, $node->kind->value, $this->location($node));
+            if (isset($methods[$node->id])) {
+                $line .= '; methods ' . implode(', ', $methods[$node->id]);
+            }
+            $lines[] = $line;
+        }
+        if (\count($subgraph->nodes) >= $budget) {
+            $lines[] = \sprintf('  (limit of %d nodes reached: pass a larger limit for more, or get_neighbors on one of them)', $budget);
         }
 
         $families = [];
@@ -227,15 +251,15 @@ final class TextPresenter
             }
         }
 
-        // An injected list's members appear in the summary above, not one edge each.
-        $edges = array_values(array_filter($subgraph->edges, static fn (Edge $edge): bool => $edge->relation !== Relation::Receives
-            || (!str_starts_with($edge->via(), 'tagged_') && !str_starts_with($edge->via(), 'through '))));
+        // An injected list's members appear in the summary above, not one edge each; a listed method's has_method
+        // edge is its place on its class's line.
+        $edges = array_values(array_filter($subgraph->edges, static fn (Edge $edge): bool => ($edge->relation !== Relation::Receives
+            || (!str_starts_with($edge->via(), 'tagged_') && !str_starts_with($edge->via(), 'through ')))
+            && $edge->relation !== Relation::HasMethod));
         $edgeLimit = $budget * 3;
         $lines[] = '';
-        $lines[] = 'Edges (' . \count($edges) . '):';
-        foreach (\array_slice($edges, 0, $edgeLimit) as $edge) {
-            $lines[] = '  ' . $this->formatEdge($edge);
-        }
+        $lines[] = 'Edges (' . \count($edges) . ', grouped by source and relation):';
+        array_push($lines, ...$this->groupedEdges(\array_slice($edges, 0, $edgeLimit)));
         if (\count($edges) > $edgeLimit) {
             $lines[] = \sprintf('  ... %d more', \count($edges) - $edgeLimit);
         }
@@ -938,6 +962,31 @@ final class TextPresenter
     private function percent(int $part, CallStats $calls): string
     {
         return $calls->total() === 0 ? '-' : \sprintf('%.0f%%', 100 * $part / $calls->total());
+    }
+
+    /**
+     * `A --calls--> B at L12, C [INFERRED]`: the edges of one source by one relation and confidence on one line.
+     *
+     * @param list<Edge> $edges
+     *
+     * @return list<string>
+     */
+    private function groupedEdges(array $edges): array
+    {
+        $groups = [];
+        foreach ($edges as $edge) {
+            $lines = $edge->lines();
+            $groups[$edge->source . "\0" . $edge->relation->value . "\0" . $edge->confidence->value][] = $this->query->label($edge->target)
+                . ($lines === [] ? '' : ' at L' . implode(', L', \array_slice($lines, 0, 8)) . (\count($lines) > 8 ? ', ...' : ''));
+        }
+
+        $text = [];
+        foreach ($groups as $key => $targets) {
+            [$source, $relation, $confidence] = explode("\0", (string) $key);
+            $text[] = \sprintf('  %s --%s--> %s [%s]', $this->query->label($source), $relation, implode('; ', $targets), $confidence);
+        }
+
+        return $text;
     }
 
     private function formatEdge(Edge $edge): string
