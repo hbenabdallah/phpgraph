@@ -64,6 +64,41 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 - `query_graph "all routes"` (and `every`, `list`...) lists every route: the word was taken for a topic.
 - `outline`: the "+N more: section ..." lines were dropped when the core had families (a variable was reused).
 
+## 1.0.7 (2026-10-10)
+
+### Changed
+- `query_graph` shows the method linking a message to the class handling or sending it, and a route to its
+  controller, when both classes are in the answer.
+
+## 1.0.6 (2026-10-10)
+
+### Changed
+- `query_graph` answers are shorter: a method sits on its class's line, the edges of one source and relation share a
+  line, and a line says when the node limit is reached.
+
+### Fixed
+- `query_graph "all routes"` lists every route: the word was taken for a topic.
+
+## 1.0.5 (2026-10-09)
+
+### Fixed
+- `serve` keeps running when its standard input is a socket that times out, as Claude Code opens it.
+- `tools/build-binary.sh` runs its Alpine container on the host network, which a local DNS resolver needs.
+
+## 1.0.4 (2026-10-06)
+
+### Changed
+- `impact`: the classes a guarded rule accepts are narrowed by the types of the parameters the use case passes its
+  input on to (`setUp(CreateEstimateQueryInterface $query)`), within a closure too.
+
+## 1.0.3 (2026-10-06)
+
+### Changed
+- `impact`: the rules of a tagged collection are filtered by their `supports()` guard (`instanceof`, `||` of
+  `instanceof`, `return true`), against what the use case passes them: a rule that never runs for a use case no
+  longer reaches its routes. A guard not read is marked `supports() not resolved`.
+- `impact`: a route's chain goes through the rules of its own bounded context.
+
 ## 1.0.2 (2026-10-04)
 
 ### Added
