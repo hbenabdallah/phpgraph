@@ -111,6 +111,21 @@ final class GenericsTest extends TestCase
         self::assertTrue($this->hasEdge($result->graph, 'App\Upgrader::check', 'App\Theme::errors', Relation::Calls, Confidence::Inferred), 'WordPress writes it so');
     }
 
+    public function testMagicMethodsAndMixinsCarryAChainOn(): void
+    {
+        $result = $this->buildProject([
+            'src/ActivityLogger.php' => 'namespace App; class ActivityLogger { public function add(string $type): void {} }',
+            'src/Activity.php' => 'namespace App; /** @mixin ActivityLogger */ class Activity { public static function __callStatic(string $name, array $arguments): mixed { return null; } }',
+            'src/Query.php' => 'namespace App; class Query { /** @return $this */ public function orderBy(string $column): static { return $this; } }',
+            'src/Builder.php' => 'namespace App; /** @mixin Query @method static Builder query() */ class Builder { public function __call(string $name, array $arguments): mixed { return null; } public function get(): array { return []; } }',
+            'src/Controller.php' => 'namespace App; class Controller { public function log(): void { Activity::add("x"); } public function list(): array { return Builder::query()->orderBy("name")->get(); } }',
+        ]);
+
+        self::assertTrue($this->hasEdge($result->graph, 'App\\Controller::log', 'App\\ActivityLogger::add', Relation::Calls, Confidence::Inferred), 'a facade forwarding to its @mixin');
+        self::assertTrue($this->hasEdge($result->graph, 'App\\Controller::list', 'App\\Query::orderBy', Relation::Calls, Confidence::Inferred), '@method query(), then the mixin');
+        self::assertTrue($this->hasEdge($result->graph, 'App\\Controller::list', 'App\\Builder::get', Relation::Calls, Confidence::Inferred), '$this of a mixin method: the receiver, the Builder');
+    }
+
     /**
      * @param array<string, string> $files
      */

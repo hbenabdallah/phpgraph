@@ -18,6 +18,7 @@ final readonly class ClassSignature
      * @param array<string, list<string>> $parentArguments parent => the arguments it gives the parent's templates
      * @param array<string, string> $genericReturns  method id => GenericType returned
      * @param array<string, string> $genericProperties property name => GenericType
+     * @param list<string>          $mixins          classes it forwards unknown calls to (`@mixin`)
      */
     public function __construct(
         public string $name,
@@ -29,6 +30,7 @@ final readonly class ClassSignature
         public array $parentArguments = [],
         public array $genericReturns = [],
         public array $genericProperties = [],
+        public array $mixins = [],
     ) {
     }
 }

@@ -91,6 +91,8 @@ final class VendorSignatures
                     $genericProperties[substr($property, \strlen($name) + 2)] = $type;
                 }
             }
+            // Magic methods documented with `@method`, a facade's: after those it declares.
+            $class['methods'] += $extraction->documentedMethods[$name] ?? [];
             $returnTypes = array_intersect_key($extraction->returnTypes, array_flip($class['methods']));
 
             $this->signatures[strtolower($name)] = new ClassSignature(
@@ -103,6 +105,7 @@ final class VendorSignatures
                 $extraction->parentArguments[$name] ?? [],
                 array_intersect_key($extraction->genericReturns, array_flip($class['methods'])),
                 $genericProperties,
+                $extraction->mixins[$name] ?? [],
             );
         }
     }

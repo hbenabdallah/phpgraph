@@ -124,6 +124,12 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<string, string> property of the current class => its GenericType (`@var Collection<int, Item>`) */
     private array $propertyGenerics = [];
 
+    /** @var array<string, array<string, string>> class => lowercase name => method id of its `@method` methods */
+    private array $documentedMethods = [];
+
+    /** @var array<string, list<string>> */
+    private array $mixins = [];
+
     /** @var array<string, string> parameter of the current callable => class of its elements (`@param Rule[] $rules`) */
     private array $parameterElements = [];
 
@@ -216,6 +222,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->parentArguments,
             $this->genericReturns,
             $this->genericProperties,
+            $this->documentedMethods,
+            $this->mixins,
         );
     }
 
@@ -445,6 +453,32 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         $templates = $node->getAttribute(DocTypeResolver::TEMPLATES);
         if (\is_array($templates) && $templates !== []) {
             $this->templates[$fqcn] = array_values(array_filter($templates, 'is_string'));
+        }
+        // Magic methods the class documents (`@method static PendingRequest timeout(int $seconds)` on a facade): they
+        // carry a call chain on as declared ones do, without being nodes of the graph.
+        $declared = [];
+        foreach ($node->stmts as $statement) {
+            if ($statement instanceof Stmt\ClassMethod) {
+                $declared[strtolower($statement->name->toString())] = true;
+            }
+        }
+        $documented = $node->getAttribute(DocTypeResolver::DOC_METHODS);
+        foreach (\is_array($documented) ? $documented : [] as $lower => $method) {
+            if (!\is_array($method) || isset($declared[(string) $lower]) || !\is_string($method[0] ?? null)) {
+                continue;
+            }
+            $id = $fqcn . '::' . $method[0];
+            $this->documentedMethods[$fqcn][(string) $lower] = $id;
+            if (\is_string($method[1] ?? null)) {
+                $this->returnTypes[$id] = $method[1] === 'self' ? $fqcn : $method[1];
+            }
+            if (\is_string($method[2] ?? null)) {
+                $this->genericReturns[$id] = $method[2];
+            }
+        }
+        $mixins = $node->getAttribute(DocTypeResolver::MIXINS);
+        if (\is_array($mixins) && $mixins !== []) {
+            $this->mixins[$fqcn] = array_values(array_filter($mixins, 'is_string'));
         }
         $parentArguments = $node->getAttribute(DocTypeResolver::PARENT_ARGUMENTS);
         if (\is_array($parentArguments) && $parentArguments !== []) {

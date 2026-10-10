@@ -147,6 +147,10 @@ final class GraphBuilder
         $genericReturns = [];
         /** @var array<string, string> $genericProperties */
         $genericProperties = [];
+        /** @var array<string, array<string, string>> $documentedMethods */
+        $documentedMethods = [];
+        /** @var array<string, list<string>> $mixins */
+        $mixins = [];
         /** @var array<string, array{method: string, types: list<string>|true|null}> $guards */
         $guards = [];
         /** @var array<string, list<array{string, int, list<?string>, list<?string>}>> $callArguments */
@@ -208,6 +212,12 @@ final class GraphBuilder
             }
             foreach ($extraction->genericReturns as $method => $type) {
                 $genericReturns[$id($method)] ??= GenericType::mapNames($type, $id);
+            }
+            foreach ($extraction->documentedMethods as $class => $methods) {
+                $documentedMethods[$id($class)] ??= array_map($id, $methods);
+            }
+            foreach ($extraction->mixins as $class => $classes) {
+                $mixins[$id($class)] ??= array_map($id, $classes);
             }
             foreach ($extraction->genericProperties as $property => $type) {
                 $genericProperties[$this->qualifiedMember($property, $id)] ??= GenericType::mapNames($type, $id);
@@ -314,7 +324,7 @@ final class GraphBuilder
         }
 
         $methodsByClass = $this->methodsByClass($graph);
-        $types = new TypeResolver($graph, $names, $methodsByClass, $returnTypes, $propertyTypes, $vendor, $returnElements, new Generics($templates, $parentArguments, $genericReturns, $genericProperties));
+        $types = new TypeResolver($graph, $names, $methodsByClass, $returnTypes, $propertyTypes, $vendor, $returnElements, new Generics($templates, $parentArguments, $genericReturns, $genericProperties, $documentedMethods, $mixins));
 
         // A method reading a property typed as an enum (`$violation->type`) uses that enum: what it outputs depends on it.
         foreach ($propertyReads as [$reader, $property]) {

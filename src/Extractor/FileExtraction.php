@@ -59,6 +59,9 @@ final readonly class FileExtraction
      * @param array<string, string> $genericReturns method id => the GenericType it returns, when it says more than a
      *                                             class: `ScalarNodeDefinition<static>`, `@TParent`
      * @param array<string, string> $genericProperties "Class::property" => its GenericType: `Collection<?,App\Item>`
+     * @param array<string, array<string, string>> $documentedMethods class => lowercase name => method id of the
+     *                                             magic methods it documents (`@method`), not graph nodes
+     * @param array<string, list<string>> $mixins class => the classes it forwards unknown calls to (`@mixin`)
      */
     public function __construct(
         public array $nodes,
@@ -91,6 +94,8 @@ final readonly class FileExtraction
         public array $parentArguments = [],
         public array $genericReturns = [],
         public array $genericProperties = [],
+        public array $documentedMethods = [],
+        public array $mixins = [],
     ) {
     }
 }

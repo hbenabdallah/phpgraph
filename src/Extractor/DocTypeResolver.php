@@ -58,6 +58,17 @@ final class DocTypeResolver extends NodeVisitorAbstract
     public const PARENT_ARGUMENTS = 'phpgraph.parentArguments';
 
     /**
+     * array<string, array{string, ?string, ?string}>: the methods a class documents with `@method` (magic methods,
+     * facades), by lowercase name: name, class returned (or TypeExpr::STATIC), GenericType returned.
+     */
+    public const DOC_METHODS = 'phpgraph.docMethods';
+
+    /**
+     * list<string>: the classes a class forwards its unknown calls to (`@mixin \Illuminate\Database\Query\Builder`).
+     */
+    public const MIXINS = 'phpgraph.mixins';
+
+    /**
      * string: the GenericType a method returns, when it says more than its class: `ScalarNodeDefinition<static>`, `@T`.
      */
     public const RETURN_GENERIC = 'phpgraph.returnGeneric';
@@ -109,6 +120,22 @@ final class DocTypeResolver extends NodeVisitorAbstract
             }
             if ($parents !== []) {
                 $node->setAttribute(self::PARENT_ARGUMENTS, $parents);
+            }
+
+            $methods = [];
+            preg_match_all('/@(?:phpstan-|psalm-)?method\s+(?:static\s+)?(?:(\S+(?:<[^>]*>)?)\s+)?(\w+)\s*\(/', $doc ?? '', $matches, \PREG_SET_ORDER);
+            foreach ($matches as $match) {
+                $type = $match[1] === '' ? null : $this->resolve($match[1], $templates);
+                $generic = $match[1] === '' ? null : $this->generic($match[1], []);
+                $methods[strtolower($match[2])] = [$match[2], $type, $generic !== null && GenericType::isGeneric($generic) ? $generic : null];
+            }
+            if ($methods !== []) {
+                $node->setAttribute(self::DOC_METHODS, $methods);
+            }
+            preg_match_all('/@(?:phpstan-|psalm-)?mixin\s+(\S+)/', $doc ?? '', $matches);
+            $mixins = array_values(array_filter(array_map(fn (string $mixin): ?string => $this->resolve($mixin, $templates), $matches[1])));
+            if ($mixins !== []) {
+                $node->setAttribute(self::MIXINS, $mixins);
             }
 
             return null;

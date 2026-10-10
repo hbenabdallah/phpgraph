@@ -360,15 +360,36 @@ final class TypeResolver
     {
         $key = $class . '::' . $name;
         if (!\array_key_exists($key, $this->methods)) {
+            // Set first: a mixin forwarding back to the class does not loop.
+            $this->methods[$key] = null;
             $this->methods[$key] = $this->search(
                 $class,
                 fn (string $owner, bool $withVendor): ?string => $this->methodsByClass[$owner][$name]
+                    ?? $this->generics->documentedMethods[$owner][$name]
                     ?? ($withVendor ? $this->vendorSignature($owner)?->methods[$name] ?? null : null),
                 [Relation::Extends, Relation::Implements, Relation::UsesTrait],
-            );
+            ) ?? $this->throughMixins($class, $name);
         }
 
         return $this->methods[$key];
+    }
+
+    /**
+     * A method of a class a `@mixin` tag of the class or of its parents names: Eloquent's Builder forwards
+     * `orderBy()` to the query builder. A method returning `$this` there returns the receiver, as forwarded calls do.
+     */
+    private function throughMixins(string $class, string $name): ?string
+    {
+        foreach ($this->lineage($class) as $owner) {
+            foreach ($this->generics->mixins[$owner] ?? $this->vendorSignature($owner)->mixins ?? [] as $mixin) {
+                $found = $this->findMethod($this->names->canonical($mixin), $name);
+                if ($found !== null) {
+                    return $found;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function findProperty(string $class, string $name): ?string
