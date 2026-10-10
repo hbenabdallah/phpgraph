@@ -6,15 +6,17 @@ phpgraph could not type, the main target of type inference work. Arrows compare 
 
 | Project | Files | Failed | Duplicates | Classes | Methods | Edges | Vendor files read | Seconds | Memory MB |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4184 | 102 | 0.58 | 28 |
-| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140464 | 602 | 8.96 | 530 |
-| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 217443 | 686 | 14.66 | 652 |
-| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 185138 | 588 | 13.29 | 576 |
-| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6789 | 61 | 0.64 | 34 |
-| bookstack | 1513 | 0 | 0 | 698 | 4076 | 23025 | 358 | 3.60 | 130 |
-| wordpress | 1899 | 0 | 50 | 840 | 7580 | 41975 | 0 | 6.71 | 133 |
-| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 97 | 0.44 | 38 |
-| art-gallery | 266 | 0 | 0 | 140 | 148 | 1692 | 80 | 0.63 | 46 |
+| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4184 | 102 | 0.51 | 28 |
+| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140464 | 602 | 8.29 | 530 |
+| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 217443 | 686 | 13.18 | 652 |
+| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 185138 | 588 | 12.45 | 576 |
+| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6789 | 61 | 0.62 | 34 |
+| bookstack | 1513 | 0 | 0 | 698 | 4076 | 23025 | 358 | 3.32 | 130 |
+| wordpress | 1899 | 0 | 50 | 840 | 7580 | 41975 | 0 | 5.96 | 133 |
+| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 97 | 0.42 | 38 |
+| art-gallery | 266 | 0 | 0 | 140 | 148 | 1692 | 80 | 0.58 | 46 |
+| ticket-booking | 366 | 0 | 0 | 291 | 737 | 4795 | 284 | 0.79 | 32 |
+| stayhub | 260 | 0 | 0 | 112 | 323 | 1974 | 129 | 1.14 | 48 |
 
 ## Method calls in application code
 
@@ -31,6 +33,8 @@ The main indicator: test code (see `TestFiles`) is left out.
 | wordpress | 26448 | 79.6% | 9.1% | 2.7% | 8.5% | 0.6% |
 | laravel-rabbitmq-microservices | 136 | 1.5% | 3.7% | 75.0% | 19.9% | 7.4% |
 | art-gallery | 586 | 4.1% | 0.2% | 68.8% | 27.0% | 9.6% |
+| ticket-booking | 1646 | 18.5% | 1.0% | 72.9% | 7.6% | 3.9% |
+| stayhub | 981 | 25.7% | 2.3% | 40.0% | 32.0% | 10.8% |
 
 ## Method calls in test code
 
@@ -47,6 +51,8 @@ Mocks and specs make test code harder to type; read it apart.
 | wordpress | 0 | - | - | - | - | - |
 | laravel-rabbitmq-microservices | 10 | 0.0% | 0.0% | 60.0% | 40.0% | 0.0% |
 | art-gallery | 75 | 0.0% | 0.0% | 89.3% | 10.7% | 0.0% |
+| ticket-booking | 28 | 10.7% | 0.0% | 85.7% | 3.6% | 3.6% |
+| stayhub | 343 | 0.0% | 0.0% | 97.1% | 2.9% | 0.6% |
 
 ## Method calls in all code
 
@@ -63,6 +69,8 @@ Application and test code together.
 | wordpress | 26448 | 79.6% | 9.1% | 2.7% | 8.5% | 0.6% |
 | laravel-rabbitmq-microservices | 146 | 1.4% | 3.4% | 74.0% | 21.2% | 6.8% |
 | art-gallery | 661 | 3.6% | 0.2% | 71.1% | 25.1% | 8.5% |
+| ticket-booking | 1674 | 18.4% | 1.0% | 73.1% | 7.5% | 3.9% |
+| stayhub | 1324 | 19.0% | 1.7% | 54.8% | 24.5% | 8.2% |
 
 ## Architecture of application code
 
@@ -79,6 +87,8 @@ Class dependencies breaking the default layer rules, and pairs of bounded contex
 | wordpress | 0 | 0 | - |
 | laravel-rabbitmq-microservices | 0 | 0 | - |
 | art-gallery | 0 | 0 | - |
+| ticket-booking | 0 | 0 | - |
+| stayhub | 0 | 0 | - |
 
 ## HTTP and services
 
@@ -95,6 +105,8 @@ Routes and the controllers handling them; HTTP calls of application code reachin
 | wordpress | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | laravel-rabbitmq-microservices | 3 | 10 | 8 | 0 | 0 | 0 | 0 | 0 | 0 |
 | art-gallery | 5 | 39 | 35 | 0 | 0 | 1 | 0 | 0 | 1 |
+| ticket-booking | 7 | 13 | 13 | 0 | 0 | 0 | 0 | 0 | 0 |
+| stayhub | 8 | 52 | 38 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 ## Container injections
 
@@ -111,6 +123,8 @@ What the container configuration injects by tag or by id (`receives`), and what 
 | wordpress | 0 | 0 | 0 | 0 |
 | laravel-rabbitmq-microservices | 0 | 0 | 0 | 0 |
 | art-gallery | 0 | 0 | 0 | 0 |
+| ticket-booking | 0 | 0 | 0 | 0 |
+| stayhub | 0 | 0 | 0 | 0 |
 
 ## Messages in application code
 
@@ -127,3 +141,5 @@ Handlers and sends linked to their message class, by confidence; then what could
 | wordpress | 0 | 1195 | 0 | 3234 | 27 | 330 | 2191 | 184 | 0 |
 | laravel-rabbitmq-microservices | 0 | 9 | 0 | 4 | 0 | 0 | 0 | 1 | 4 |
 | art-gallery | 0 | 0 | 0 | 0 | 0 | 16 | 0 | 0 | 0 |
+| ticket-booking | 22 | 0 | 0 | 17 | 0 | 5 | 3 | 5 | 12 |
+| stayhub | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |

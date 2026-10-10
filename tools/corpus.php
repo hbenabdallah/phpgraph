@@ -138,7 +138,9 @@ function installDependencies(string $name, string $directory, string $relative):
 
     echo "{$label}: " . ($resolve ? 'resolving and installing' : 'installing') . " dependencies\n";
     $command = sprintf(
-        'cd %s && COMPOSER_CACHE_DIR=%s COMPOSER_MEMORY_LIMIT=-1 composer %s -q --no-interaction --no-scripts --no-plugins --ignore-platform-reqs --prefer-dist 2>&1',
+        // Projects frozen at an old commit depend on packages with security advisories: Composer would refuse them,
+        // though nothing of theirs is ever run here.
+        'cd %s && COMPOSER_CACHE_DIR=%s COMPOSER_MEMORY_LIMIT=-1 COMPOSER_NO_SECURITY_BLOCKING=1 COMPOSER_NO_AUDIT=1 composer %s -q --no-interaction --no-scripts --no-plugins --ignore-platform-reqs --prefer-dist 2>&1',
         escapeshellarg($target),
         escapeshellarg(CHECKOUTS_DIR . '/.composer-cache'),
         $resolve ? 'update' : 'install',

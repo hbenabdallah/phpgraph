@@ -3,6 +3,37 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## 1.1.0 (2026-10-10)
+
+### Added
+- Generics, read in docblocks in the project and in `vendor/`: `@template`, what a class gives its parents
+  (`@extends Repository<Order>`, `@implements`, `@use`, `@template-extends`), and the generic types of `@return`,
+  `@var` and `@param` (`Collection<int, Item>`, `ScalarNodeDefinition<$this>`). A template is bound by the type of
+  the receiver, through the parents passing it on: Symfony's configuration builders (`->end()` returns `TParent`)
+  are typed down to the last call. A `foreach` walks the elements of any typed collection (a property, a variable,
+  a method's return), up to `IteratorAggregate<K, V>`. Sylius: 20.1% → 4.0% of application calls with an unknown
+  receiver; no INFERRED edge lost on the corpus.
+- PHP's own classes (`DateTime`, `ArrayObject`, `SplObjectStorage`, `PDO`...), from signatures generated once
+  (`tools/internal-classes.php`), with the templates of their iterables; read even without `vendor/`.
+- `overview` names the other languages of a mixed repository (`TypeScript (340 files)`), and a project without PHP is
+  told at once: in the MCP instructions, before any build, and in every answer.
+
+### Changed
+- `query_graph` answers are about a third of their size: a method sits on its class's line (no repeated path, no
+  `has_method` edge), the edges of one source and relation share a line, and a line says when the node limit is
+  reached. Neighbours must name the topic the matched classes share: `course created event handler` no longer
+  brings in `CreateVideoCommandHandler` through `create` and `handler`.
+- `query_graph` shows the method linking a message to its handler or sender, and a route to its controller, when
+  both classes are in the answer (`CourseCreatedDomainEvent --handled_by--> IncrementCoursesCounterOnCourseCreated::__invoke()`).
+- `overview` is 8 to 29% shorter: routes grouped by routing directory without `::__invoke()`, route prefixes with
+  their number of routing files instead of their paths, names without the root namespace, 3 examples of layer
+  violations instead of 5.
+- `@return Foo|false` is read as `Foo`, as PHP's own functions and WordPress write it.
+
+### Fixed
+- `query_graph "all routes"` (and `every`, `list`...) lists every route: the word was taken for a topic.
+- `outline`: the "+N more: section ..." lines were dropped when the core had families (a variable was reused).
+
 ## 1.0.2 (2026-10-04)
 
 ### Added

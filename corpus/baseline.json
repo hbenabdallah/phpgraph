@@ -892,5 +892,177 @@
         },
         "seconds": 0.63,
         "peakMemoryMb": 46
+    },
+    {
+        "name": "ticket-booking",
+        "commit": "8a7a79bd4c3af0a47f5f56d33a369d22273fe3ff",
+        "filesParsed": 366,
+        "filesFailed": 0,
+        "duplicates": 0,
+        "nodes": 1825,
+        "classLike": 291,
+        "methods": 737,
+        "external": 413,
+        "edges": 4795,
+        "vendorFilesRead": 284,
+        "edgesByConfidence": {
+            "EXTRACTED": 4320,
+            "INFERRED": 452,
+            "AMBIGUOUS": 23
+        },
+        "calls": {
+            "total": 1674,
+            "inferred": 308,
+            "ambiguous": 16,
+            "outsideProject": 1224,
+            "unknownReceiver": 126,
+            "chainOutsideProject": 65
+        },
+        "applicationCalls": {
+            "total": 1646,
+            "inferred": 305,
+            "ambiguous": 16,
+            "outsideProject": 1200,
+            "unknownReceiver": 125,
+            "chainOutsideProject": 64
+        },
+        "testCalls": {
+            "total": 28,
+            "inferred": 3,
+            "ambiguous": 0,
+            "outsideProject": 24,
+            "unknownReceiver": 1,
+            "chainOutsideProject": 1
+        },
+        "bus": {
+            "handlers": {
+                "EXTRACTED": 22
+            },
+            "sends": {
+                "INFERRED": 17
+            },
+            "untypedSends": 5,
+            "messagesWithoutHandlerCount": 3,
+            "messagesWithoutHandler": [
+                "cinema@App\\Event\\ReservationCanceled",
+                "cinema@App\\Event\\TicketBought",
+                "cinema@App\\Event\\TicketReserved"
+            ],
+            "messagesNeverSentCount": 5,
+            "messagesNeverSent": [
+                "centrifugo@App\\Application\\Command\\Centrifugo\\GenerateAuthenticationTokenCommand",
+                "shared@Spiral\\Shared\\CQRS\\Command\\ChargeMoneyCommand",
+                "shared@Spiral\\Shared\\CQRS\\Command\\SendEmailCommand",
+                "shared@Spiral\\Shared\\CQRS\\Query\\GetUserQuery",
+                "web@App\\Application\\Command\\Centrifugo\\GenerateAuthenticationTokenCommand"
+            ],
+            "contracts": 12
+        },
+        "http": {
+            "routes": 13,
+            "routesWithHandler": 13,
+            "requests": 0,
+            "requestsToProject": 0,
+            "requestsToServices": 0,
+            "routesToDependencies": 0,
+            "methodMismatchCount": 0,
+            "methodMismatches": [],
+            "routesToMissingControllers": 0,
+            "missingControllers": []
+        },
+        "injections": {
+            "injections": 0,
+            "linked": 0,
+            "edges": 0,
+            "unlinkedCount": 0,
+            "unlinked": []
+        },
+        "services": 7,
+        "architecture": {
+            "layerViolations": 0,
+            "contextPairs": 0,
+            "layerFirst": false
+        },
+        "seconds": 0.79,
+        "peakMemoryMb": 32
+    },
+    {
+        "name": "stayhub",
+        "commit": "813ed5159b3b6c366307c29bea2efce42f70d2dc",
+        "filesParsed": 260,
+        "filesFailed": 0,
+        "duplicates": 0,
+        "nodes": 796,
+        "classLike": 112,
+        "methods": 323,
+        "external": 49,
+        "edges": 1974,
+        "vendorFilesRead": 129,
+        "edgesByConfidence": {
+            "EXTRACTED": 1745,
+            "INFERRED": 208,
+            "AMBIGUOUS": 21
+        },
+        "calls": {
+            "total": 1324,
+            "inferred": 252,
+            "ambiguous": 23,
+            "outsideProject": 725,
+            "unknownReceiver": 324,
+            "chainOutsideProject": 108
+        },
+        "applicationCalls": {
+            "total": 981,
+            "inferred": 252,
+            "ambiguous": 23,
+            "outsideProject": 392,
+            "unknownReceiver": 314,
+            "chainOutsideProject": 106
+        },
+        "testCalls": {
+            "total": 343,
+            "inferred": 0,
+            "ambiguous": 0,
+            "outsideProject": 333,
+            "unknownReceiver": 10,
+            "chainOutsideProject": 2
+        },
+        "bus": {
+            "handlers": [],
+            "sends": [],
+            "untypedSends": 0,
+            "messagesWithoutHandlerCount": 0,
+            "messagesWithoutHandler": [],
+            "messagesNeverSentCount": 0,
+            "messagesNeverSent": [],
+            "contracts": 0
+        },
+        "http": {
+            "routes": 52,
+            "routesWithHandler": 38,
+            "requests": 0,
+            "requestsToProject": 0,
+            "requestsToServices": 0,
+            "routesToDependencies": 0,
+            "methodMismatchCount": 0,
+            "methodMismatches": [],
+            "routesToMissingControllers": 0,
+            "missingControllers": []
+        },
+        "injections": {
+            "injections": 0,
+            "linked": 0,
+            "edges": 0,
+            "unlinkedCount": 0,
+            "unlinked": []
+        },
+        "services": 8,
+        "architecture": {
+            "layerViolations": 0,
+            "contextPairs": 0,
+            "layerFirst": false
+        },
+        "seconds": 1.09,
+        "peakMemoryMb": 48
     }
 ]

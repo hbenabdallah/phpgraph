@@ -106,5 +106,35 @@
         "composer": [
             "Backend/*"
         ]
+    },
+    {
+        "name": "ticket-booking",
+        "repository": "https://github.com/spiral/ticket-booking",
+        "commit": "8a7a79bd4c3af0a47f5f56d33a369d22273fe3ff",
+        "stack": [
+            "spiral",
+            "microservices",
+            "grpc",
+            "protobuf"
+        ],
+        "why": "Spiral's own example: five services (cinema, payment, users, web, centrifugo) and shared code, calling each other through gRPC services declared in .proto files: contracts written as schemas",
+        "composer": [
+            "*"
+        ]
+    },
+    {
+        "name": "stayhub",
+        "repository": "https://github.com/ahmedibrahimyassindev/StayHub",
+        "commit": "813ed5159b3b6c366307c29bea2efce42f70d2dc",
+        "stack": [
+            "laravel",
+            "microservices",
+            "openapi",
+            "api-gateway"
+        ],
+        "why": "Seven Laravel services behind an APISIX gateway, their API described by one OpenAPI file (docs/openapi.yaml, 33 paths): routes declared both in the code and in a schema. No license: fetched to measure, never copied",
+        "composer": [
+            "services/*"
+        ]
     }
 ]
