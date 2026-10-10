@@ -58,6 +58,13 @@ final class DocTypeResolver extends NodeVisitorAbstract
     public const PARENT_ARGUMENTS = 'phpgraph.parentArguments';
 
     /**
+     * string: a conditional `@return` as JSON, `($content is null ? ResponseFactory : Response)`: a tree of
+     * `{"param": position, "test": "null"|"class", "then": tree, "else": tree}`, `{"type": class}` and
+     * `{"arg": position}` (the class an argument names, `app(Mailer::class)`), evaluated against the arguments of a call.
+     */
+    public const RETURN_CONDITIONAL = 'phpgraph.returnConditional';
+
+    /**
      * array<string, array{string, ?string, ?string}>: the methods a class documents with `@method` (magic methods,
      * facades), by lowercase name: name, class returned (or TypeExpr::STATIC), GenericType returned.
      */
@@ -158,6 +165,16 @@ final class DocTypeResolver extends NodeVisitorAbstract
                 $generic = $this->generic($this->firstType(trim($match[1])), $this->templates($doc));
                 if ($generic !== null && GenericType::isGeneric($generic)) {
                     $node->setAttribute(self::RETURN_GENERIC, $generic);
+                }
+                $parameters = [];
+                foreach ($node->params as $position => $param) {
+                    if ($param->var instanceof AstNode\Expr\Variable && \is_string($param->var->name)) {
+                        $parameters[$param->var->name] = $position;
+                    }
+                }
+                $conditional = $this->conditional($this->firstType(trim($match[1])), $parameters);
+                if ($conditional !== null && $conditional !== ['type' => null]) {
+                    $node->setAttribute(self::RETURN_CONDITIONAL, json_encode($conditional));
                 }
             }
             $elements = $types = $generics = [];
@@ -396,6 +413,46 @@ final class DocTypeResolver extends NodeVisitorAbstract
         };
 
         return GenericType::format($resolved, $arguments);
+    }
+
+    /**
+     * A conditional return type as a tree, null when the text is none: `($abstract is null ? Application : mixed)`.
+     *
+     * @param array<string, int> $parameters name => position
+     *
+     * @return array<string, mixed>|null
+     */
+    private function conditional(string $text, array $parameters, int $depth = 0): ?array
+    {
+        $text = trim($text);
+        while (str_starts_with($text, '(') && str_ends_with($text, ')') && $this->closingParenthesis($text) === \strlen($text) - 1) {
+            $text = trim(substr($text, 1, -1));
+        }
+        if ($depth > 5 || preg_match('/^\$(\w+)\s+is\s+(not\s+)?(\S+?)\s*\?(.*)$/s', $text, $match) !== 1 || !isset($parameters[$match[1]])) {
+            return null;
+        }
+        // The two branches: split at the `:` outside brackets and nested conditions.
+        $branches = $this->split($match[4], ':');
+        if (\count($branches) < 2) {
+            return null;
+        }
+        $then = array_shift($branches);
+        $else = implode(':', $branches);
+        $template = preg_match('/^class-string<(\w+)>$/', $match[3], $found) === 1 ? $found[1] : null;
+        $test = strtolower($match[3]) === 'null' ? 'null' : ($template !== null ? 'class' : null);
+        if ($test === null) {
+            return null;
+        }
+        $leaf = function (string $branch) use ($parameters, $depth, $match, $template): array {
+            if ($template !== null && trim($branch) === $template) {
+                return ['arg' => $parameters[$match[1]]];
+            }
+
+            return $this->conditional($branch, $parameters, $depth + 1) ?? ['type' => $this->resolve($branch)];
+        };
+        [$then, $else] = $match[2] === '' ? [$leaf($then), $leaf($else)] : [$leaf($else), $leaf($then)];
+
+        return ['param' => $parameters[$match[1]], 'test' => $test, 'then' => $then, 'else' => $else];
     }
 
     /**

@@ -151,6 +151,8 @@ final class GraphBuilder
         $documentedMethods = [];
         /** @var array<string, list<string>> $mixins */
         $mixins = [];
+        /** @var array<string, string> $conditionals */
+        $conditionals = [];
         /** @var array<string, array{method: string, types: list<string>|true|null}> $guards */
         $guards = [];
         /** @var array<string, list<array{string, int, list<?string>, list<?string>}>> $callArguments */
@@ -215,6 +217,9 @@ final class GraphBuilder
             }
             foreach ($extraction->documentedMethods as $class => $methods) {
                 $documentedMethods[$id($class)] ??= array_map($id, $methods);
+            }
+            foreach ($extraction->conditionalReturns as $callable => $conditional) {
+                $conditionals[$id($callable)] ??= $conditional;
             }
             foreach ($extraction->mixins as $class => $classes) {
                 $mixins[$id($class)] ??= array_map($id, $classes);
@@ -324,7 +329,7 @@ final class GraphBuilder
         }
 
         $methodsByClass = $this->methodsByClass($graph);
-        $types = new TypeResolver($graph, $names, $methodsByClass, $returnTypes, $propertyTypes, $vendor, $returnElements, new Generics($templates, $parentArguments, $genericReturns, $genericProperties, $documentedMethods, $mixins));
+        $types = new TypeResolver($graph, $names, $methodsByClass, $returnTypes, $propertyTypes, $vendor, $returnElements, new Generics($templates, $parentArguments, $genericReturns, $genericProperties, $documentedMethods, $mixins, $conditionals));
 
         // A method reading a property typed as an enum (`$violation->type`) uses that enum: what it outputs depends on it.
         foreach ($propertyReads as [$reader, $property]) {

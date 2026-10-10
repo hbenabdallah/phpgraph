@@ -15,6 +15,15 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
   client are linked to its operations (`requests`). `overview` reports what is documented and not implemented, and
   the routes no document describes. StayHub: 45 of 45 operations linked; ticket-booking: 14 of 14 rpcs.
 - HTTP calls whose path is built by `sprintf('/apps/%s/challenge', $id)` are read (`/apps/*/challenge`).
+- What a function returns types the calls on it: the project's functions (`wp_get_theme()->exists()`), and the
+  helpers of the packages, found in their autoloaded files and read, never run (`now()`, `response()->json()`). A
+  conditional `@return` is decided by the arguments of the call: `response()` without content is the factory,
+  `app(Mailer::class)` a Mailer, a variable argument leaves it unknown. WordPress: 469 more calls resolved; StayHub:
+  29% → 13% of application calls with an unknown receiver.
+- Magic methods documented with `@method` and classes named by `@mixin` carry call chains on: Laravel facades
+  (`Http::timeout()->get()`, `Activity::add()` reaching the project's `ActivityLogger`), Eloquent's builder forwarding
+  `orderBy()` to the query builder. BookStack: 11.5% → 5.4% of application calls with an unknown receiver, together
+  with the functions.
 
 ### Fixed
 - A library the services of a repository require (a path repository, or its package name) is their common code, not

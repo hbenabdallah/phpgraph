@@ -16,7 +16,9 @@ final readonly class TypeExpr
     public const STATIC = 'static';
 
     /**
-     * @param ?string $generic the type with its arguments, a GenericType string, when it has some: `Collection<?,Item>`
+     * @param ?string      $generic   the type with its arguments, a GenericType string, when it has some: `Collection<?,Item>`
+     * @param list<string> $functions the function called, `response()`: the names it may have, its namespace's first
+     * @param list<string> $arguments what the call passes, by position: `null`, `class:Foo` (Foo::class) or `?`
      */
     private function __construct(
         public ?string $className,
@@ -25,7 +27,20 @@ final readonly class TypeExpr
         public bool $isProperty = false,
         public bool $isElement = false,
         public ?string $generic = null,
+        public array $functions = [],
+        public array $arguments = [],
     ) {
+    }
+
+    /**
+     * What a function returns: `now()`, `response()` (its `@return` may depend on the arguments).
+     *
+     * @param list<string> $names     the names the function may have: in the namespace of the call, then global
+     * @param list<string> $arguments
+     */
+    public static function returnOfFunction(array $names, array $arguments): self
+    {
+        return new self(null, null, null, false, false, null, $names, $arguments);
     }
 
     public static function named(string $className): self
@@ -77,6 +92,13 @@ final readonly class TypeExpr
      */
     public function map(\Closure $map): self
     {
+        if ($this->functions !== []) {
+            return new self(null, null, null, false, false, null, array_map($map, $this->functions), array_map(
+                static fn (string $argument): string => str_starts_with($argument, 'class:') ? 'class:' . $map(substr($argument, 6)) : $argument,
+                $this->arguments,
+            ));
+        }
+
         return $this->receiver === null
             ? new self($this->className === null ? null : $map($this->className), null, null, false, false, $this->generic === null ? null : GenericType::mapNames($this->generic, $map))
             : new self(null, $this->receiver->map($map), $this->member, $this->isProperty, $this->isElement);
@@ -84,6 +106,9 @@ final readonly class TypeExpr
 
     public function key(): string
     {
+        if ($this->functions !== []) {
+            return strtolower(implode('|', $this->functions)) . '(' . implode(',', $this->arguments) . ')';
+        }
         if ($this->receiver === null) {
             return strtolower($this->generic ?? (string) $this->className);
         }

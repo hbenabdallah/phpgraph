@@ -62,6 +62,8 @@ final readonly class FileExtraction
      * @param array<string, array<string, string>> $documentedMethods class => lowercase name => method id of the
      *                                             magic methods it documents (`@method`), not graph nodes
      * @param array<string, list<string>> $mixins class => the classes it forwards unknown calls to (`@mixin`)
+     * @param array<string, string> $conditionalReturns callable id => its conditional return type, as JSON
+     *                                             (DocTypeResolver::RETURN_CONDITIONAL)
      */
     public function __construct(
         public array $nodes,
@@ -96,6 +98,7 @@ final readonly class FileExtraction
         public array $genericProperties = [],
         public array $documentedMethods = [],
         public array $mixins = [],
+        public array $conditionalReturns = [],
     ) {
     }
 }

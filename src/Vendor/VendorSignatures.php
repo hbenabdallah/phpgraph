@@ -6,6 +6,7 @@ namespace PhpGraph\Vendor;
 
 use PhpGraph\Extractor\FileExtractor;
 use PhpGraph\Extractor\PhpFileExtractor;
+use PhpGraph\Graph\NodeKind;
 use PhpGraph\Graph\Relation;
 use PhpParser\Error;
 
@@ -41,6 +42,63 @@ final class VendorSignatures
 
         // PHP's own classes: never in vendor/, read from the signatures generated once.
         return $this->signatures[$key] ??= InternalClasses::signature($class);
+    }
+
+    /** @var array<string, string>|null lowercase function name => the autoloaded file declaring it */
+    private ?array $functionFiles = null;
+
+    /** @var array<string, array{?string, ?string, ?string}> lowercase function name => return type, GenericType, conditional */
+    private array $functions = [];
+
+    /**
+     * What a function of the packages returns: its class, its GenericType, its conditional return type (JSON). The
+     * autoloaded files are scanned for the names they declare; the file declaring it is then read, never run.
+     *
+     * @return array{?string, ?string, ?string}|null
+     */
+    public function function(string $name): ?array
+    {
+        $key = strtolower(ltrim($name, '\\'));
+        if (\array_key_exists($key, $this->functions)) {
+            return $this->functions[$key];
+        }
+        if ($this->functionFiles === null) {
+            $this->functionFiles = [];
+            foreach ($this->locator->files() as $file) {
+                $code = @file_get_contents($file);
+                if (!\is_string($code)) {
+                    continue;
+                }
+                $namespace = preg_match('/^namespace\s+([\w\\\\]+)\s*;/m', $code, $match) === 1 ? $match[1] . '\\' : '';
+                preg_match_all('/^\s*function\s+&?(\w+)\s*\(/m', $code, $matches);
+                foreach ($matches[1] as $function) {
+                    $this->functionFiles[strtolower($namespace . $function)] ??= $file;
+                }
+            }
+        }
+        $file = $this->functionFiles[$key] ?? null;
+        if ($file === null) {
+            return null;
+        }
+
+        $code = (string) @file_get_contents($file);
+        try {
+            $extraction = $this->extractor->extract($code, $file);
+        } catch (Error) {
+            return $this->functions[$key] = [null, null, null];
+        }
+        ++$this->filesRead;
+        foreach ($extraction->nodes as $node) {
+            if ($node->kind === NodeKind::Func) {
+                $this->functions[strtolower($node->id)] = [
+                    $extraction->returnTypes[$node->id] ?? null,
+                    $extraction->genericReturns[$node->id] ?? null,
+                    $extraction->conditionalReturns[$node->id] ?? null,
+                ];
+            }
+        }
+
+        return $this->functions[$key] ??= [null, null, null];
     }
 
     public function filesRead(): int

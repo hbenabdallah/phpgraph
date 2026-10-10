@@ -8,6 +8,7 @@ use PhpGraph\Extractor\GenericType;
 use PhpGraph\Extractor\TypeExpr;
 use PhpGraph\Graph\Graph;
 use PhpGraph\Graph\Relation;
+use PhpGraph\Values;
 use PhpGraph\Vendor\ClassSignature;
 use PhpGraph\Vendor\VendorSignatures;
 
@@ -101,6 +102,9 @@ final class TypeResolver
 
     private function resolveUncached(TypeExpr $type, bool &$leftProject): ?string
     {
+        if ($type->functions !== []) {
+            return $this->functionReturn($type->functions, $type->arguments);
+        }
         if ($type->receiver === null) {
             if ($type->generic !== null) {
                 return $this->canonicalType($type->generic);
@@ -166,6 +170,62 @@ final class TypeResolver
             TypeExpr::STATIC => $receiverType,
             default => $this->names->canonical($returned),
         };
+    }
+
+    /**
+     * What a function returns to this call: the project's function first, then a function of the packages; a
+     * conditional `@return` is evaluated against the arguments (`response()` without content: the factory).
+     *
+     * @param list<string> $names
+     * @param list<string> $arguments
+     */
+    private function functionReturn(array $names, array $arguments): ?string
+    {
+        foreach ($names as $name) {
+            $id = $this->names->canonical($name);
+            [$returned, $generic, $conditional] = isset($this->returnTypes[$id]) || isset($this->generics->conditionals[$id]) || isset($this->generics->returns[$id])
+                ? [$this->returnTypes[$id] ?? null, $this->generics->returns[$id] ?? null, $this->generics->conditionals[$id] ?? null]
+                : ($this->vendor?->function($name) ?? [null, null, null]);
+            if ($conditional !== null) {
+                $decided = json_decode($conditional, true);
+
+                return \is_array($decided) ? $this->decide($decided, $arguments) : null;
+            }
+            if ($generic !== null || $returned !== null) {
+                return $this->canonicalType($generic ?? (string) $returned);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<mixed> $tree      a conditional return type (DocTypeResolver::RETURN_CONDITIONAL)
+     * @param list<string> $arguments
+     */
+    private function decide(array $tree, array $arguments, int $depth = 0): ?string
+    {
+        if ($depth > 5) {
+            return null;
+        }
+        if (\array_key_exists('type', $tree)) {
+            return \is_string($tree['type']) && $tree['type'] !== TypeExpr::STATIC ? $this->names->canonical($tree['type']) : null;
+        }
+        if (isset($tree['arg'])) {
+            $argument = $arguments[Values::number($tree['arg'])] ?? '';
+
+            return str_starts_with($argument, 'class:') ? $this->names->canonical(substr($argument, 6)) : null;
+        }
+        // Absent, the parameter takes its default: null for the functions written so.
+        $argument = $arguments[Values::number($tree['param'] ?? 0)] ?? 'null';
+        $holds = match ($tree['test'] ?? null) {
+            'null' => $argument === 'null' ? true : ($argument === '?' ? null : false),
+            'class' => str_starts_with($argument, 'class:') ? true : ($argument === '?' ? null : false),
+            default => null,
+        };
+        $branch = $holds === null ? null : ($holds ? $tree['then'] ?? null : $tree['else'] ?? null);
+
+        return \is_array($branch) ? $this->decide($branch, $arguments, $depth + 1) : null;
     }
 
     /**

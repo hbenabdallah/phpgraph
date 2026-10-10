@@ -17,6 +17,7 @@ final readonly class Generics
      * @param array<string, string>                      $properties      "Class::property" => GenericType
      * @param array<string, array<string, string>>       $documentedMethods class => lowercase name => id of a `@method`
      * @param array<string, list<string>>                $mixins          class => the classes of its `@mixin` tags
+     * @param array<string, string>                      $conditionals    callable id => conditional return type (JSON)
      */
     public function __construct(
         public array $templates = [],
@@ -25,6 +26,7 @@ final readonly class Generics
         public array $properties = [],
         public array $documentedMethods = [],
         public array $mixins = [],
+        public array $conditionals = [],
     ) {
     }
 }

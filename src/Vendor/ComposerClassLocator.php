@@ -20,6 +20,9 @@ final class ComposerClassLocator
     /** @var array<string, list<string>> namespace prefix => directories */
     private array $psr4 = [];
 
+    /** @var list<string> autoloaded files of the packages: their functions */
+    private array $files = [];
+
     /** @var array<string, list<string>> namespace or class prefix => directories */
     private array $psr0 = [];
 
@@ -38,6 +41,16 @@ final class ComposerClassLocator
 
         uksort($this->psr4, static fn (string $a, string $b): int => \strlen($b) <=> \strlen($a));
         uksort($this->psr0, static fn (string $a, string $b): int => \strlen($b) <=> \strlen($a));
+    }
+
+    /**
+     * The files the packages load on every request, where their functions are declared.
+     *
+     * @return list<string>
+     */
+    public function files(): array
+    {
+        return $this->files;
     }
 
     public function isEmpty(): bool
@@ -102,6 +115,13 @@ final class ComposerClassLocator
             $installPath = \is_string($package['install-path'] ?? null)
                 ? $vendor . '/composer/' . $package['install-path']
                 : $vendor . '/' . (\is_string($package['name'] ?? null) ? $package['name'] : '');
+
+            // Files loaded on every request: the helper functions of the packages (Laravel's `response()`, `now()`).
+            foreach (\is_array($package['autoload']['files'] ?? null) ? $package['autoload']['files'] : [] as $file) {
+                if (\is_string($file)) {
+                    $this->files[] = $installPath . '/' . $file;
+                }
+            }
 
             foreach (['psr-4', 'psr-0'] as $standard) {
                 $rules = $package['autoload'][$standard] ?? null;

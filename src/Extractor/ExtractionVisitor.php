@@ -130,6 +130,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<string, list<string>> */
     private array $mixins = [];
 
+    /** @var array<string, string> callable id => its conditional return type, as JSON (DocTypeResolver) */
+    private array $conditionalReturns = [];
+
     /** @var array<string, string> parameter of the current callable => class of its elements (`@param Rule[] $rules`) */
     private array $parameterElements = [];
 
@@ -224,6 +227,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->genericProperties,
             $this->documentedMethods,
             $this->mixins,
+            $this->conditionalReturns,
         );
     }
 
@@ -578,6 +582,22 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
         if ($kind === NodeKind::Method && $this->currentClass !== null && strtolower($node->name->toString()) === '__construct') {
             $this->onInjectedParameters($this->currentClass, $node->params);
+        }
+
+        $conditional = $node->getAttribute(DocTypeResolver::RETURN_CONDITIONAL);
+        if (\is_string($conditional)) {
+            $this->conditionalReturns[$id] = $conditional;
+        }
+        // A function's return type types the calls to it: `now()->addDay()`, `response()->json()`.
+        if ($kind === NodeKind::Func) {
+            $returnType = $this->declaredReturnType($node);
+            if ($returnType !== null && $returnType !== TypeExpr::STATIC) {
+                $this->returnTypes[$id] = $returnType;
+            }
+            $generic = $node->getAttribute(DocTypeResolver::RETURN_GENERIC);
+            if (\is_string($generic) && !str_contains($generic, TypeExpr::STATIC)) {
+                $this->genericReturns[$id] = $generic;
+            }
         }
 
         if ($kind === NodeKind::Method) {
@@ -1821,6 +1841,28 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $class = $this->resolveName($expr->class);
 
             return $class === null ? null : TypeExpr::returnOf(TypeExpr::named($class), $expr->name->toString());
+        }
+
+        if ($expr instanceof Expr\FuncCall && $expr->name instanceof Name) {
+            // An unqualified name in a namespace: that namespace's function, else the global one.
+            $namespaced = $expr->name->getAttribute('namespacedName');
+            $names = $expr->name->isFullyQualified() || !$namespaced instanceof Name
+                ? [$expr->name->toString()]
+                : [$namespaced->toString(), $expr->name->toString()];
+            $arguments = [];
+            foreach ($expr->args as $argument) {
+                if (!$argument instanceof AstNode\Arg || $argument->unpack || $argument->name !== null) {
+                    break;
+                }
+                $class = $this->classConstant($argument->value);
+                $arguments[] = match (true) {
+                    $class !== null => 'class:' . $class,
+                    $argument->value instanceof Expr\ConstFetch && strtolower($argument->value->name->toString()) === 'null' => 'null',
+                    default => '?',
+                };
+            }
+
+            return TypeExpr::returnOfFunction($names, $arguments);
         }
 
         if ($expr instanceof Expr\New_ && $expr->class instanceof Name) {
