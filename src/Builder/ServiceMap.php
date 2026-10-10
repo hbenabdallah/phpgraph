@@ -9,7 +9,8 @@ namespace PhpGraph\Builder;
  *
  * A service is a directory holding a composer.json that is not part of an enclosing project: no composer.json above
  * it autoloads its code, declares it as a path repository, replaces its package or one it requires (monorepo packages
- * are parts), and it is not test code.
+ * are parts), and it is not test code. Nor is it a library the services share: no other composer.json of the
+ * repository declares it as a path repository or requires its package (`../shared`); such a library is common code.
  * The repository is split only when it holds at least two of them: one lone tool or bundled library below the root
  * stays with the root code. phpgraph.yaml can name the services instead.
  *
@@ -54,7 +55,7 @@ final class ServiceMap
 
         $services = [];
         foreach ($composer as $directory => $data) {
-            if ($directory !== '.' && !self::isPartOfEnclosingProject((string) $directory, $composer)) {
+            if ($directory !== '.' && !self::isPartOfEnclosingProject((string) $directory, $composer) && !self::isSharedLibrary((string) $directory, $composer)) {
                 $services[] = (string) $directory;
             }
         }
@@ -90,6 +91,35 @@ final class ServiceMap
         sort($names);
 
         return $names === [] ? [] : [...$names, self::ROOT];
+    }
+
+    /**
+     * A library the services share: another composer.json of the repository declares it as a path repository
+     * (`../shared`) or requires its package by name. Its code is the services' common code, not a service.
+     *
+     * @param array<string, array<mixed>> $composer directory => decoded composer.json
+     */
+    private static function isSharedLibrary(string $directory, array $composer): bool
+    {
+        $name = $composer[$directory]['name'] ?? null;
+        foreach ($composer as $other => $data) {
+            $other = (string) $other;
+            if ($other === $directory) {
+                continue;
+            }
+            $required = \is_array($data['require'] ?? null) ? $data['require'] : [];
+            if (\is_string($name) && isset($required[$name])) {
+                return true;
+            }
+            foreach (\is_array($data['repositories'] ?? null) ? $data['repositories'] : [] as $repository) {
+                $url = \is_array($repository) && ($repository['type'] ?? null) === 'path' ? $repository['url'] ?? null : null;
+                if (\is_string($url) && self::normalize(($other === '.' ? '' : $other . '/') . $url) === $directory) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

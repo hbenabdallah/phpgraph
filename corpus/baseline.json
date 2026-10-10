@@ -899,30 +899,30 @@
         "filesParsed": 366,
         "filesFailed": 0,
         "duplicates": 0,
-        "nodes": 1825,
+        "nodes": 1773,
         "classLike": 291,
         "methods": 737,
-        "external": 413,
-        "edges": 4795,
-        "vendorFilesRead": 284,
+        "external": 361,
+        "edges": 4991,
+        "vendorFilesRead": 242,
         "edgesByConfidence": {
-            "EXTRACTED": 4320,
-            "INFERRED": 452,
+            "EXTRACTED": 4309,
+            "INFERRED": 659,
             "AMBIGUOUS": 23
         },
         "calls": {
             "total": 1674,
-            "inferred": 308,
+            "inferred": 564,
             "ambiguous": 16,
-            "outsideProject": 1224,
+            "outsideProject": 968,
             "unknownReceiver": 126,
             "chainOutsideProject": 65
         },
         "applicationCalls": {
             "total": 1646,
-            "inferred": 305,
+            "inferred": 561,
             "ambiguous": 16,
-            "outsideProject": 1200,
+            "outsideProject": 944,
             "unknownReceiver": 125,
             "chainOutsideProject": 64
         },
@@ -939,21 +939,18 @@
                 "EXTRACTED": 22
             },
             "sends": {
-                "INFERRED": 17
+                "INFERRED": 22
             },
-            "untypedSends": 5,
+            "untypedSends": 0,
             "messagesWithoutHandlerCount": 3,
             "messagesWithoutHandler": [
                 "cinema@App\\Event\\ReservationCanceled",
                 "cinema@App\\Event\\TicketBought",
                 "cinema@App\\Event\\TicketReserved"
             ],
-            "messagesNeverSentCount": 5,
+            "messagesNeverSentCount": 2,
             "messagesNeverSent": [
                 "centrifugo@App\\Application\\Command\\Centrifugo\\GenerateAuthenticationTokenCommand",
-                "shared@Spiral\\Shared\\CQRS\\Command\\ChargeMoneyCommand",
-                "shared@Spiral\\Shared\\CQRS\\Command\\SendEmailCommand",
-                "shared@Spiral\\Shared\\CQRS\\Query\\GetUserQuery",
                 "web@App\\Application\\Command\\Centrifugo\\GenerateAuthenticationTokenCommand"
             ],
             "contracts": 12
@@ -977,13 +974,13 @@
             "unlinkedCount": 0,
             "unlinked": []
         },
-        "services": 7,
+        "services": 6,
         "architecture": {
             "layerViolations": 0,
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.79,
+        "seconds": 0.84,
         "peakMemoryMb": 32
     },
     {

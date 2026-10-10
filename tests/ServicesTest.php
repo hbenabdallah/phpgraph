@@ -70,6 +70,22 @@ final class ServicesTest extends TestCase
         self::assertSame(ServiceMap::ROOT, $map->serviceOf('src/Bundle/CoreBundle/Kernel.php'));
     }
 
+    public function testALibraryTheServicesRequireIsTheirCommonCode(): void
+    {
+        $result = $this->buildProject([
+            'shared/composer.json' => '{"name": "acme/shared", "autoload": {"psr-4": {"Shared\\\\": "src/"}}}',
+            'shared/src/CinemaServiceInterface.php' => 'namespace Shared; interface CinemaServiceInterface { public function Reserve(): void; }',
+            'cinema/composer.json' => '{"name": "acme/cinema", "repositories": [{"type": "path", "url": "../shared"}], "require": {"acme/shared": "*"}}',
+            'cinema/src/CinemaService.php' => 'namespace Cinema; class CinemaService implements \\Shared\\CinemaServiceInterface { public function Reserve(): void {} }',
+            'web/composer.json' => '{"name": "acme/web", "require": {"acme/shared": "*"}}',
+            'web/src/ReserveTicket.php' => 'namespace Web; class ReserveTicket { public function __construct(private \\Shared\\CinemaServiceInterface $cinema) {} public function run(): void { $this->cinema->Reserve(); } }',
+        ]);
+
+        self::assertSame(['cinema', 'web', ServiceMap::ROOT], $result->services, 'shared is required by name or as a path repository: a library, not a service');
+        self::assertTrue($this->hasEdge($result->graph, 'cinema@Cinema\\CinemaService', 'root@Shared\\CinemaServiceInterface', Relation::Implements));
+        self::assertTrue($this->hasEdge($result->graph, 'web@Web\\ReserveTicket::run', 'root@Shared\\CinemaServiceInterface::Reserve', Relation::Calls));
+    }
+
     public function testEachServiceHasItsOwnClasses(): void
     {
         $result = $this->buildProject(self::TWO_SERVICES);
