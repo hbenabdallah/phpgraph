@@ -300,7 +300,8 @@ final class GraphBuilder
             $vendor = $previous->vendor;
         } else {
             $locator = new ComposerClassLocator($this->readVendor ? $vendorDirectories : []);
-            $vendor = $locator->isEmpty() ? null : new VendorSignatures($locator, $this->extractor);
+            // Without dependencies to read, PHP's own classes still are.
+            $vendor = new VendorSignatures($locator, $this->extractor);
         }
 
         $methodsByClass = $this->methodsByClass($graph);
@@ -401,7 +402,7 @@ final class GraphBuilder
             $duplicates,
             $counter->all(),
             $counter->tests(),
-            $vendor?->filesRead() ?? 0,
+            $vendor->filesRead(),
             $composerFiles,
             \count($vendorDirectories),
             $counter->mostUnresolved(15),

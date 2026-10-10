@@ -5,6 +5,7 @@ declare(strict_types=1);
 $finder = (new PhpCsFixer\Finder())
     ->in([__DIR__ . '/src', __DIR__ . '/tests', __DIR__ . '/tools'])
     ->exclude('Fixtures')
+    ->notPath('Vendor/internal-classes.php')
     ->append([__DIR__ . '/bin/phpgraph']);
 
 return (new PhpCsFixer\Config())

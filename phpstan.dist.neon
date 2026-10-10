@@ -6,3 +6,4 @@ parameters:
         - tools
     excludePaths:
         - tests/Fixtures
+        - src/Vendor/internal-classes.php

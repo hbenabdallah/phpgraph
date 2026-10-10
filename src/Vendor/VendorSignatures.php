@@ -39,7 +39,8 @@ final class VendorSignatures
             $this->read($file);
         }
 
-        return $this->signatures[$key];
+        // PHP's own classes: never in vendor/, read from the signatures generated once.
+        return $this->signatures[$key] ??= InternalClasses::signature($class);
     }
 
     public function filesRead(): int
