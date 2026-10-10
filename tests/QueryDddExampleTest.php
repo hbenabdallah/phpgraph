@@ -12,16 +12,16 @@ use PhpGraph\Query\GraphQuery;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Questions about routes on php-ddd-example, from an agent's bench: every route about the topic, before anything
- * else, in an answer short enough to stay in the agent's context.
+ * Questions on php-ddd-example, from an agent's bench: every route about the topic, before anything else, the
+ * subscribers of an event linked to it, in an answer short enough to stay in the agent's context.
  */
-final class QueryRoutesTest extends TestCase
+final class QueryDddExampleTest extends TestCase
 {
     private static ?GraphQuery $query = null;
 
     private static function query(): GraphQuery
     {
-        return self::$query ??= new GraphQuery((new GraphBuilder())->build(__DIR__ . '/Fixtures/ddd-routes')->graph);
+        return self::$query ??= new GraphQuery((new GraphBuilder())->build(__DIR__ . '/Fixtures/ddd-example')->graph);
     }
 
     /**
@@ -73,5 +73,21 @@ final class QueryRoutesTest extends TestCase
         self::assertSame(2, substr_count($text, 'GET /courses --handled_by--> '), 'two routes, one per application');
         self::assertStringContainsString('WebController --extends--> ApiController [EXTRACTED]', $text);
         self::assertStringContainsString('CoursesPostWebController::__invoke() --calls--> CoursesPostWebController::createCourse() at L', $text, 'call lines kept');
+    }
+
+    public function testTheSubscribersOfAnEventAreLinkedToIt(): void
+    {
+        $text = (new TextPresenter(self::query()))->query('course created event handler');
+
+        self::assertStringContainsString('CourseCreatedDomainEvent --handled_by--> CreateBackofficeCourseOnCourseCreated::__invoke(); IncrementCoursesCounterOnCourseCreated::__invoke()', $text, 'the method standing for its class comes along');
+        self::assertStringContainsString('IncrementCoursesCounterOnCourseCreated [class] src/Mooc/CoursesCounter/Application/Increment/IncrementCoursesCounterOnCourseCreated.php L13; methods __invoke() L22', $text);
+        self::assertStringNotContainsString('IncrementCoursesCounterOnCourseCreated::__invoke() --', $text, 'only the link that brought it');
+    }
+
+    public function testEveryRouteIsLinkedToItsController(): void
+    {
+        $text = (new TextPresenter(self::query()))->query('all routes');
+
+        self::assertSame(12, substr_count($text, ' --handled_by--> '), 'all but GET /api/courses, whose controller exists nowhere');
     }
 }

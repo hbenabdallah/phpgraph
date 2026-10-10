@@ -786,6 +786,24 @@ final class GraphQuery
             $frontier = $next;
         }
 
+        // A message and the class handling or sending it are both in the answer, the link between them held by a method
+        // standing for its class: the method comes along, so the link shows (CourseCreated handled_by
+        // IncrementCounterOnCourseCreated::__invoke). Outside the budget: it sits on its class's line, with that link only.
+        $bus = [Relation::HandledBy, Relation::Dispatches];
+        $bridges = [];
+        foreach (array_keys($selected) as $id) {
+            foreach ($this->graph->incident((string) $id) as $item) {
+                $other = $item['other'];
+                $class = explode('::', $other)[0];
+                if (!isset($selected[$other]) && $class !== $other && isset($selected[$class])
+                    && \in_array($item['edge']->relation, $bus, true)) {
+                    $bridges[$other] = true;
+                }
+            }
+        }
+
+        $selected += $bridges;
+
         $nodes = [];
         foreach (array_keys($selected) as $id) {
             $node = $this->graph->node((string) $id);
@@ -797,7 +815,8 @@ final class GraphQuery
         $edges = [];
         foreach ($nodes as $node) {
             foreach ($this->graph->incident($node->id) as $item) {
-                if ($item['forward'] && isset($selected[$item['other']])) {
+                if ($item['forward'] && isset($selected[$item['other']])
+                    && (!isset($bridges[$node->id]) && !isset($bridges[$item['other']]) || \in_array($item['edge']->relation, $bus, true))) {
                     $edges[] = $item['edge'];
                 }
             }
