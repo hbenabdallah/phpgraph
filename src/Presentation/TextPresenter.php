@@ -409,8 +409,12 @@ final class TextPresenter
         $lines[] = '## Structure of application code';
         $lines[] = 'Read from namespaces: layer names in brackets are namespace segments found below, not a verdict on the architecture.';
         if ($overview->root !== '') {
-            $lines[] = 'Root namespace: ' . $overview->root;
+            $lines[] = 'Root namespace: ' . $overview->root . ' (left out of the names below)';
         }
+        // The root namespace, said once above, is left out of the names of the lists below.
+        $short = static fn (string $name): string => $overview->root !== '' && str_starts_with($name, $overview->root . '\\')
+            ? substr($name, \strlen($overview->root) + 1)
+            : $name;
         if ($overview->globalClasses > 0) {
             $lines[] = \sprintf('%d classes without namespace.', $overview->globalClasses);
         }
@@ -459,7 +463,7 @@ final class TextPresenter
                 $lines[] = '- No dependency breaks them.';
             } else {
                 $lines[] = \sprintf('- %d class dependencies break them: %s. Details: phpgraph check.', \count($architecture->violations), $this->counts($this->violationPairs($architecture->violations)));
-                foreach (\array_slice($architecture->violations, 0, 5) as $violation) {
+                foreach (\array_slice($architecture->violations, 0, 3) as $violation) {
                     $lines[] = '  ' . $this->violation($violation);
                 }
             }
@@ -467,7 +471,7 @@ final class TextPresenter
                 $lines[] = \sprintf(
                     '- Dependencies between bounded contexts (read %s the layer segment, EXTRACTED and INFERRED relations): %s%s.',
                     $architecture->layerFirst ? 'after' : 'before',
-                    $this->counts(\array_slice($architecture->contextDependencies, 0, 10, true)),
+                    $this->counts($this->shortPairs(\array_slice($architecture->contextDependencies, 0, 10, true), $short)),
                     \count($architecture->contextDependencies) > 10 ? \sprintf(', ... %d more pairs', \count($architecture->contextDependencies) - 10) : '',
                 );
             }
@@ -487,7 +491,7 @@ final class TextPresenter
                 $lines[] = \sprintf(
                     '- %d sent messages have no handler in the project (handled by a dependency, another service, or not detected): %s%s.',
                     $bus->messagesWithoutHandlerCount,
-                    implode(', ', $bus->messagesWithoutHandler),
+                    implode(', ', array_map($short, $bus->messagesWithoutHandler)),
                     $bus->messagesWithoutHandlerCount > \count($bus->messagesWithoutHandler) ? ', ...' : '',
                 );
             }
@@ -495,7 +499,7 @@ final class TextPresenter
                 $lines[] = \sprintf(
                     '- %d handled messages are never sent by the project (sent by a dependency or another service, deserialized, or sent untyped): %s%s.',
                     $bus->messagesNeverSentCount,
-                    implode(', ', $bus->messagesNeverSent),
+                    implode(', ', array_map($short, $bus->messagesNeverSent)),
                     $bus->messagesNeverSentCount > \count($bus->messagesNeverSent) ? ', ...' : '',
                 );
             }
@@ -952,6 +956,24 @@ final class TextPresenter
     }
 
     /**
+     * `App\Sales -> App\Shared` as `Sales -> Shared`.
+     *
+     * @param array<string, int>       $pairs
+     * @param \Closure(string): string $short
+     *
+     * @return array<string, int>
+     */
+    private function shortPairs(array $pairs, \Closure $short): array
+    {
+        $shortened = [];
+        foreach ($pairs as $pair => $count) {
+            $shortened[implode(' -> ', array_map($short, explode(' -> ', (string) $pair)))] = $count;
+        }
+
+        return $shortened;
+    }
+
+    /**
      * @param array<string, int> $counts
      */
     private function counts(array $counts): string
@@ -1013,15 +1035,26 @@ final class TextPresenter
     private function routeList(array $routes): array
     {
         if (\count($routes) <= self::ROUTES_LISTED) {
-            $lines = ['## Routes', 'Method, path, controller, routing file. query_graph("routes /path") or get_node on a route gives its neighbours.'];
+            $lines = ['## Routes', 'Method, path, controller (routing file), by directory of the routing files. query_graph("routes /path") or get_node on a route gives its neighbours.'];
+            $byDirectory = [];
             foreach ($routes as $route) {
-                $lines[] = \sprintf(
-                    '- %s%s -> %s (%s)',
-                    $route->route->service === null ? '' : $route->route->service . ': ',
-                    $route->route->label,
-                    $route->handler === null ? 'no controller in the graph' : $route->handler->label,
-                    $this->location($route->route),
-                );
+                $file = (string) $route->route->file;
+                $byDirectory[\dirname($file) === '.' ? '' : \dirname($file) . '/'][] = [$route, basename($file)];
+            }
+            foreach ($byDirectory as $directory => $entries) {
+                if ($directory !== '') {
+                    $lines[] = $directory;
+                }
+                foreach ($entries as [$route, $file]) {
+                    $lines[] = \sprintf(
+                        '- %s%s -> %s (%s%s)',
+                        $route->route->service === null ? '' : $route->route->service . ': ',
+                        $route->route->label,
+                        $route->handler === null ? 'no controller in the graph' : preg_replace('/::__invoke\(\)$/', '', $route->handler->label),
+                        $file,
+                        $route->route->line === null ? '' : ' L' . $route->route->line,
+                    );
+                }
             }
 
             return $lines;
@@ -1044,13 +1077,12 @@ final class TextPresenter
         $lines = [
             '## Routes',
             \sprintf(
-                '%d routes, by path prefix (count, routing files). query_graph("routes /prefix") lists those of a prefix with their controllers.',
+                '%d routes, by path prefix. query_graph("routes /prefix") lists those of a prefix with their controllers and routing files.',
                 \count($routes),
             ),
         ];
         foreach (\array_slice($groups, 0, self::ROUTES_LISTED, true) as $key => $group) {
-            $files = array_keys($group['files']);
-            $lines[] = \sprintf('- %s: %d (%s%s)', $key, $group['count'], implode(', ', \array_slice($files, 0, 3)), \count($files) > 3 ? ', ...' : '');
+            $lines[] = \sprintf('- %s: %d (%s)', $key, $group['count'], \count($group['files']) === 1 ? 'one routing file' : \count($group['files']) . ' routing files');
         }
         if (\count($groups) > self::ROUTES_LISTED) {
             $lines[] = \sprintf('- ... %d more prefixes', \count($groups) - self::ROUTES_LISTED);

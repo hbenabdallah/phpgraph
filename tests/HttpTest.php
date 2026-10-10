@@ -129,8 +129,8 @@ final class HttpTest extends TestCase
         $result = $this->buildProject(self::TWO_APPS);
         $text = (new TextPresenter(new GraphQuery($result->graph, ProjectSummary::fromBuild($result, new BuildOptions(), []))))->overview();
 
-        self::assertStringContainsString('- PUT /courses/{id} -> PutCourseController::__invoke() (apps/mooc/config/routes.yaml L5)', $text);
-        self::assertStringContainsString('- GET /courses -> no controller in the graph (apps/backoffice/config/routes.yaml L1)', $text);
+        self::assertStringContainsString("apps/mooc/config/\n- GET /courses -> GetCoursesController (routes.yaml L1)\n- PUT /courses/{id} -> PutCourseController (routes.yaml L5)", $text, 'by directory, __invoke() left out');
+        self::assertStringContainsString('- GET /courses -> no controller in the graph (routes.yaml L1)', $text);
         self::assertStringContainsString('1 routes name a controller class declared nowhere in the project', $text);
         self::assertStringContainsString('GET /courses -> App\Backoffice\ApiCoursesGetController (apps/backoffice/config/routes.yaml:1)', $text);
 
@@ -142,7 +142,7 @@ final class HttpTest extends TestCase
         $text = (new TextPresenter(new GraphQuery($result->graph, ProjectSummary::fromBuild($result, new BuildOptions(), []))))->overview();
 
         self::assertStringContainsString('44 routes, by path prefix', $text);
-        self::assertStringContainsString('- /orders: 20 (src/Controller0.php, src/Controller10.php, src/Controller12.php, ...)', $text);
+        self::assertStringContainsString('- /orders: 20 (20 routing files)', $text);
     }
 
     public function testApiPlatformResourcesAreRoutesHandledByTheirStateClasses(): void
