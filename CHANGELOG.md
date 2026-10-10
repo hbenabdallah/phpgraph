@@ -3,7 +3,7 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
-## Unreleased
+## 1.2.0 (2026-10-10)
 
 ### Added
 - API schemas, read as files, never run: the operations of OpenAPI (Swagger) documents in YAML or JSON, and the rpcs

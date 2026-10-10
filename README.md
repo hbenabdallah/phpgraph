@@ -226,12 +226,12 @@ phpgraph is developed against a corpus of open-source projects pinned to a commi
 | Project | Kind | PHP files | Build | Receiver typed |
 |---|---|---:|---:|---:|
 | [php-ddd-example](https://github.com/CodelyTV/php-ddd-example) | DDD, CQRS | 304 | 0.4 s | 98.5 % |
-| [Sylius](https://github.com/Sylius/Sylius) | Symfony e-commerce | 4,946 | 6.5 s | 96.0 % |
+| [Sylius](https://github.com/Sylius/Sylius) | Symfony e-commerce | 4,946 | 6.5 s | 96.6 % |
 | [Akeneo PIM](https://github.com/akeneo/pim-community-dev) | hexagonal, bounded contexts | 8,416 | 10.3 s | 88.7 % |
 | [PrestaShop](https://github.com/PrestaShop/PrestaShop) | CQRS and legacy | 7,850 | 10.0 s | 91.5 % |
-| [Ecotone quickstart](https://github.com/ecotoneframework/quickstart-examples) | 47 services, messaging | 583 | 0.6 s | 93.8 % |
-| [BookStack](https://github.com/BookStackApp/BookStack) | Laravel | 1,513 | 2.8 s | 88.5 % |
-| [WordPress](https://github.com/WordPress/WordPress) | no framework, hooks | 1,899 | 5.3 s | 91.5 % |
+| [Ecotone quickstart](https://github.com/ecotoneframework/quickstart-examples) | 47 services, messaging | 583 | 0.6 s | 94.4 % |
+| [BookStack](https://github.com/BookStackApp/BookStack) | Laravel | 1,513 | 2.8 s | 94.6 % |
+| [WordPress](https://github.com/WordPress/WordPress) | no framework, hooks | 1,899 | 5.3 s | 92.8 % |
 
 Four microservices projects complete the corpus: [two Laravel services over RabbitMQ](https://github.com/mostafaaminflakes/Using-RabbitMQ-in-Microservices), linked by 4 message contracts; [four Laravel services over HTTP](https://github.com/omarihab99/Art-Gallery), where phpgraph found a `POST` sent to a `GET`-only route; [Spiral's ticket booking](https://github.com/spiral/ticket-booking), services calling each other through gRPC services declared in `.proto` files; and [StayHub](https://github.com/ahmedibrahimyassindev/StayHub), seven Laravel services behind an API gateway described by an OpenAPI file. The last two measure API schemas as contracts: all 45 operations of StayHub's document and all 14 rpcs of ticket-booking are linked to what implements them. Zero parse failures on about 26,600 files. The details per project, including messages, routes and services, are in [`corpus/RESULTS.md`](https://github.com/hbenabdallah/phpgraph/blob/main/corpus/RESULTS.md).
 
