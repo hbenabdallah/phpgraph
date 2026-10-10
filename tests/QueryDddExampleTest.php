@@ -81,7 +81,16 @@ final class QueryDddExampleTest extends TestCase
 
         self::assertStringContainsString('CourseCreatedDomainEvent --handled_by--> CreateBackofficeCourseOnCourseCreated::__invoke(); IncrementCoursesCounterOnCourseCreated::__invoke()', $text, 'the method standing for its class comes along');
         self::assertStringContainsString('IncrementCoursesCounterOnCourseCreated [class] src/Mooc/CoursesCounter/Application/Increment/IncrementCoursesCounterOnCourseCreated.php L13; methods __invoke() L22', $text);
-        self::assertStringNotContainsString('IncrementCoursesCounterOnCourseCreated::__invoke() --', $text, 'only the link that brought it');
+    }
+
+    public function testNeighboursOffTheTopicAreLeftOut(): void
+    {
+        $labels = array_map(static fn (Node $node): string => $node->label, self::query()->subgraph('course created event handler')->nodes);
+
+        self::assertContains('CreateBackofficeCourseOnCourseCreated', $labels);
+        foreach (['CreateVideoCommandHandler', 'VideoCreatedDomainEvent', 'AuthenticateUserCommandHandler', 'VideoCreator'] as $offTopic) {
+            self::assertNotContains($offTopic, $labels, $offTopic . ' names "create", "event" or "handler", not "course"');
+        }
     }
 
     public function testEveryRouteIsLinkedToItsController(): void

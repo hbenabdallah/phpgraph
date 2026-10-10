@@ -527,11 +527,37 @@ final class GraphQuery
             $seeds[] = $node;
         }
         $primary = array_map('strval', array_keys($classes));
+        $topic = $this->topic($primary, $stems);
         if ($collaborators && $seeds !== []) {
-            $seeds = [...$seeds, ...$this->collaborators($primary, $stems, self::SEEDS * 2 - \count($seeds))];
+            $seeds = [...$seeds, ...$this->collaborators($primary, $stems, self::SEEDS * 2 - \count($seeds), $topic)];
         }
 
-        return $this->expand($stems, $seeds, $depth, $budget, $wantsTests, $primary);
+        return $this->expand($stems, $seeds, $depth, $budget, $wantsTests, $primary, $topic);
+    }
+
+    /**
+     * The topic: the words every class the question names shares (`course` and `created` for CourseCreatedEvent and
+     * CreateCourseHandler). A class naming only the question's other words (CreateVideoHandler, through `create` and
+     * `handler`) is not about it: it may still come in by a telling relation, never open the way. Empty when the
+     * question names one class only, or when they share all its words.
+     *
+     * @param list<string> $classes
+     * @param list<string> $terms
+     *
+     * @return list<string>
+     */
+    private function topic(array $classes, array $terms): array
+    {
+        $named = array_values(array_filter(array_map(fn (string $class): ?Node => $this->graph->node($class), $classes)));
+        if (\count($named) < 2) {
+            return [];
+        }
+        $topic = $terms;
+        foreach ($named as $node) {
+            $topic = array_values(array_intersect($topic, $this->relevance()->matched($node, $terms)));
+        }
+
+        return \count($topic) === \count($terms) ? [] : $topic;
     }
 
     /**
@@ -540,10 +566,11 @@ final class GraphQuery
      *
      * @param list<string> $seeds
      * @param list<string> $stems
+     * @param list<string> $topic the words a class must name to be about the question
      *
      * @return list<Node>
      */
-    private function collaborators(array $seeds, array $stems, int $limit): array
+    private function collaborators(array $seeds, array $stems, int $limit, array $topic = []): array
     {
         $cluster = new FeatureCluster($this->graph, $this->relevance());
         $prefix = static fn (string $class): string => implode('\\', \array_slice(explode('\\', $class), 0, 2));
@@ -555,7 +582,7 @@ final class GraphQuery
                 continue;
             }
             $linked = array_intersect_key($cluster->linksOf($class), array_flip($seeds)) !== [];
-            $about = $this->relevance()->score($node, $stems, true) > 0;
+            $about = $this->relevance()->score($node, $stems, true) > 0 && array_diff($topic, $this->relevance()->matched($node, $stems)) === [];
             if ($linked || $about) {
                 $found[] = [($about ? 2 : 0) + ($linked ? 1 : 0), $node];
             }
@@ -690,8 +717,9 @@ final class GraphQuery
      * @param list<Node>        $seeds
      * @param list<string>|null $primary the classes the question names, whose methods may stand on their own (the
      *                                   classes of the feature added around them stand as classes)
+     * @param list<string>      $topic   the words a neighbour must name to be about the question (topic())
      */
-    private function expand(array $terms, array $seeds, int $depth, int $budget, bool $withTests = true, ?array $primary = null): Subgraph
+    private function expand(array $terms, array $seeds, int $depth, int $budget, bool $withTests = true, ?array $primary = null, array $topic = []): Subgraph
     {
         $selected = [];
         $frontier = [];
@@ -716,12 +744,14 @@ final class GraphQuery
             return isset($methodsShown[$class]) ? $node : ($this->graph->node($class) ?? $node);
         };
 
+        $aboutTopic = fn (Node $node): bool => $topic === [] || array_diff($topic, $this->relevance()->matched($node, $terms)) === [];
+
         // Each step keeps the neighbours that are about the question, then those linked by a telling relation;
         // the next step starts only from the first ones, so an unrelated hub never opens the way.
         $cluster = new FeatureCluster($this->graph, $this->relevance());
         for ($level = 1; $level <= $depth && $frontier !== [] && \count($selected) < $budget; ++$level) {
             $candidates = [];
-            $consider = function (Node $other, int $weight, bool $ownName) use (&$candidates, &$selected, $terms, $withTests, $cluster): void {
+            $consider = function (Node $other, int $weight, bool $ownName) use (&$candidates, &$selected, $terms, $withTests, $cluster, $aboutTopic): void {
                 if (isset($selected[$other->id]) || $other->kind === NodeKind::File || $other->kind === NodeKind::External
                     || (!$withTests && $other->file !== null && TestFiles::isTest($other->file))) {
                     return;
@@ -731,7 +761,7 @@ final class GraphQuery
                 if ($head !== null && isset($selected[$head]) && $this->relevance()->score($other, $terms, true) <= 0) {
                     return;
                 }
-                $score = $this->relevance()->score($other, $terms, $ownName);
+                $score = $aboutTopic($other) ? $this->relevance()->score($other, $terms, $ownName) : 0.0;
                 if ($score <= 0 && ($weight < 2 || $this->graph->degree($other->id) > self::HUB)) {
                     return;
                 }
