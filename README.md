@@ -275,7 +275,7 @@ Sylius (the corpus commit), October 2026, without any LLM: phpgraph 1.0.2, [code
 ## Limitations
 
 - Calls to global functions and dynamic calls (`$this->$name()`, `__call`) are not resolved.
-- Generics are read for collections only: a `foreach` over a parameter or property documented as `Foo[]`, `array<Foo>`, `list<Foo>` or `iterable<Foo>` is typed; `Collection<Foo>` and other generic classes are read as `Collection`.
+- Generics are read from docblocks (`@template`, `@extends Repository<Order>`, `@return Collection<int, Item>`, `ScalarNodeDefinition<$this>`), in the project and in `vendor/`: a template is bound by the type of the receiver and the parents passing it on, and a `foreach` walks the elements of any typed collection. Conditional return types (`T is 'array' ? A : B`) and templates of a method (`@param class-string<T>`) are not evaluated.
 - Chains stop at magic methods, PHP internal classes, and dependencies without a usable return type.
 - Without an installed `vendor/`, call chains stop at the first dependency.
 - Services built at runtime (compiler passes, bundle extensions, ids computed from values only known at runtime), XML routes, API Platform resources declared in XML or YAML, and API schemas (OpenAPI, protobuf) are not read; injections that cannot be linked are listed by `overview`.

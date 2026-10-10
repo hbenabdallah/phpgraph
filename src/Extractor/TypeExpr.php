@@ -15,18 +15,40 @@ final readonly class TypeExpr
      */
     public const STATIC = 'static';
 
+    /**
+     * @param ?string $generic the type with its arguments, a GenericType string, when it has some: `Collection<?,Item>`
+     */
     private function __construct(
         public ?string $className,
         public ?self $receiver = null,
         public ?string $member = null,
         public bool $isProperty = false,
         public bool $isElement = false,
+        public ?string $generic = null,
     ) {
     }
 
     public static function named(string $className): self
     {
         return new self($className);
+    }
+
+    /**
+     * A type with its arguments, read in a docblock: `@var Collection<int, Item> $items`, `@param Item[] $items`.
+     */
+    public static function generic(string $type): self
+    {
+        $base = GenericType::base($type);
+
+        return new self(GenericType::isClass($base) ? $base : null, null, null, false, false, $type);
+    }
+
+    /**
+     * An element of a collection: `foreach ($order->getItems() as $item)` with `@return Collection<int, Item>`.
+     */
+    public static function elementOf(self $collection): self
+    {
+        return new self(null, $collection, null, false, true);
     }
 
     public static function returnOf(self $receiver, string $method): self
@@ -56,14 +78,17 @@ final readonly class TypeExpr
     public function map(\Closure $map): self
     {
         return $this->receiver === null
-            ? new self($this->className === null ? null : $map($this->className))
+            ? new self($this->className === null ? null : $map($this->className), null, null, false, false, $this->generic === null ? null : GenericType::mapNames($this->generic, $map))
             : new self(null, $this->receiver->map($map), $this->member, $this->isProperty, $this->isElement);
     }
 
     public function key(): string
     {
         if ($this->receiver === null) {
-            return strtolower((string) $this->className);
+            return strtolower($this->generic ?? (string) $this->className);
+        }
+        if ($this->member === null) {
+            return $this->receiver->key() . '[]';
         }
 
         return $this->receiver->key() . ($this->isProperty ? '->$' : '->') . $this->member . ($this->isProperty ? '' : '()') . ($this->isElement ? '[]' : '');

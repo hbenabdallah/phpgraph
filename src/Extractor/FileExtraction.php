@@ -53,6 +53,12 @@ final readonly class FileExtraction
      * @param list<array{string, string, TypeExpr, string, int|string}> $parameterPasses a method passing one of its
      *                                             parameters untouched to a call: caller, parameter, receiver, method,
      *                                             position or name of the argument
+     * @param array<string, list<string>> $templates class => its template parameters (`@template T`), in order
+     * @param array<string, array<string, list<string>>> $parentArguments class => parent => the arguments it gives the
+     *                                             parent's templates (`@extends Repository<Order>`), GenericType strings
+     * @param array<string, string> $genericReturns method id => the GenericType it returns, when it says more than a
+     *                                             class: `ScalarNodeDefinition<static>`, `@TParent`
+     * @param array<string, string> $genericProperties "Class::property" => its GenericType: `Collection<?,App\Item>`
      */
     public function __construct(
         public array $nodes,
@@ -81,6 +87,10 @@ final readonly class FileExtraction
         public array $propertyHolds = [],
         public array $methodParameters = [],
         public array $parameterPasses = [],
+        public array $templates = [],
+        public array $parentArguments = [],
+        public array $genericReturns = [],
+        public array $genericProperties = [],
     ) {
     }
 }

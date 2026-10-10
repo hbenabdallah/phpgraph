@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpGraph\Builder;
 
 use PhpGraph\Extractor\FileExtractor;
+use PhpGraph\Extractor\GenericType;
 use PhpGraph\Extractor\HandlerFact;
 use PhpGraph\Extractor\PendingCall;
 use PhpGraph\Extractor\PendingDispatch;
@@ -129,6 +130,14 @@ final class GraphBuilder
         $returnElements = [];
         $invokedParameters = [];
         $propertyTypes = [];
+        /** @var array<string, list<string>> $templates */
+        $templates = [];
+        /** @var array<string, array<string, list<string>>> $parentArguments */
+        $parentArguments = [];
+        /** @var array<string, string> $genericReturns */
+        $genericReturns = [];
+        /** @var array<string, string> $genericProperties */
+        $genericProperties = [];
         /** @var array<string, array{method: string, types: list<string>|true|null}> $guards */
         $guards = [];
         /** @var array<string, list<array{string, int, list<?string>, list<?string>}>> $callArguments */
@@ -179,6 +188,20 @@ final class GraphBuilder
             }
             foreach ($extraction->propertyTypes as $property => $type) {
                 $propertyTypes[$this->qualifiedMember($property, $id)] ??= $id($type);
+            }
+            foreach ($extraction->templates as $class => $parameters) {
+                $templates[$id($class)] ??= $parameters;
+            }
+            foreach ($extraction->parentArguments as $class => $parents) {
+                foreach ($parents as $parent => $arguments) {
+                    $parentArguments[$id($class)][$id($parent)] ??= array_map(static fn (string $argument): string => GenericType::mapNames($argument, $id), $arguments);
+                }
+            }
+            foreach ($extraction->genericReturns as $method => $type) {
+                $genericReturns[$id($method)] ??= GenericType::mapNames($type, $id);
+            }
+            foreach ($extraction->genericProperties as $property => $type) {
+                $genericProperties[$this->qualifiedMember($property, $id)] ??= GenericType::mapNames($type, $id);
             }
             foreach ($extraction->guards as $class => $guard) {
                 $guards[$id($class)] ??= ['method' => $guard['method'], 'types' => \is_array($guard['types']) ? array_map($id, $guard['types']) : $guard['types']];
@@ -281,7 +304,7 @@ final class GraphBuilder
         }
 
         $methodsByClass = $this->methodsByClass($graph);
-        $types = new TypeResolver($graph, $names, $methodsByClass, $returnTypes, $propertyTypes, $vendor, $returnElements);
+        $types = new TypeResolver($graph, $names, $methodsByClass, $returnTypes, $propertyTypes, $vendor, $returnElements, new Generics($templates, $parentArguments, $genericReturns, $genericProperties));
 
         // A method reading a property typed as an enum (`$violation->type`) uses that enum: what it outputs depends on it.
         foreach ($propertyReads as [$reader, $property]) {

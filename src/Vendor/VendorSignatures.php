@@ -79,15 +79,30 @@ final class VendorSignatures
         }
 
         foreach ($classes as $name => $class) {
-            $properties = [];
+            $properties = $genericProperties = [];
             foreach ($extraction->propertyTypes as $property => $type) {
                 if (str_starts_with($property, $name . '::')) {
                     $properties[substr($property, \strlen($name) + 2)] = $type;
                 }
             }
+            foreach ($extraction->genericProperties as $property => $type) {
+                if (str_starts_with($property, $name . '::')) {
+                    $genericProperties[substr($property, \strlen($name) + 2)] = $type;
+                }
+            }
             $returnTypes = array_intersect_key($extraction->returnTypes, array_flip($class['methods']));
 
-            $this->signatures[strtolower($name)] = new ClassSignature($name, $class['parents'], $class['methods'], $returnTypes, $properties);
+            $this->signatures[strtolower($name)] = new ClassSignature(
+                $name,
+                $class['parents'],
+                $class['methods'],
+                $returnTypes,
+                $properties,
+                $extraction->templates[$name] ?? [],
+                $extraction->parentArguments[$name] ?? [],
+                array_intersect_key($extraction->genericReturns, array_flip($class['methods'])),
+                $genericProperties,
+            );
         }
     }
 }

@@ -62,6 +62,10 @@ final class BuildState
         foreach ($extraction->invokedParameters as $method => $parameters) {
             hash_update($hash, 'i' . $method . '=' . json_encode($parameters) . "\n");
         }
+        foreach ($extraction->returnElements as $method => $type) {
+            hash_update($hash, 'l' . $method . '=' . $type . "\n");
+        }
+        hash_update($hash, 'g' . json_encode([$extraction->templates, $extraction->parentArguments, $extraction->genericReturns, $extraction->genericProperties]) . "\n");
 
         return hash_final($hash);
     }

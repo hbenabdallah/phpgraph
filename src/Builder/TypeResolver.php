@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpGraph\Builder;
 
+use PhpGraph\Extractor\GenericType;
 use PhpGraph\Extractor\TypeExpr;
 use PhpGraph\Graph\Graph;
 use PhpGraph\Graph\Relation;
@@ -51,8 +52,19 @@ final class TypeResolver
         private readonly array $propertyTypes,
         private readonly ?VendorSignatures $vendor = null,
         private readonly array $returnElements = [],
+        private readonly Generics $generics = new Generics(),
     ) {
     }
+
+    /** @var array<string, list<string>> */
+    private array $supertypes = [];
+
+    /**
+     * Resolved expressions, by key: each call of a chain resolves its receiver, the chain before it, again.
+     *
+     * @var array<string, array{?string, bool}>
+     */
+    private array $resolved = [];
 
     /**
      * @param bool $leftProject set when the chain stops at a member the project does not declare: one missing
@@ -60,16 +72,60 @@ final class TypeResolver
      */
     public function resolve(TypeExpr $type, bool &$leftProject = false): ?string
     {
+        $resolved = $this->resolveGeneric($type, $leftProject);
+        $base = $resolved === null ? null : GenericType::base($resolved);
+
+        return $base !== null && GenericType::isClass($base) ? $base : null;
+    }
+
+    /**
+     * The type with its arguments: `ScalarNodeDefinition<NodeBuilder<ArrayNodeDefinition<TreeBuilder>>>`, so that
+     * the next call of a chain binds the templates of its class (`end()` returns `TParent`).
+     */
+    private function resolveGeneric(TypeExpr $type, bool &$leftProject): ?string
+    {
         if ($type->receiver === null) {
+            return $this->resolveUncached($type, $leftProject);
+        }
+
+        $key = $type->key();
+        if (!isset($this->resolved[$key])) {
+            $left = false;
+            $this->resolved[$key] = [$this->resolveUncached($type, $left), $left];
+        }
+        [$resolved, $left] = $this->resolved[$key];
+        $leftProject = $leftProject || $left;
+
+        return $resolved;
+    }
+
+    private function resolveUncached(TypeExpr $type, bool &$leftProject): ?string
+    {
+        if ($type->receiver === null) {
+            if ($type->generic !== null) {
+                return $this->canonicalType($type->generic);
+            }
+
             return $type->className === null ? null : $this->names->canonical($type->className);
         }
 
-        $receiver = $this->resolve($type->receiver, $leftProject);
-        if ($receiver === null || $type->member === null) {
+        $receiverType = $this->resolveGeneric($type->receiver, $leftProject);
+        if ($receiverType === null) {
+            return null;
+        }
+        if ($type->member === null) {
+            return $this->elementOf($receiverType);
+        }
+        $receiver = GenericType::base($receiverType);
+        if (!GenericType::isClass($receiver)) {
             return null;
         }
 
         if ($type->isProperty) {
+            $generic = $this->genericProperty($receiverType, $type->member);
+            if ($generic !== null) {
+                return $generic;
+            }
             $property = $this->findProperty($receiver, $type->member);
             if ($property === null) {
                 $leftProject = true;
@@ -87,8 +143,17 @@ final class TypeResolver
 
         if ($type->isElement) {
             $element = $this->returnElements[$method] ?? null;
+            if ($element !== null) {
+                return $this->names->canonical($element);
+            }
+            $returned = $this->genericReturn($method, $receiverType);
 
-            return $element === null ? null : $this->names->canonical($element);
+            return $returned === null ? null : $this->elementOf($returned);
+        }
+
+        $generic = $this->genericReturn($method, $receiverType);
+        if ($generic !== null) {
+            return $generic;
         }
 
         $returned = $this->returnTypes[$method] ?? $this->vendorReturnType($method);
@@ -98,9 +163,161 @@ final class TypeResolver
 
         return match ($returned) {
             null => null,
-            TypeExpr::STATIC => $receiver,
+            TypeExpr::STATIC => $receiverType,
             default => $this->names->canonical($returned),
         };
+    }
+
+    /**
+     * What a method documented with a generic type returns to this receiver: its templates bound by the receiver's
+     * arguments, through the parents that pass them on.
+     */
+    private function genericReturn(string $method, string $receiverType): ?string
+    {
+        $owner = substr($method, 0, (int) strrpos($method, '::'));
+        $generic = $this->generics->returns[$method] ?? $this->vendorSignature($owner)?->genericReturns[$method] ?? null;
+        if ($generic === null) {
+            return null;
+        }
+        $returned = GenericType::substitute($generic, $this->bindings($receiverType, $owner), $receiverType);
+
+        return $returned === null ? null : $this->canonicalType($returned);
+    }
+
+    private function genericProperty(string $receiverType, string $name): ?string
+    {
+        foreach ($this->supertypes($receiverType) as $supertype) {
+            [$class, $arguments] = GenericType::parse($supertype);
+            $generic = $this->generics->properties[$class . '::' . $name] ?? $this->vendorSignature($class)?->genericProperties[$name] ?? null;
+            if ($generic !== null) {
+                $type = GenericType::substitute($generic, $this->zip($this->templates($class), $arguments), $receiverType);
+
+                return $type === null ? null : $this->canonicalType($type);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The elements of a collection type: its own arguments when it is an array or one of PHP's iterables, otherwise
+     * those of the iterable it extends, `Collection<int, Item>` being an `IteratorAggregate<int, Item>`.
+     */
+    private function elementOf(string $type): ?string
+    {
+        foreach ($this->supertypes($type) as $supertype) {
+            $element = GenericType::element($supertype);
+            if ($element !== null) {
+                return $element;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The bindings of a class's templates as seen from a type extending it: `ScalarNodeDefinition<NodeBuilder>`
+     * binds the TParent of NodeDefinition, through `@extends VariableNodeDefinition<TParent>`.
+     *
+     * @return array<string, string>
+     */
+    private function bindings(string $type, string $class): array
+    {
+        $class = strtolower($class);
+        foreach ($this->supertypes($type) as $supertype) {
+            [$base, $arguments] = GenericType::parse($supertype);
+            if (strtolower($base) === $class) {
+                return $this->zip($this->templates($base), $arguments);
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * The type and everything it extends, implements or uses, each with the arguments it receives: nearest first.
+     *
+     * @return list<string>
+     */
+    private function supertypes(string $type): array
+    {
+        if (isset($this->supertypes[$type])) {
+            return $this->supertypes[$type];
+        }
+
+        $queue = [$type];
+        $seen = [strtolower(GenericType::base($type)) => true];
+        $supertypes = [];
+        while ($queue !== [] && \count($supertypes) < 64) {
+            $current = array_shift($queue);
+            $supertypes[] = $current;
+            [$base, $arguments] = GenericType::parse($current);
+            if (!GenericType::isClass($base)) {
+                continue;
+            }
+            $bindings = $this->zip($this->templates($base), $arguments);
+            $declared = [];
+            foreach ($this->parentArguments($base) as $parent => $parentArguments) {
+                $declared[strtolower($parent)] = [$parent, $parentArguments];
+            }
+            $parents = $this->parents($base, [Relation::Extends, Relation::Implements, Relation::UsesTrait], true);
+            foreach ($declared as [$parent]) {
+                $parents[] = $parent;
+            }
+            foreach ($parents as $parent) {
+                $key = strtolower($parent);
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $queue[] = GenericType::format($parent, array_map(
+                    static fn (string $argument): string => GenericType::substitute($argument, $bindings, $current) ?? GenericType::UNKNOWN,
+                    $declared[$key][1] ?? [],
+                ));
+            }
+        }
+
+        return $this->supertypes[$type] = $supertypes;
+    }
+
+    /**
+     * @param list<string> $templates
+     * @param list<string> $arguments
+     *
+     * @return array<string, string>
+     */
+    private function zip(array $templates, array $arguments): array
+    {
+        $bindings = [];
+        foreach ($templates as $index => $template) {
+            $argument = $arguments[$index] ?? GenericType::UNKNOWN;
+            if ($argument !== GenericType::UNKNOWN) {
+                $bindings[$template] = $argument;
+            }
+        }
+
+        return $bindings;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function templates(string $class): array
+    {
+        return $this->generics->templates[$class] ?? $this->vendorSignature($class)->templates ?? [];
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function parentArguments(string $class): array
+    {
+        return $this->generics->parentArguments[$class] ?? $this->vendorSignature($class)->parentArguments ?? [];
+    }
+
+    private function canonicalType(string $type): string
+    {
+        return GenericType::mapNames($type, fn (string $name): string => $this->names->canonical($name));
     }
 
     /**

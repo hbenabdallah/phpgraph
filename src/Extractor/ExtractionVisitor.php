@@ -109,6 +109,21 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<string, string> property of the current class => class of the elements it holds (`@var Rule[]`) */
     private array $propertyElements = [];
 
+    /** @var array<string, list<string>> */
+    private array $templates = [];
+
+    /** @var array<string, array<string, list<string>>> */
+    private array $parentArguments = [];
+
+    /** @var array<string, string> */
+    private array $genericReturns = [];
+
+    /** @var array<string, string> */
+    private array $genericProperties = [];
+
+    /** @var array<string, string> property of the current class => its GenericType (`@var Collection<int, Item>`) */
+    private array $propertyGenerics = [];
+
     /** @var array<string, string> parameter of the current callable => class of its elements (`@param Rule[] $rules`) */
     private array $parameterElements = [];
 
@@ -197,6 +212,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->propertyHolds,
             $this->methodParameters,
             $this->parameterPasses,
+            $this->templates,
+            $this->parentArguments,
+            $this->genericReturns,
+            $this->genericProperties,
         );
     }
 
@@ -419,6 +438,19 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
         $this->propertyTypes = $this->collectPropertyTypes($node);
         $this->propertyElements = $this->collectPropertyElements($node);
+        $this->propertyGenerics = $this->collectPropertyGenerics($node);
+        foreach ($this->propertyGenerics as $property => $type) {
+            $this->genericProperties[$fqcn . '::' . $property] = $type;
+        }
+        $templates = $node->getAttribute(DocTypeResolver::TEMPLATES);
+        if (\is_array($templates) && $templates !== []) {
+            $this->templates[$fqcn] = array_values(array_filter($templates, 'is_string'));
+        }
+        $parentArguments = $node->getAttribute(DocTypeResolver::PARENT_ARGUMENTS);
+        if (\is_array($parentArguments) && $parentArguments !== []) {
+            /** @var array<string, list<string>> $parentArguments */
+            $this->parentArguments[$fqcn] = $parentArguments;
+        }
         $holds = $this->collectPropertyHolds($node);
         if ($holds !== []) {
             $this->propertyHolds[$fqcn] = $holds;
@@ -496,7 +528,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                 $this->reference($id, $type);
             }
         }
-        $this->typeParameters($node->params);
+        $generics = $node->getAttribute(DocTypeResolver::GENERICS);
+        $this->typeParameters($node->params, \is_array($generics) ? array_filter($generics, 'is_string') : []);
 
         foreach ($this->typeNames($node->returnType) as $type) {
             $this->reference($id, $type);
@@ -524,6 +557,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $returnType = $this->declaredReturnType($node);
             if ($returnType !== null) {
                 $this->returnTypes[$id] = $returnType;
+            }
+            $generic = $node->getAttribute(DocTypeResolver::RETURN_GENERIC);
+            if (\is_string($generic)) {
+                $this->genericReturns[$id] = $generic;
             }
             $element = $node->getAttribute(DocTypeResolver::RETURN_ELEMENT);
             $element = \is_string($element) ? $this->documentedClass($element) : null;
@@ -575,16 +612,36 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     }
 
     /**
-     * @param array<AstNode\Param> $params
+     * @param array<AstNode\Param>  $params
+     * @param array<string, string> $generics parameter => its GenericType documented (`@param Collection<int, Item>`)
      */
-    private function typeParameters(array $params): void
+    private function typeParameters(array $params, array $generics = []): void
     {
         foreach ($params as $param) {
             if ($param->var instanceof Expr\Variable && \is_string($param->var->name)) {
                 $type = $this->singleType($param->type);
-                $this->assignLocal($param->var->name, $type === null ? null : TypeExpr::named($type));
+                $generic = $this->usableGeneric($generics[$param->var->name] ?? null);
+                $this->assignLocal($param->var->name, match (true) {
+                    $generic !== null => TypeExpr::generic($generic),
+                    $type !== null => TypeExpr::named($type),
+                    default => null,
+                });
             }
         }
+    }
+
+    /**
+     * A documented GenericType a variable can hold: a class or an array with arguments. A template parameter of the
+     * class is left to the native type: its binding depends on the object, which the method does not see.
+     */
+    private function usableGeneric(?string $type): ?string
+    {
+        if ($type === null || str_starts_with($type, '@')) {
+            return null;
+        }
+        [$base, $arguments] = GenericType::parse($type);
+
+        return $arguments !== [] && ($base === GenericType::ARRAY || GenericType::isClass($base)) && !str_contains($type, TypeExpr::STATIC) ? $type : null;
     }
 
     private function enterClosure(Expr\Closure|Expr\ArrowFunction $node): void
@@ -667,6 +724,20 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             }
             $this->localTypes[$name] = TypeExpr::named($class);
             $this->pinned[$name] = spl_object_id($node);
+        }
+
+        $generics = $node->getAttribute(DocTypeResolver::GENERICS);
+        foreach (\is_array($generics) ? $generics : [] as $name => $type) {
+            if ($name === '' && $node instanceof Stmt\Expression && $node->expr instanceof Expr\Assign
+                && $node->expr->var instanceof Expr\Variable && \is_string($node->expr->var->name)
+            ) {
+                $name = $node->expr->var->name;
+            }
+            $type = \is_string($type) ? $this->usableGeneric($type) : null;
+            if (\is_string($name) && $name !== '' && $type !== null) {
+                $this->localTypes[$name] = TypeExpr::generic($type);
+                $this->pinned[$name] = spl_object_id($node);
+            }
         }
     }
 
@@ -1695,6 +1766,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
         if (($expr instanceof Expr\PropertyFetch || $expr instanceof Expr\NullsafePropertyFetch) && $expr->name instanceof Identifier) {
             $property = $expr->name->toString();
+            if ($expr->var instanceof Expr\Variable && $expr->var->name === 'this' && $this->usableGeneric($this->propertyGenerics[$property] ?? null) !== null) {
+                return TypeExpr::generic($this->propertyGenerics[$property]);
+            }
             if ($expr->var instanceof Expr\Variable && $expr->var->name === 'this' && isset($this->propertyTypes[$property])) {
                 return TypeExpr::named($this->propertyTypes[$property]);
             }
@@ -1791,6 +1865,34 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     }
 
     /**
+     * @return array<string, string> property => its GenericType, from `@var` on the property or `@param` on a promoted
+     *                               constructor parameter
+     */
+    private function collectPropertyGenerics(Stmt\ClassLike $node): array
+    {
+        $generics = [];
+        foreach ($node->stmts as $statement) {
+            if ($statement instanceof Stmt\Property) {
+                $types = $statement->getAttribute(DocTypeResolver::GENERICS);
+                $type = \is_array($types) && $types !== [] ? ($types[''] ?? reset($types)) : null;
+                foreach (\is_string($type) ? $statement->props : [] as $property) {
+                    $generics[$property->name->toString()] = (string) $type;
+                }
+            } elseif ($statement instanceof Stmt\ClassMethod && strtolower($statement->name->toString()) === '__construct') {
+                $types = $statement->getAttribute(DocTypeResolver::GENERICS);
+                foreach ($statement->params as $param) {
+                    $name = $param->var instanceof Expr\Variable && \is_string($param->var->name) ? $param->var->name : null;
+                    if ($param->flags !== 0 && $name !== null && \is_array($types) && \is_string($types[$name] ?? null)) {
+                        $generics[$name] = $types[$name];
+                    }
+                }
+            }
+        }
+
+        return $generics;
+    }
+
+    /**
      * The classes the properties of a class may hold: their native types (each of a union), the class or the elements
      * documented (`@var Line[]`, `@param MaterialLines $lines` on a promoted `mixed` parameter).
      *
@@ -1837,14 +1939,19 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
             return $receiver === null ? null : TypeExpr::elementsOf($receiver, $expr->name->toString());
         }
-        if ($expr instanceof Expr\Variable && \is_string($expr->name)) {
-            $class = $this->parameterElements[$expr->name] ?? null;
-
-            return $class === null ? null : $this->documentedClass($class);
+        if ($expr instanceof Expr\Variable && \is_string($expr->name) && isset($this->parameterElements[$expr->name])) {
+            return $this->documentedClass($this->parameterElements[$expr->name]);
         }
         $property = $this->thisProperty($expr);
+        if ($property !== null && isset($this->propertyElements[$property])) {
+            return $this->propertyElements[$property];
+        }
 
-        return $property === null ? null : $this->propertyElements[$property] ?? null;
+        // Any other typed expression: its elements are found by the builder, through the type's arguments
+        // (`Collection<int, Item>`) and its parents (`@extends IteratorAggregate<TKey, T>`).
+        $collection = $this->typeOf($expr);
+
+        return $collection === null ? null : TypeExpr::elementOf($collection);
     }
 
     private function documentedPropertyType(Stmt\Property $property): ?string
