@@ -17,6 +17,16 @@ final class SourceFiles
     public const CONFIG = 'phpgraph.yaml';
 
     /**
+     * The extensions of the source files in other languages, by language.
+     */
+    private const LANGUAGES = [
+        'ts' => 'TypeScript', 'tsx' => 'TypeScript', 'js' => 'JavaScript', 'jsx' => 'JavaScript', 'mjs' => 'JavaScript',
+        'cjs' => 'JavaScript', 'vue' => 'Vue', 'svelte' => 'Svelte', 'java' => 'Java', 'kt' => 'Kotlin', 'kts' => 'Kotlin',
+        'go' => 'Go', 'py' => 'Python', 'rb' => 'Ruby', 'cs' => 'C#', 'rs' => 'Rust', 'swift' => 'Swift', 'scala' => 'Scala',
+        'dart' => 'Dart', 'ex' => 'Elixir', 'exs' => 'Elixir', 'c' => 'C', 'cpp' => 'C++', 'cc' => 'C++',
+    ];
+
+    /**
      * PHP sources, the composer.json files locating vendor/ directories, the YAML routing files (Symfony): those whose
      * path mentions routes or routing, and the YAML and XML files of a config directory, where Symfony declares its
      * services.
@@ -48,6 +58,40 @@ final class SourceFiles
         }
 
         return $finder;
+    }
+
+    /**
+     * The source files of other languages the project holds, by language, most first: what the graph does not see.
+     * Built and minified files and the project's ignored files are left out.
+     *
+     * @param list<string> $excludePatterns
+     *
+     * @return array<string, int> language => files
+     */
+    public static function otherLanguages(string $root, array $excludePatterns = []): array
+    {
+        $gitignore = new ProjectGitignore($root);
+        $finder = Finder::create()
+            ->files()
+            ->in($root)
+            ->name(array_map(static fn (string $extension): string => '*.' . $extension, array_keys(self::LANGUAGES)))
+            ->notName(['*.min.js', '*.d.ts'])
+            ->exclude([...self::DEFAULT_EXCLUDES, 'dist', 'build', 'target', 'coverage', 'bower_components'])
+            ->filter(static fn (SplFileInfo $file): bool => !$gitignore->isIgnored($file->getPathname()));
+        foreach ($excludePatterns as $pattern) {
+            $finder->notPath($pattern);
+        }
+
+        $languages = [];
+        foreach ($finder as $file) {
+            $language = self::LANGUAGES[strtolower($file->getExtension())] ?? null;
+            if ($language !== null) {
+                $languages[$language] = ($languages[$language] ?? 0) + 1;
+            }
+        }
+        arsort($languages);
+
+        return $languages;
     }
 
     /**

@@ -134,6 +134,32 @@ final class ProjectGraphTest extends TestCase
         self::assertTrue($this->project()->refresh());
     }
 
+    public function testTheOverviewNamesTheOtherLanguagesOfAMixedProject(): void
+    {
+        @mkdir($this->root . '/front/src', 0777, true);
+        @mkdir($this->root . '/front/node_modules/lib', 0777, true);
+        file_put_contents($this->root . '/front/src/app.ts', 'export {}');
+        file_put_contents($this->root . '/front/src/orders.tsx', 'export {}');
+        file_put_contents($this->root . '/front/src/vendor.min.js', '');
+        file_put_contents($this->root . '/front/node_modules/lib/index.js', '');
+        $server = new McpServer(GraphQueryProvider::forProject($this->project()));
+
+        self::assertStringContainsString('Other languages, not in the graph: TypeScript (2 files).', $this->text($server->handle(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/call', 'params' => ['name' => 'overview', 'arguments' => []]])), 'minified and node_modules/ files left out');
+        $initialize = $server->handle(['jsonrpc' => '2.0', 'id' => 2, 'method' => 'initialize', 'params' => []]);
+        self::assertStringStartsWith('Knowledge graph', (string) ($initialize['result']['instructions'] ?? ''), 'some PHP: the usual instructions');
+    }
+
+    public function testAProjectWithoutPhpIsToldAtOnce(): void
+    {
+        unlink($this->root . '/src/Order.php');
+        file_put_contents($this->root . '/src/Main.java', 'class Main {}');
+        $server = new McpServer(GraphQueryProvider::forProject($this->project()));
+
+        $initialize = $server->handle(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'initialize', 'params' => []]);
+        self::assertStringStartsWith('No PHP code: this project is written in Java (1 file).', (string) ($initialize['result']['instructions'] ?? ''), 'before any build');
+        self::assertStringContainsString('its tools cannot help here', $this->text($server->handle(['jsonrpc' => '2.0', 'id' => 2, 'method' => 'tools/call', 'params' => ['name' => 'get_node', 'arguments' => ['name' => 'Main']]])));
+    }
+
     private function project(): ProjectGraph
     {
         return ProjectGraph::reusingSavedOptions($this->root, $this->root . '/phpgraph-out', null, checkInterval: 0.0);

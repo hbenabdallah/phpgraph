@@ -347,7 +347,35 @@ final class TextPresenter
      */
     public function warning(): ?string
     {
-        return self::unreadSources($this->query->summary()->phpFilesNotRead ?? 0);
+        $summary = $this->query->summary();
+
+        return self::unreadSources($summary->phpFilesNotRead ?? 0)
+            ?? ($summary !== null && $summary->filesParsed === 0 ? self::notPhp($summary->otherLanguages) : null);
+    }
+
+    /**
+     * A project without PHP code: the graph is empty, the tools have nothing to say about it.
+     *
+     * @param array<string, int> $otherLanguages
+     */
+    public static function notPhp(array $otherLanguages): ?string
+    {
+        if ($otherLanguages === []) {
+            return null;
+        }
+
+        return \sprintf(
+            'No PHP code: this project is written in %s. phpgraph only reads PHP: its graph is empty and its tools cannot help here.',
+            self::languages($otherLanguages),
+        );
+    }
+
+    /**
+     * @param array<string, int> $languages
+     */
+    private static function languages(array $languages): string
+    {
+        return implode(', ', array_map(static fn (string $language, int $files): string => \sprintf('%s (%d file%s)', $language, $files, $files === 1 ? '' : 's'), array_keys($languages), $languages));
     }
 
     public function overview(): string
@@ -404,6 +432,10 @@ final class TextPresenter
             $overview->testClasses,
             implode(', ', array_map(static fn (string $kind, int $count): string => $count . ' ' . $kind, array_keys($overview->nodesByKind), $overview->nodesByKind)),
         );
+
+        if ($summary !== null && $summary->otherLanguages !== [] && $summary->filesParsed > 0) {
+            $lines[] = \sprintf('Other languages, not in the graph: %s. Code calling the PHP part from them (HTTP, messages) is not linked.', self::languages($summary->otherLanguages));
+        }
 
         $lines[] = '';
         $lines[] = '## Structure of application code';

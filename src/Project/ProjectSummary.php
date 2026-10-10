@@ -21,6 +21,7 @@ final readonly class ProjectSummary
      * @param array<string, int> $mostUnresolvedMethods
      * @param list<string>       $services              services of a multi-service repository, empty otherwise
      * @param int                $phpFilesNotRead       PHP files of the directory, when the build read none of them
+     * @param array<string, int> $otherLanguages        source files in other languages, by language: not in the graph
      */
     public function __construct(
         public string $generatedAt,
@@ -40,13 +41,15 @@ final readonly class ProjectSummary
         public HttpStats $http = new HttpStats(),
         public int $phpFilesNotRead = 0,
         public InjectionStats $injections = new InjectionStats(),
+        public array $otherLanguages = [],
     ) {
     }
 
     /**
      * @param list<array{directory: string, php: ?string, locked: bool, packages: array<string, array{version: string, role: string}>}> $stack
+     * @param array<string, int> $otherLanguages
      */
-    public static function fromBuild(BuildResult $result, BuildOptions $options, array $stack): self
+    public static function fromBuild(BuildResult $result, BuildOptions $options, array $stack, array $otherLanguages = []): self
     {
         return new self(
             gmdate('c'),
@@ -66,6 +69,7 @@ final readonly class ProjectSummary
             $result->http,
             $result->phpFilesNotRead,
             $result->injections,
+            $otherLanguages,
         );
     }
 
@@ -87,6 +91,8 @@ final readonly class ProjectSummary
         $duplicates = array_values(array_filter($list('duplicates'), 'is_string'));
         /** @var array<string, int> $unresolved */
         $unresolved = array_filter($list('mostUnresolvedMethods'), 'is_int');
+        /** @var array<string, int> $otherLanguages */
+        $otherLanguages = array_filter($list('otherLanguages'), 'is_int');
 
         return new self(
             \is_string($data['generatedAt'] ?? null) ? $data['generatedAt'] : '',
@@ -106,6 +112,7 @@ final readonly class ProjectSummary
             HttpStats::fromArray($list('http')),
             $int('phpFilesNotRead'),
             InjectionStats::fromArray($list('injections')),
+            $otherLanguages,
         );
     }
 
@@ -132,6 +139,7 @@ final readonly class ProjectSummary
             'http' => $this->http->toArray(),
             'phpFilesNotRead' => $this->phpFilesNotRead,
             'injections' => $this->injections->toArray(),
+            'otherLanguages' => $this->otherLanguages,
         ];
     }
 }

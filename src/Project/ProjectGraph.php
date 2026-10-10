@@ -50,7 +50,7 @@ final class ProjectGraph
      *                                                   makes several calls in a row
      */
     public function __construct(
-        private readonly string $root,
+        public readonly string $root,
         private readonly string $outputDirectory,
         private BuildOptions $options = new BuildOptions(),
         private readonly ?\Closure $log = null,
@@ -125,7 +125,12 @@ final class ProjectGraph
             $this->saveCache($extractor, array_keys($result->state->files ?? []));
             $reuse = $extractor->stats();
         }
-        $summary = ProjectSummary::fromBuild($result, $this->options, (new StackDetector())->detect($this->root, $result->composerFiles));
+        $summary = ProjectSummary::fromBuild(
+            $result,
+            $this->options,
+            (new StackDetector())->detect($this->root, $result->composerFiles),
+            SourceFiles::otherLanguages($this->root, $this->options->excludes),
+        );
 
         $this->storage->save($result->graph, $this->graphPath(), [
             'root' => $this->root,

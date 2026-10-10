@@ -274,6 +274,7 @@ Sylius (the corpus commit), October 2026, without any LLM: phpgraph 1.0.2, [code
 
 ## Limitations
 
+- Only PHP is read: `overview` names the other languages of a mixed repository (their calls to the PHP part are not linked), and the MCP instructions say at once when a project has no PHP at all.
 - Calls to global functions and dynamic calls (`$this->$name()`, `__call`) are not resolved.
 - Generics are read from docblocks (`@template`, `@extends Repository<Order>`, `@return Collection<int, Item>`, `ScalarNodeDefinition<$this>`), in the project and in `vendor/`: a template is bound by the type of the receiver and the parents passing it on, and a `foreach` walks the elements of any typed collection. Conditional return types (`T is 'array' ? A : B`) and templates of a method (`@param class-string<T>`) are not evaluated.
 - Chains stop at magic methods and at dependencies without a usable return type. PHP's own classes (`DateTime`, `ArrayObject`, `SplObjectStorage`, `PDO`...) are known from signatures generated once (`tools/internal-classes.php`); those of the `intl` and `mysqli` extensions are not.

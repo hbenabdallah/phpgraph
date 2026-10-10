@@ -119,7 +119,7 @@ final class McpServer
             'protocolVersion' => \in_array($params['protocolVersion'] ?? null, self::PROTOCOLS, true) ? $params['protocolVersion'] : self::PROTOCOLS[\count(self::PROTOCOLS) - 1],
             'capabilities' => ['tools' => new \stdClass()],
             'serverInfo' => ['name' => self::NAME, 'version' => $this->version],
-            'instructions' => self::INSTRUCTIONS,
+            'instructions' => ($note = $this->provider->projectNote()) === null ? self::INSTRUCTIONS : $note . "\n\n" . self::INSTRUCTIONS,
         ];
     }
 

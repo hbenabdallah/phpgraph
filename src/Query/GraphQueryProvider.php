@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace PhpGraph\Query;
 
+use PhpGraph\Builder\SourceFiles;
+use PhpGraph\Presentation\TextPresenter;
 use PhpGraph\Project\ProjectGraph;
 use PhpGraph\Project\ProjectSummary;
 use PhpGraph\Storage\JsonGraphStorage;
@@ -45,6 +47,20 @@ final class GraphQueryProvider
         $output = \dirname($this->graphPath);
 
         return basename($output) === 'phpgraph-out' && is_dir(\dirname($output)) ? \dirname($output) : null;
+    }
+
+    /**
+     * What an agent must know before calling any tool, told in the MCP instructions: a project without PHP code.
+     * Found without building the graph: the server answers `initialize` at once.
+     */
+    public function projectNote(): ?string
+    {
+        if ($this->project === null || SourceFiles::countPhpFiles($this->project->root) > 0) {
+            return null;
+        }
+
+        return TextPresenter::notPhp(SourceFiles::otherLanguages($this->project->root))
+            ?? 'No PHP code in this directory: phpgraph only reads PHP, its tools cannot help here.';
     }
 
     public function get(): GraphQuery
