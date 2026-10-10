@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpGraph\Builder;
 
+use PhpGraph\Values;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Tag\TaggedValue;
 use Symfony\Component\Yaml\Yaml;
@@ -117,10 +118,10 @@ final class ContainerServices
     private function merge(array $declared, string $service): void
     {
         foreach (\is_array($declared['definitions'] ?? null) ? $declared['definitions'] : [] as $id => $target) {
-            $this->definitions[$service][(string) $id] ??= (string) $target;
+            $this->definitions[$service][(string) $id] ??= Values::text($target);
         }
         foreach (\is_array($declared['parameters'] ?? null) ? $declared['parameters'] : [] as $name => $value) {
-            $this->parameters[$service][(string) $name] = (string) $value;
+            $this->parameters[$service][(string) $name] = Values::text($value);
         }
         foreach (\is_array($declared['tags'] ?? null) ? $declared['tags'] : [] as $tag) {
             /** @var array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>} $tag */

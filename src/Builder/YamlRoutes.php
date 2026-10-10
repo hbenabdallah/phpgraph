@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpGraph\Builder;
 
 use PhpGraph\Extractor\RouteFact;
+use PhpGraph\Values;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -60,7 +61,7 @@ final class YamlRoutes
                     continue;
                 }
                 $path = $definition['path'] ?? null;
-                $path = \is_array($path) ? (string) reset($path) : $path;
+                $path = \is_array($path) ? Values::text(reset($path)) : $path;
                 if (\is_string($path)) {
                     $definitions[$file][] = $definition + ['path' => $path];
                 }
@@ -71,14 +72,15 @@ final class YamlRoutes
         foreach ($definitions as $file => $fileDefinitions) {
             foreach ($this->prefixes($file, $importedBy, 0) as $prefix) {
                 foreach ($fileDefinitions as $definition) {
-                    [$controller, $action, $serviceId] = $this->controller($definition['controller'] ?? $definition['defaults']['_controller'] ?? null);
+                    $defaults = \is_array($definition['defaults'] ?? null) ? $definition['defaults'] : [];
+                    [$controller, $action, $serviceId] = $this->controller($definition['controller'] ?? $defaults['_controller'] ?? null);
                     $routes[] = new RouteFact(
                         $this->methods($definition['methods'] ?? null),
-                        RouteFact::normalizePath($prefix . '/' . $definition['path']),
+                        RouteFact::normalizePath($prefix . '/' . Values::text($definition['path'])),
                         $controller,
                         $action,
                         $file,
-                        $definition['line'],
+                        Values::optionalNumber($definition['line'] ?? null),
                         $serviceId,
                     );
                 }

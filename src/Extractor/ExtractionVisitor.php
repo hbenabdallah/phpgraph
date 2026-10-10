@@ -502,7 +502,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             }
         }
         $elements = $node->getAttribute(DocTypeResolver::ELEMENT_TYPES);
-        $this->parameterElements = \is_array($elements) ? array_filter($elements, 'is_string') : [];
+        $this->parameterElements = self::stringMap($elements);
         if ($kind === NodeKind::Method) {
             // `name:Class,other:` kept as a string: one per method of the project, most of them never looked at.
             $types = array_map(fn (AstNode\Param $param): string => (string) $this->singleType($param->type), $node->params);
@@ -516,7 +516,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->passesStart = \count($this->parameterPasses);
         }
         $documented = $node->getAttribute(DocTypeResolver::PARAM_TYPES);
-        $this->documentedParameters = \is_array($documented) ? array_map(fn (string $type): string => (string) $this->documentedClass($type), array_filter($documented, 'is_string')) : [];
+        $this->documentedParameters = array_map(fn (string $type): string => (string) $this->documentedClass($type), self::stringMap($documented));
         $this->reassigned = [];
         $this->configuration->enterCallable($id, $node->params, array_values(array_map(fn (AstNode\Param $param): ?string => $this->singleType($param->type), $node->params)));
         $this->localTypes = [];
@@ -529,7 +529,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             }
         }
         $generics = $node->getAttribute(DocTypeResolver::GENERICS);
-        $this->typeParameters($node->params, \is_array($generics) ? array_filter($generics, 'is_string') : []);
+        $this->typeParameters($node->params, self::stringMap($generics));
 
         foreach ($this->typeNames($node->returnType) as $type) {
             $this->reference($id, $type);
@@ -1875,8 +1875,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             if ($statement instanceof Stmt\Property) {
                 $types = $statement->getAttribute(DocTypeResolver::GENERICS);
                 $type = \is_array($types) && $types !== [] ? ($types[''] ?? reset($types)) : null;
-                foreach (\is_string($type) ? $statement->props : [] as $property) {
-                    $generics[$property->name->toString()] = (string) $type;
+                if (!\is_string($type)) {
+                    continue;
+                }
+                foreach ($statement->props as $property) {
+                    $generics[$property->name->toString()] = $type;
                 }
             } elseif ($statement instanceof Stmt\ClassMethod && strtolower($statement->name->toString()) === '__construct') {
                 $types = $statement->getAttribute(DocTypeResolver::GENERICS);
@@ -1970,6 +1973,23 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         $names = $this->typeNames($type);
 
         return \count($names) === 1 ? $names[0] : null;
+    }
+
+    /**
+     * A node attribute holding names to strings, as DocTypeResolver sets them.
+     *
+     * @return array<string, string>
+     */
+    private static function stringMap(mixed $attribute): array
+    {
+        $map = [];
+        foreach (\is_array($attribute) ? $attribute : [] as $key => $value) {
+            if (\is_string($value)) {
+                $map[(string) $key] = $value;
+            }
+        }
+
+        return $map;
     }
 
     /**

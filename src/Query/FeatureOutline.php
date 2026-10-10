@@ -6,6 +6,7 @@ namespace PhpGraph\Query;
 
 use PhpGraph\Builder\TestFiles;
 use PhpGraph\Extractor\ClassFacts;
+use PhpGraph\Extractor\Hint;
 use PhpGraph\Extractor\SourceFacts;
 use PhpGraph\Graph\Confidence;
 use PhpGraph\Graph\Graph;
@@ -134,12 +135,12 @@ final class FeatureOutline
         // (`create()` returns null on errors), a comparison, a branch on constants, an early return naming its
         // outcome; type assertions, unguarded throws, boolean searches and constructor checks last.
         $outside = array_flip(array_keys($callers));
-        $rank = static function (array $hint) use ($outside): int {
-            $text = $hint[1]->text;
-            $isCaller = isset($outside[$hint[0] . '::' . $hint[1]->method]);
+        $rank = static function (string $class, Hint $hint) use ($outside): int {
+            $text = $hint->text;
+            $isCaller = isset($outside[$class . '::' . $hint->method]);
 
             return match (true) {
-                strtolower($hint[1]->method) === '__construct' => 6,
+                strtolower($hint->method) === '__construct' => 6,
                 str_starts_with($text, 'throws') && (str_contains($text, 'instanceof') || preg_match('/ (if|unless) /', $text) !== 1) => 4,
                 str_starts_with($text, 'throws') => $isCaller ? 4 : 0,
                 $isCaller => preg_match('/^returns (null|false|early) /', $text) === 1 ? 1 : 4,
@@ -149,7 +150,7 @@ final class FeatureOutline
                 default => 3,
             };
         };
-        uksort($hints, static fn (int $a, int $b): int => [$rank($hints[$a]), $a] <=> [$rank($hints[$b]), $b]);
+        uksort($hints, static fn (int $a, int $b): int => [$rank(...$hints[$a]), $a] <=> [$rank(...$hints[$b]), $b]);
         $hints = array_values($hints);
 
         [$consumers, $consumerFiles, $tests, $topTests] = $this->users($core, $inCore, $members);
@@ -309,7 +310,7 @@ final class FeatureOutline
                     continue;
                 }
                 $score = fn (array $chain): array => [
-                    array_filter($chain, fn (string $step): bool => $this->dispatched($step, $members)) === [],
+                    array_filter($chain, fn (mixed $step): bool => \is_string($step) && $this->dispatched($step, $members)) === [],
                     \count($chain),
                 ];
                 if (!isset($routes[$impacted->class]) || $score($impacted->chain) > $score($routes[$impacted->class])) {

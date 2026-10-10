@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpGraph\Command;
 
+use PhpGraph\Values;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -26,8 +27,8 @@ final class McpConfigCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $agent = (string) $input->getArgument('agent');
-        $project = realpath((string) $input->getOption('project'));
+        $agent = Values::text($input->getArgument('agent'));
+        $project = realpath(Values::text($input->getOption('project')));
         if (!\in_array($agent, self::AGENTS, true) || $project === false) {
             $output->writeln(sprintf('<error>%s</error>', $project === false ? 'Project path not found.' : 'Agent must be one of: ' . implode(', ', self::AGENTS) . '.'));
 

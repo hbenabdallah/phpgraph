@@ -53,7 +53,6 @@ final class OutlineReport
         $this->prefix = self::commonDirectory(array_values($files));
         // A section alone lists everything, each line still compact; full also spells out every line.
         $all = $full || $section !== null;
-        $limit = static fn (array $items, int $count): array => $all ? $items : \array_slice($items, 0, $count);
         $more = static fn (array $all, array $shown): string => \count($all) > \count($shown) ? \sprintf(' (+%d)', \count($all) - \count($shown)) : '';
 
         $lines = [
@@ -126,11 +125,11 @@ final class OutlineReport
         // Families.
         if ($wanted('families') && $outline->families !== []) {
             $lines[] = '';
-            $all = [];
+            $directories = [];
             foreach ($outline->families as $family) {
-                array_push($all, ...array_map('strval', array_keys($family['directories'])));
+                array_push($directories, ...array_map('strval', array_keys($family['directories'])));
             }
-            $base = self::commonDirectory(array_map(static fn (string $directory): string => $directory . '/', $all));
+            $base = self::commonDirectory(array_map(static fn (string $directory): string => $directory . '/', $directories));
             $lines[] = 'Families (application classes implementing or extending them' . ($base === '' ? '' : ', by module under ' . $base) . '):';
             $single = [];
             foreach ($outline->families as $family) {
@@ -146,7 +145,7 @@ final class OutlineReport
                     $modules[$module] = ($modules[$module] ?? 0) + $count;
                 }
                 arsort($modules);
-                $shown = $limit($modules, \count($modules) > 3 ? 2 : 3);
+                $shown = self::limited($all, $modules, \count($modules) > 3 ? 2 : 3);
                 $lines[] = \sprintf(
                     '  %s: %s%s%s',
                     $this->query->label($family['head']),
@@ -167,7 +166,7 @@ final class OutlineReport
             $lines[] = 'Flow:';
             if ($outline->routes !== []) {
                 $lines[] = \sprintf('  Routes (%d), from their handler into the core:', \count($outline->routes));
-                foreach ($limit($outline->routes, self::LIST) as $route) {
+                foreach (self::limited($all, $outline->routes, self::LIST) as $route) {
                     $lines[] = '    ' . $this->query->label($route['route']) . ' → ' . $this->chain($route['chain']);
                 }
             }
@@ -175,7 +174,7 @@ final class OutlineReport
             $called = array_keys($outline->entries + $outline->fromFamilies);
             if ($called !== []) {
                 $lines[] = '  Into the core, from outside (callers):';
-                foreach ($limit($called, self::ENTRIES) as $method) {
+                foreach (self::limited($all, $called, self::ENTRIES) as $method) {
                     $callers = $outline->entries[$method] ?? [];
                     $classes = array_unique(array_map(static fn (string $caller): string => explode('::', $caller)[0], $callers));
                     $from = [];
@@ -211,7 +210,7 @@ final class OutlineReport
             }
             if ($outline->inside !== []) {
                 $lines[] = '  Inside the core:';
-                foreach ($limit($outline->inside, self::INSIDE) as $method => $callees) {
+                foreach (self::limited($all, $outline->inside, self::INSIDE) as $method => $callees) {
                     $lines[] = \sprintf('    %s → %s', $this->query->label($method), $this->methodList($callees, $full ? 0 : 4));
                 }
             }
@@ -222,7 +221,7 @@ final class OutlineReport
         if ($wanted('behaviour') && $hints !== []) {
             $lines[] = '';
             $lines[] = 'Behaviour (read in the method bodies)' . ($hints === $outline->hints ? '' : ', besides the outcomes above') . ':';
-            foreach ($limit($hints, self::HINTS) as [$class, $hint]) {
+            foreach (self::limited($all, $hints, self::HINTS) as [$class, $hint]) {
                 $lines[] = \sprintf('  %s::%s L%d: %s', $this->query->label($class), $hint->method, $hint->line, $hint->text);
             }
             if (!$all && \count($hints) > self::HINTS) {
@@ -260,7 +259,7 @@ final class OutlineReport
         if ($wanted('users')) {
             $lines[] = '';
             $consumers = $outline->consumers;
-            $shownConsumers = $limit($consumers, 8);
+            $shownConsumers = self::limited($all, $consumers, 8);
             $lines[] = \sprintf(
                 'Used by %d files outside the core. Application%s: %s%s.',
                 $outline->consumerFiles,
@@ -270,7 +269,7 @@ final class OutlineReport
             );
             if ($outline->tests !== []) {
                 $tests = $outline->tests;
-                $shownTests = $limit($tests, 4);
+                $shownTests = self::limited($all, $tests, 4);
                 $lines[] = \sprintf(
                     'Tests touching the core: %d files in %d modules (%s%s); touching the most: %s.',
                     array_sum($tests),
@@ -420,6 +419,21 @@ final class OutlineReport
         }
 
         return $result;
+    }
+
+    /**
+     * The first entries of a list, keys kept; all of them with `all`.
+     *
+     * @template TKey of array-key
+     * @template TValue
+     *
+     * @param array<TKey, TValue> $items
+     *
+     * @return array<TKey, TValue>
+     */
+    private static function limited(bool $all, array $items, int $count): array
+    {
+        return $all ? $items : \array_slice($items, 0, $count, true);
     }
 
     /**

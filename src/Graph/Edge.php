@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace PhpGraph\Graph;
 
+use PhpGraph\Values;
+
 final class Edge
 {
     /**
@@ -80,15 +82,15 @@ final class Edge
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param array<mixed> $data
      */
     public static function fromArray(array $data): self
     {
         return new self(
-            (string) $data['source'],
-            (string) $data['target'],
-            Relation::from((string) $data['relation']),
-            Confidence::from((string) $data['confidence']),
+            Values::text($data['source'] ?? null),
+            Values::text($data['target'] ?? null),
+            Relation::from(Values::text($data['relation'] ?? null)),
+            Confidence::from(Values::text($data['confidence'] ?? null)),
             \is_string($data['lines'] ?? null) ? $data['lines'] : '',
             \is_string($data['via'] ?? null) ? $data['via'] : '',
         );

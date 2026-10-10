@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpGraph\Command;
 
 use PhpGraph\Query\Direction;
+use PhpGraph\Values;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -25,7 +26,7 @@ final class ExplainCommand extends AbstractGraphCommand
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $direction = Direction::tryFrom((string) $input->getOption('direction'));
+        $direction = Direction::tryFrom(Values::text($input->getOption('direction')));
         if ($direction === null) {
             $output->writeln('<error>Direction must be in, out or both.</error>');
 
@@ -33,7 +34,7 @@ final class ExplainCommand extends AbstractGraphCommand
         }
 
         $output->writeln($this->loadPresenter($input)->explain(
-            (string) $input->getArgument('name'),
+            Values::text($input->getArgument('name')),
             $direction,
         ), OutputInterface::OUTPUT_RAW);
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpGraph\Tests;
 
 use PhpGraph\Command\McpConfigCommand;
+use PhpGraph\Tests\Support\Dig;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Tester\CommandTester;
 
@@ -17,7 +18,7 @@ final class McpConfigTest extends TestCase
 
         $tester->execute(['agent' => 'cursor', '--project' => $project]);
         $json = json_decode(substr($tester->getDisplay(), (int) strpos($tester->getDisplay(), '{')), true);
-        self::assertSame(['type' => 'stdio', 'command' => 'php', 'args' => ['-d', 'opcache.enable_cli=1', '-d', 'opcache.jit=tracing', '-d', 'opcache.jit_buffer_size=128M', (string) realpath(__DIR__ . '/../bin/phpgraph'), 'serve', $project]], $json['mcpServers']['phpgraph'] ?? null);
+        self::assertSame(['type' => 'stdio', 'command' => 'php', 'args' => ['-d', 'opcache.enable_cli=1', '-d', 'opcache.jit=tracing', '-d', 'opcache.jit_buffer_size=128M', (string) realpath(__DIR__ . '/../bin/phpgraph'), 'serve', $project]], Dig::at($json, 'mcpServers', 'phpgraph') ?? null);
 
         $tester->execute(['agent' => 'cursor']);
         self::assertStringContainsString('"${workspaceFolder}"', $tester->getDisplay(), 'Without --project, the shareable form');
@@ -33,7 +34,7 @@ final class McpConfigTest extends TestCase
 
         $tester->execute(['agent' => 'sherpa']);
         $json = json_decode(substr($tester->getDisplay(), (int) strpos($tester->getDisplay(), '{')), true);
-        self::assertSame(['command' => 'php', 'args' => ['-d', 'opcache.enable_cli=1', '-d', 'opcache.jit=tracing', '-d', 'opcache.jit_buffer_size=128M', (string) realpath(__DIR__ . '/../bin/phpgraph'), 'serve']], $json['mcpServers']['phpgraph'] ?? null, 'Sherpa: no path, the project it runs in');
+        self::assertSame(['command' => 'php', 'args' => ['-d', 'opcache.enable_cli=1', '-d', 'opcache.jit=tracing', '-d', 'opcache.jit_buffer_size=128M', (string) realpath(__DIR__ . '/../bin/phpgraph'), 'serve']], Dig::at($json, 'mcpServers', 'phpgraph') ?? null, 'Sherpa: no path, the project it runs in');
         self::assertStringContainsString('~/.config/sherpa/mcp.json', $tester->getDisplay());
 
         self::assertSame(2, $tester->execute(['agent' => 'unknown']));

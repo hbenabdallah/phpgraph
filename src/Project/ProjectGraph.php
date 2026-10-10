@@ -213,7 +213,8 @@ final class ProjectGraph
         if ($this->builtFingerprint === null) {
             $meta = $this->savedMeta();
             // Built by another phpgraph, or in another format: rebuilt, whatever the sources.
-            if (($meta['phpgraph']['builder'] ?? null) !== Version::builder() || $this->storage->format($this->graphPath()) !== JsonGraphStorage::FORMAT) {
+            $builtBy = \is_array($meta['phpgraph'] ?? null) ? $meta['phpgraph'] : [];
+            if (($builtBy['builder'] ?? null) !== Version::builder() || $this->storage->format($this->graphPath()) !== JsonGraphStorage::FORMAT) {
                 $this->say('the graph was built by another version of phpgraph');
                 $this->build();
 

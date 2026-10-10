@@ -149,7 +149,14 @@ final class CachingExtractor implements FileExtractor
 
         $entries = @unserialize($payload, ['allowed_classes' => self::ALLOWED_CLASSES]);
 
-        return \is_array($entries) ? array_filter($entries, static fn (mixed $entry): bool => $entry instanceof FileExtraction) : [];
+        $extractions = [];
+        foreach (\is_array($entries) ? $entries : [] as $key => $entry) {
+            if ($entry instanceof FileExtraction) {
+                $extractions[(string) $key] = $entry;
+            }
+        }
+
+        return $extractions;
     }
 
     /**
@@ -158,7 +165,7 @@ final class CachingExtractor implements FileExtractor
     private static function version(): string
     {
         static $version = null;
-        if ($version !== null) {
+        if (\is_string($version)) {
             return $version;
         }
 

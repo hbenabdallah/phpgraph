@@ -13,6 +13,7 @@ use PhpGraph\Query\GraphQuery;
 use PhpGraph\Query\GraphQueryProvider;
 use PhpGraph\Query\Layers;
 use PhpGraph\Query\Result\LayerViolation;
+use PhpGraph\Tests\Support\Dig;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -144,7 +145,7 @@ final class ArchitectureTest extends TestCase
     {
         $server = new McpServer(GraphQueryProvider::forProject(new ProjectGraph($this->root, $this->root . '/phpgraph-out')));
         $response = $server->handle(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/call', 'params' => ['name' => 'impact_of', 'arguments' => ['name' => 'TaxApi']]]);
-        $text = $response['result']['content'][0]['text'] ?? '';
+        $text = Dig::at($response, 'result', 'content', 0, 'text') ?? '';
 
         self::assertIsString($text);
         self::assertStringContainsString('Impact of changing TaxApi', $text);
@@ -153,7 +154,7 @@ final class ArchitectureTest extends TestCase
         self::assertStringContainsString('No test touches: Pricing', $text, 'PricingTest only creates a TaxApi');
 
         $full = $server->handle(['jsonrpc' => '2.0', 'id' => 2, 'method' => 'tools/call', 'params' => ['name' => 'impact_of', 'arguments' => ['name' => 'TaxApi', 'format' => 'full']]]);
-        self::assertStringContainsString("Tests to run:\n  - PricingTest", (string) ($full['result']['content'][0]['text'] ?? ''), 'every relation spelled out');
+        self::assertStringContainsString("Tests to run:\n  - PricingTest", Dig::text($full, 'result', 'content', 0, 'text'), 'every relation spelled out');
     }
 
     private function graph(): Graph

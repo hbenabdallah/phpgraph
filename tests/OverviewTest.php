@@ -11,6 +11,7 @@ use PhpGraph\Project\ProjectGraph;
 use PhpGraph\Project\StackDetector;
 use PhpGraph\Query\GraphQuery;
 use PhpGraph\Query\GraphQueryProvider;
+use PhpGraph\Tests\Support\Dig;
 use PHPUnit\Framework\TestCase;
 
 final class OverviewTest extends TestCase
@@ -101,7 +102,7 @@ final class OverviewTest extends TestCase
 
         $server = new McpServer(GraphQueryProvider::forProject(new ProjectGraph($this->root, $this->root . '/phpgraph-out')));
         $response = $server->handle(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/call', 'params' => ['name' => 'overview']]);
-        $text = $response['result']['content'][0]['text'] ?? '';
+        $text = Dig::at($response, 'result', 'content', 0, 'text') ?? '';
 
         self::assertIsString($text);
         self::assertStringContainsString('framework: symfony/framework-bundle ^7.0', $text);

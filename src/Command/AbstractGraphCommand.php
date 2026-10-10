@@ -6,6 +6,7 @@ namespace PhpGraph\Command;
 
 use PhpGraph\Presentation\TextPresenter;
 use PhpGraph\Query\GraphQueryProvider;
+use PhpGraph\Values;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -21,7 +22,7 @@ abstract class AbstractGraphCommand extends Command
 
     protected function graphPath(InputInterface $input): string
     {
-        return (string) $input->getOption('graph');
+        return Values::text($input->getOption('graph'));
     }
 
     protected function loadPresenter(InputInterface $input): TextPresenter

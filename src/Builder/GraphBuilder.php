@@ -526,6 +526,9 @@ final class GraphBuilder
         return $call->named === [] ? '' : 'named: ' . implode(', ', $call->named);
     }
 
+    /**
+     * @param \Closure(string): string $id
+     */
     private function qualifiedMember(string $member, \Closure $id): string
     {
         $separator = (int) strrpos($member, '::');

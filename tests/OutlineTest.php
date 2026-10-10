@@ -10,6 +10,7 @@ use PhpGraph\Graph\Graph;
 use PhpGraph\Graph\Relation;
 use PhpGraph\Presentation\TextPresenter;
 use PhpGraph\Query\GraphQuery;
+use PhpGraph\Tests\Support\Dig;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -88,7 +89,7 @@ final class OutlineTest extends TestCase
 
         $json = json_decode($presenter->outline('notification validation', 'json'), true);
         self::assertIsArray($json);
-        self::assertContains('App\Validation\ViolationPrinter', $json['unused'] ?? []);
+        self::assertContains('App\Validation\ViolationPrinter', Dig::list($json, 'unused'));
         self::assertSame('No class matches "zzz": try query_graph, or other words.', $presenter->outline('zzz'));
     }
 

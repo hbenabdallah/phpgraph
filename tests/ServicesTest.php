@@ -12,6 +12,7 @@ use PhpGraph\Project\ProjectConfig;
 use PhpGraph\Project\ProjectGraph;
 use PhpGraph\Query\GraphQuery;
 use PhpGraph\Storage\JsonGraphStorage;
+use PhpGraph\Tests\Support\Dig;
 use PhpGraph\Tests\Support\TemporaryProject;
 use PHPUnit\Framework\TestCase;
 
@@ -159,6 +160,6 @@ final class ServicesTest extends TestCase
         (new JsonGraphStorage())->save($this->buildProject(self::TWO_SERVICES)->graph, $path);
 
         self::assertSame('billing', (new JsonGraphStorage())->load($path)->node('billing@App\Checkout')?->service);
-        self::assertSame(2, json_decode((string) file_get_contents($path), true)['version'] ?? null);
+        self::assertSame(2, Dig::at(json_decode((string) file_get_contents($path), true), 'version'));
     }
 }

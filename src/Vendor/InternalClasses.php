@@ -15,7 +15,11 @@ final class InternalClasses
 
     public static function signature(string $class): ?ClassSignature
     {
-        self::$data ??= require __DIR__ . '/internal-classes.php';
+        if (self::$data === null) {
+            /** @var array<string, array{name: string, parents?: list<string>, methods?: array<string, string>, returns?: array<string, string>, templates?: list<string>, parentArguments?: array<string, list<string>>, genericReturns?: array<string, string>}> $data */
+            $data = require __DIR__ . '/internal-classes.php';
+            self::$data = $data;
+        }
         $class = self::$data[strtolower(ltrim($class, '\\'))] ?? null;
         if ($class === null) {
             return null;

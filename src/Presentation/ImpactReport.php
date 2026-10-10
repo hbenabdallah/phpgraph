@@ -105,7 +105,6 @@ final class ImpactReport
             ),
         ];
         $wanted = static fn (string $name): bool => $section === null || $section === $name;
-        $slice = static fn (array $entries, int $default) => $limit === 0 ? $entries : \array_slice($entries, 0, max($limit, $default));
         $more = static function (array $all, array $shown) use (&$lines): void {
             if (\count($all) > \count($shown)) {
                 $lines[] = \sprintf('  ... %d more', \count($all) - \count($shown));
@@ -115,7 +114,7 @@ final class ImpactReport
         if ($wanted('routes') && $g['routes'] !== []) {
             $lines[] = '';
             $lines[] = 'Routes reaching it, ← from their handler:';
-            foreach ($shown = $slice($g['routes'], 0) as $route) {
+            foreach ($shown = self::sliced($g['routes'], $limit, 0) as $route) {
                 $marked = $route->confidence === Confidence::Inferred ? '' : ' [' . $route->confidence->value . ']';
                 $also = \array_slice($route->otherChains, 0, $limit === 0 ? 5 : self::CHAINS);
                 $others = \count($route->otherChains) - \count($also);
@@ -141,7 +140,7 @@ final class ImpactReport
                 }
                 $lines[] = '';
                 $lines[] = $level === 1 ? 'Direct dependents:' : \sprintf('%d relations away:', $level);
-                foreach ($shown = $slice($atDepth, 0) as $class) {
+                foreach ($shown = self::sliced($atDepth, $limit, 0) as $class) {
                     $lines[] = '  ' . $this->classLine($class, $limit);
                 }
                 $more($atDepth, $shown);
@@ -157,7 +156,7 @@ final class ImpactReport
         if ($wanted('state') && $state !== []) {
             $lines[] = '';
             $lines[] = 'Through the state it changes (they call a method reading what it writes and filter on it, compare before and after, or use what it writes):';
-            foreach ($shown = $slice($state, 0) as $class) {
+            foreach ($shown = self::sliced($state, $limit, 0) as $class) {
                 $lines[] = '  ' . $this->classLine($class, $limit);
             }
             $more($state, $shown);
@@ -187,7 +186,7 @@ final class ImpactReport
             $lines[] = $title;
             // One test per line, its path below its module: what PHPUnit takes, and unique where names repeat.
             $byModule = [];
-            foreach ($shown = $slice($tests, self::TESTS) as $test) {
+            foreach ($shown = self::sliced($tests, $limit, self::TESTS) as $test) {
                 $file = (string) $this->file($test->class);
                 $module = $this->module($file);
                 $base = $this->prefix . ($module === '' ? '' : $module . '/');
@@ -258,6 +257,16 @@ final class ImpactReport
         }
 
         return (string) json_encode($data, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * @param list<ImpactedClass> $entries
+     *
+     * @return list<ImpactedClass>
+     */
+    private static function sliced(array $entries, int $limit, int $default): array
+    {
+        return $limit === 0 ? $entries : \array_slice($entries, 0, max($limit, $default));
     }
 
     /**

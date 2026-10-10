@@ -224,7 +224,7 @@ function measureOne(array $project): array
 /**
  * @param array{name: string, repository: string, commit: string, stack: list<string>, why: string, composer?: list<string>} $project
  *
- * @return array<string, mixed>
+ * @return array<mixed>
  */
 function measureInSubprocess(array $project): array
 {
@@ -238,9 +238,45 @@ function measureInSubprocess(array $project): array
     return $data;
 }
 
-function percent(int $part, int $total): string
+/**
+ * What a JSON measurement holds at a path: null when it is not there.
+ */
+function value(mixed $data, int|string ...$path): mixed
 {
-    return $total === 0 ? '-' : sprintf('%.1f%%', 100 * $part / $total);
+    foreach ($path as $key) {
+        if (!is_array($data) || !array_key_exists($key, $data)) {
+            return null;
+        }
+        $data = $data[$key];
+    }
+
+    return $data;
+}
+
+function number(mixed $data, int|string ...$path): int|float
+{
+    $value = value($data, ...$path);
+
+    return is_int($value) || is_float($value) ? $value : 0;
+}
+
+function maybe(mixed $data, int|string ...$path): int|float|null
+{
+    $value = value($data, ...$path);
+
+    return is_int($value) || is_float($value) ? $value : null;
+}
+
+function text(mixed $data, int|string ...$path): string
+{
+    $value = value($data, ...$path);
+
+    return is_scalar($value) ? (string) $value : '';
+}
+
+function percent(int|float $part, int|float $total): string
+{
+    return (float) $total === 0.0 ? '-' : sprintf('%.1f%%', 100 * $part / $total);
 }
 
 /**
@@ -262,8 +298,8 @@ function delta(float|int $value, float|int|null $before, bool $lowerIsBetter = f
 }
 
 /**
- * @param list<array<string, mixed>>   $results
- * @param array<string, array<string, mixed>> $baseline
+ * @param list<array<mixed>> $results
+ * @param array<mixed>       $baseline name => measurement
  */
 function render(array $results, array $baseline): string
 {
@@ -279,25 +315,25 @@ function render(array $results, array $baseline): string
     ];
 
     foreach ($results as $r) {
-        $b = $baseline[$r['name']] ?? null;
+        $b = value($baseline, text($r, 'name'));
         $lines[] = sprintf(
             '| %s | %d%s | %d%s | %d%s | %d | %d | %d%s | %d | %.2f%s | %d%s |',
-            $r['name'],
-            $r['filesParsed'],
-            delta($r['filesParsed'], $b['filesParsed'] ?? null),
-            $r['filesFailed'],
-            delta($r['filesFailed'], $b['filesFailed'] ?? null, true),
-            $r['duplicates'],
-            delta($r['duplicates'], $b['duplicates'] ?? null, true),
-            $r['classLike'],
-            $r['methods'],
-            $r['edges'],
-            delta($r['edges'], $b['edges'] ?? null),
-            $r['vendorFilesRead'] ?? 0,
-            $r['seconds'],
-            delta($r['seconds'], $b['seconds'] ?? null, true, 0.2),
-            $r['peakMemoryMb'],
-            delta($r['peakMemoryMb'], $b['peakMemoryMb'] ?? null, true, 0.2),
+            text($r, 'name'),
+            number($r, 'filesParsed'),
+            delta(number($r, 'filesParsed'), maybe($b, 'filesParsed')),
+            number($r, 'filesFailed'),
+            delta(number($r, 'filesFailed'), maybe($b, 'filesFailed'), true),
+            number($r, 'duplicates'),
+            delta(number($r, 'duplicates'), maybe($b, 'duplicates'), true),
+            number($r, 'classLike'),
+            number($r, 'methods'),
+            number($r, 'edges'),
+            delta(number($r, 'edges'), maybe($b, 'edges')),
+            number($r, 'vendorFilesRead'),
+            number($r, 'seconds'),
+            delta(number($r, 'seconds'), maybe($b, 'seconds'), true, 0.2),
+            number($r, 'peakMemoryMb'),
+            delta(number($r, 'peakMemoryMb'), maybe($b, 'peakMemoryMb'), true, 0.2),
         );
     }
 
@@ -324,15 +360,15 @@ function render(array $results, array $baseline): string
     $lines[] = '| Project | Layer violations | Context pairs | Contexts read |';
     $lines[] = '|---|---:|---:|---|';
     foreach ($results as $r) {
-        $a = $r['architecture'] ?? [];
-        $b = $baseline[$r['name']]['architecture'] ?? null;
+        $a = value($r, 'architecture');
+        $b = value($baseline, text($r, 'name'), 'architecture');
         $lines[] = sprintf(
             '| %s | %d%s | %d | %s |',
-            $r['name'],
-            $a['layerViolations'] ?? 0,
-            delta($a['layerViolations'] ?? 0, $b['layerViolations'] ?? null, true),
-            $a['contextPairs'] ?? 0,
-            ($a['contextPairs'] ?? 0) === 0 ? '-' : (($a['layerFirst'] ?? false) ? 'after the layer' : 'before the layer'),
+            text($r, 'name'),
+            number($a, 'layerViolations'),
+            delta(number($a, 'layerViolations'), maybe($b, 'layerViolations'), true),
+            number($a, 'contextPairs'),
+            (number($a, 'contextPairs')) === 0 ? '-' : (value($a, 'layerFirst') === true ? 'after the layer' : 'before the layer'),
         );
     }
     $lines[] = '';
@@ -343,22 +379,22 @@ function render(array $results, array $baseline): string
     $lines[] = '| Project | Services | Routes | With controller | Controller in dependencies | Controller not found | HTTP calls | To a route | To another service | Wrong method |';
     $lines[] = '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|';
     foreach ($results as $r) {
-        $h = $r['http'] ?? [];
-        $b = $baseline[$r['name']]['http'] ?? null;
+        $h = value($r, 'http');
+        $b = value($baseline, text($r, 'name'), 'http');
         $lines[] = sprintf(
             '| %s | %d | %d%s | %d%s | %d | %d | %d | %d | %d | %d |',
-            $r['name'],
-            $r['services'] ?? 0,
-            $h['routes'] ?? 0,
-            delta($h['routes'] ?? 0, $b['routes'] ?? null),
-            $h['routesWithHandler'] ?? 0,
-            delta($h['routesWithHandler'] ?? 0, $b['routesWithHandler'] ?? null),
-            $h['routesToDependencies'] ?? 0,
-            $h['routesToMissingControllers'] ?? 0,
-            $h['requests'] ?? 0,
-            $h['requestsToProject'] ?? 0,
-            $h['requestsToServices'] ?? 0,
-            $h['methodMismatchCount'] ?? 0,
+            text($r, 'name'),
+            number($r, 'services'),
+            number($h, 'routes'),
+            delta(number($h, 'routes'), maybe($b, 'routes')),
+            number($h, 'routesWithHandler'),
+            delta(number($h, 'routesWithHandler'), maybe($b, 'routesWithHandler')),
+            number($h, 'routesToDependencies'),
+            number($h, 'routesToMissingControllers'),
+            number($h, 'requests'),
+            number($h, 'requestsToProject'),
+            number($h, 'requestsToServices'),
+            number($h, 'methodMismatchCount'),
         );
     }
     $lines[] = '';
@@ -369,16 +405,16 @@ function render(array $results, array $baseline): string
     $lines[] = '| Project | Injections | Linked | Receives edges | Not linked |';
     $lines[] = '|---|---:|---:|---:|---:|';
     foreach ($results as $r) {
-        $i = $r['injections'] ?? [];
-        $b = $baseline[$r['name']]['injections'] ?? null;
+        $i = value($r, 'injections');
+        $b = value($baseline, text($r, 'name'), 'injections');
         $lines[] = sprintf(
             '| %s | %d | %d%s | %d | %d |',
-            $r['name'],
-            $i['injections'] ?? 0,
-            $i['linked'] ?? 0,
-            delta($i['linked'] ?? 0, $b['linked'] ?? null),
-            $i['edges'] ?? 0,
-            $i['unlinkedCount'] ?? 0,
+            text($r, 'name'),
+            number($i, 'injections'),
+            number($i, 'linked'),
+            delta(number($i, 'linked'), maybe($b, 'linked')),
+            number($i, 'edges'),
+            number($i, 'unlinkedCount'),
         );
     }
     $lines[] = '';
@@ -389,24 +425,24 @@ function render(array $results, array $baseline): string
     $lines[] = '| Project | Handlers EXTRACTED | INFERRED | AMBIGUOUS | Sends INFERRED | AMBIGUOUS | Untyped sends | Sent, no handler | Handled, never sent | Contracts between services |';
     $lines[] = '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|';
     foreach ($results as $r) {
-        $bus = $r['bus'] ?? [];
-        $b = $baseline[$r['name']]['bus'] ?? null;
-        $count = static fn (?array $values, string $key): int => (int) ($values[$key] ?? 0);
+        $bus = value($r, 'bus');
+        $b = value($baseline, text($r, 'name'), 'bus');
+        $count = static fn (mixed $values, string $key): int => (int) number($values, $key);
         $lines[] = sprintf(
             '| %s | %d%s | %d%s | %d | %d%s | %d | %d | %d | %d | %d |',
-            $r['name'],
-            $count($bus['handlers'] ?? null, 'EXTRACTED'),
-            delta($count($bus['handlers'] ?? null, 'EXTRACTED'), $b === null ? null : $count($b['handlers'] ?? null, 'EXTRACTED')),
-            $count($bus['handlers'] ?? null, 'INFERRED'),
-            delta($count($bus['handlers'] ?? null, 'INFERRED'), $b === null ? null : $count($b['handlers'] ?? null, 'INFERRED')),
-            $count($bus['handlers'] ?? null, 'AMBIGUOUS'),
-            $count($bus['sends'] ?? null, 'INFERRED'),
-            delta($count($bus['sends'] ?? null, 'INFERRED'), $b === null ? null : $count($b['sends'] ?? null, 'INFERRED')),
-            $count($bus['sends'] ?? null, 'AMBIGUOUS'),
-            $bus['untypedSends'] ?? 0,
-            $bus['messagesWithoutHandlerCount'] ?? 0,
-            $bus['messagesNeverSentCount'] ?? 0,
-            $bus['contracts'] ?? 0,
+            text($r, 'name'),
+            $count(value($bus, 'handlers'), 'EXTRACTED'),
+            delta($count(value($bus, 'handlers'), 'EXTRACTED'), $b === null ? null : $count(value($b, 'handlers'), 'EXTRACTED')),
+            $count(value($bus, 'handlers'), 'INFERRED'),
+            delta($count(value($bus, 'handlers'), 'INFERRED'), $b === null ? null : $count(value($b, 'handlers'), 'INFERRED')),
+            $count(value($bus, 'handlers'), 'AMBIGUOUS'),
+            $count(value($bus, 'sends'), 'INFERRED'),
+            delta($count(value($bus, 'sends'), 'INFERRED'), $b === null ? null : $count(value($b, 'sends'), 'INFERRED')),
+            $count(value($bus, 'sends'), 'AMBIGUOUS'),
+            number($bus, 'untypedSends'),
+            number($bus, 'messagesWithoutHandlerCount'),
+            number($bus, 'messagesNeverSentCount'),
+            number($bus, 'contracts'),
         );
     }
     $lines[] = '';
@@ -415,8 +451,8 @@ function render(array $results, array $baseline): string
 }
 
 /**
- * @param list<array<string, mixed>>          $results
- * @param array<string, array<string, mixed>> $baseline
+ * @param list<array<mixed>> $results
+ * @param array<mixed>       $baseline name => measurement
  *
  * @return list<string>
  */
@@ -428,19 +464,19 @@ function callTable(array $results, array $baseline, string $key): array
     ];
 
     foreach ($results as $r) {
-        $c = $r[$key];
-        $bc = $baseline[$r['name']][$key] ?? null;
+        $c = value($r, $key);
+        $bc = value($baseline, text($r, 'name'), $key);
         $lines[] = sprintf(
             '| %s | %d | %s%s | %s | %s | %s%s | %s |',
-            $r['name'],
-            $c['total'],
-            percent($c['inferred'], $c['total']),
-            delta($c['inferred'], $bc['inferred'] ?? null),
-            percent($c['ambiguous'], $c['total']),
-            percent($c['outsideProject'], $c['total']),
-            percent($c['unknownReceiver'], $c['total']),
-            delta($c['unknownReceiver'], $bc['unknownReceiver'] ?? null, true),
-            percent($c['chainOutsideProject'] ?? 0, $c['total']),
+            text($r, 'name'),
+            number($c, 'total'),
+            percent(number($c, 'inferred'), number($c, 'total')),
+            delta(number($c, 'inferred'), maybe($bc, 'inferred')),
+            percent(number($c, 'ambiguous'), number($c, 'total')),
+            percent(number($c, 'outsideProject'), number($c, 'total')),
+            percent(number($c, 'unknownReceiver'), number($c, 'total')),
+            delta(number($c, 'unknownReceiver'), maybe($bc, 'unknownReceiver'), true),
+            percent(number($c, 'chainOutsideProject'), number($c, 'total')),
         );
     }
 
@@ -466,9 +502,8 @@ switch ($command) {
         break;
 
     case 'measure':
-        $baseline = is_file(BASELINE_FILE)
-            ? array_column(json_decode((string) file_get_contents(BASELINE_FILE), true, 512, JSON_THROW_ON_ERROR), null, 'name')
-            : [];
+        $saved = is_file(BASELINE_FILE) ? json_decode((string) file_get_contents(BASELINE_FILE), true, 512, JSON_THROW_ON_ERROR) : [];
+        $baseline = array_column(is_array($saved) ? $saved : [], null, 'name');
 
         $results = [];
         foreach (projects($names) as $project) {

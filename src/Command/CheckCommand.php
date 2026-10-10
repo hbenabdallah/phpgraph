@@ -8,6 +8,7 @@ use PhpGraph\Presentation\TextPresenter;
 use PhpGraph\Project\ProjectGraph;
 use PhpGraph\Query\GraphQueryProvider;
 use PhpGraph\Query\Result\LayerViolation;
+use PhpGraph\Values;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -34,7 +35,7 @@ final class CheckCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $root = realpath((string) $input->getArgument('path'));
+        $root = realpath(Values::text($input->getArgument('path')));
         if ($root === false || !is_dir($root)) {
             $output->writeln('<error>Project path not found.</error>');
 

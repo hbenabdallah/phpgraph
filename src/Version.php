@@ -26,7 +26,7 @@ final class Version
     public static function builder(): string
     {
         static $hash = null;
-        if ($hash !== null) {
+        if (\is_string($hash)) {
             return $hash;
         }
 

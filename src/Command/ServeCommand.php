@@ -8,6 +8,7 @@ use PhpGraph\Mcp\McpServer;
 use PhpGraph\Project\BuildOptions;
 use PhpGraph\Project\ProjectGraph;
 use PhpGraph\Query\GraphQueryProvider;
+use PhpGraph\Values;
 use PhpGraph\Version;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -45,7 +46,7 @@ final class ServeCommand extends Command
             return Command::SUCCESS;
         }
 
-        $root = realpath((string) $input->getArgument('path'));
+        $root = realpath(Values::text($input->getArgument('path')));
         if ($root === false || !is_dir($root)) {
             fwrite(STDERR, "phpgraph: project path not found\n");
 

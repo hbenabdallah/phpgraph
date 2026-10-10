@@ -8,6 +8,7 @@ use PhpGraph\Builder\GraphBuilder;
 use PhpGraph\Mcp\McpServer;
 use PhpGraph\Query\GraphQueryProvider;
 use PhpGraph\Storage\JsonGraphStorage;
+use PhpGraph\Tests\Support\Dig;
 use PHPUnit\Framework\TestCase;
 
 final class McpServerTest extends TestCase
@@ -30,15 +31,15 @@ final class McpServerTest extends TestCase
     {
         $response = $this->call(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'initialize', 'params' => ['protocolVersion' => '2025-06-18']]);
 
-        self::assertSame('2025-06-18', $response['result']['protocolVersion']);
+        self::assertSame('2025-06-18', Dig::at($response, 'result', 'protocolVersion'));
 
         $latest = McpServer::PROTOCOLS[\count(McpServer::PROTOCOLS) - 1];
         foreach ([['protocolVersion' => '2099-01-01'], []] as $params) {
             $response = $this->call(['jsonrpc' => '2.0', 'id' => 2, 'method' => 'initialize', 'params' => $params]);
-            self::assertSame($latest, $response['result']['protocolVersion'] ?? null, 'a version it does not speak: its latest');
+            self::assertSame($latest, Dig::at($response, 'result', 'protocolVersion') ?? null, 'a version it does not speak: its latest');
         }
-        self::assertSame('phpgraph', $response['result']['serverInfo']['name']);
-        self::assertStringContainsString('Call overview first', $response['result']['instructions']);
+        self::assertSame('phpgraph', Dig::at($response, 'result', 'serverInfo', 'name'));
+        self::assertStringContainsString('Call overview first', Dig::text($response, 'result', 'instructions'));
     }
 
     public function testNotificationsReceiveNoResponse(): void
@@ -52,7 +53,7 @@ final class McpServerTest extends TestCase
 
         self::assertSame(
             ['overview', 'query_graph', 'get_node', 'get_neighbors', 'impact_of', 'outline', 'shortest_path', 'god_nodes'],
-            array_column($response['result']['tools'], 'name'),
+            array_column(Dig::list($response, 'result', 'tools'), 'name'),
         );
     }
 
@@ -65,8 +66,8 @@ final class McpServerTest extends TestCase
             'params' => ['name' => 'shortest_path', 'arguments' => ['from' => 'PlaceOrderHandler', 'to' => 'DbalOrderRepository']],
         ]);
 
-        self::assertFalse($response['result']['isError']);
-        self::assertStringContainsString('Shortest path', $response['result']['content'][0]['text']);
+        self::assertFalse(Dig::at($response, 'result', 'isError'));
+        self::assertStringContainsString('Shortest path', Dig::text($response, 'result', 'content', 0, 'text'));
     }
 
     public function testRejectsUnknownToolsAndMissingArguments(): void
@@ -74,8 +75,8 @@ final class McpServerTest extends TestCase
         $unknown = $this->call(['jsonrpc' => '2.0', 'id' => 4, 'method' => 'tools/call', 'params' => ['name' => 'nope']]);
         $missing = $this->call(['jsonrpc' => '2.0', 'id' => 5, 'method' => 'tools/call', 'params' => ['name' => 'get_node', 'arguments' => []]]);
 
-        self::assertSame(-32602, $unknown['error']['code']);
-        self::assertSame(-32602, $missing['error']['code']);
+        self::assertSame(-32602, Dig::at($unknown, 'error', 'code'));
+        self::assertSame(-32602, Dig::at($missing, 'error', 'code'));
     }
 
     public function testReportsToolErrorWhenGraphIsMissing(): void
@@ -83,7 +84,7 @@ final class McpServerTest extends TestCase
         $server = new McpServer(new GraphQueryProvider('/nonexistent/graph.json'));
         $response = $this->call(['jsonrpc' => '2.0', 'id' => 6, 'method' => 'tools/call', 'params' => ['name' => 'god_nodes']], $server);
 
-        self::assertTrue($response['result']['isError']);
+        self::assertTrue(Dig::at($response, 'result', 'isError'));
     }
 
     public function testOutlivesTheSocketTimeout(): void

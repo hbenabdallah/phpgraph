@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace PhpGraph\Graph;
 
+use PhpGraph\Values;
+
 final readonly class Node
 {
     public function __construct(
@@ -31,17 +33,17 @@ final readonly class Node
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param array<mixed> $data
      */
     public static function fromArray(array $data): self
     {
         return new self(
-            (string) $data['id'],
-            (string) $data['label'],
-            NodeKind::from((string) $data['kind']),
-            isset($data['file']) ? (string) $data['file'] : null,
-            isset($data['line']) ? (int) $data['line'] : null,
-            isset($data['service']) ? (string) $data['service'] : null,
+            Values::text($data['id'] ?? null),
+            Values::text($data['label'] ?? null),
+            NodeKind::from(Values::text($data['kind'] ?? null)),
+            Values::optionalText($data['file'] ?? null),
+            Values::optionalNumber($data['line'] ?? null),
+            Values::optionalText($data['service'] ?? null),
         );
     }
 }

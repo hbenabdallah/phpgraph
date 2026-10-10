@@ -7,6 +7,7 @@ namespace PhpGraph\Command;
 use PhpGraph\Presentation\TextPresenter;
 use PhpGraph\Project\BuildOptions;
 use PhpGraph\Project\ProjectGraph;
+use PhpGraph\Values;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -30,7 +31,7 @@ final class BuildCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $root = realpath((string) $input->getArgument('path'));
+        $root = realpath(Values::text($input->getArgument('path')));
         if ($root === false || !is_dir($root)) {
             $output->writeln('<error>Project path not found.</error>');
 
@@ -42,7 +43,7 @@ final class BuildCommand extends Command
         $project = new ProjectGraph(
             $root,
             \is_string($input->getOption('output')) ? $input->getOption('output') : $root . '/' . ProjectGraph::OUTPUT_DIRECTORY,
-            new BuildOptions($excludes, !$input->getOption('no-vendor'), max(1, (int) $input->getOption('depth'))),
+            new BuildOptions($excludes, !$input->getOption('no-vendor'), max(1, Values::number($input->getOption('depth')))),
             cache: !$input->getOption('no-cache'),
         );
         $result = $project->build();

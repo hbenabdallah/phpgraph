@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpGraph\Command;
 
 use PhpGraph\Presentation\TextPresenter;
+use PhpGraph\Values;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -45,9 +46,9 @@ final class ImpactCommand extends AbstractGraphCommand
 
         $output->writeln(
             $this->loadPresenter($input)->impact(
-                (string) $input->getArgument('name'),
-                max(1, (int) $input->getOption('depth')),
-                $input->getOption('all') ? 0 : max(0, (int) $input->getOption('limit')),
+                Values::text($input->getArgument('name')),
+                max(1, Values::number($input->getOption('depth'))),
+                $input->getOption('all') ? 0 : max(0, Values::number($input->getOption('limit'))),
                 \is_string($section) ? $section : null,
                 $format,
             ),

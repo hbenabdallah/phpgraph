@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpGraph\Command;
 
+use PhpGraph\Values;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -24,8 +25,8 @@ final class PathCommand extends AbstractGraphCommand
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $output->writeln($this->loadPresenter($input)->path(
-            (string) $input->getArgument('from'),
-            (string) $input->getArgument('to'),
+            Values::text($input->getArgument('from')),
+            Values::text($input->getArgument('to')),
         ), OutputInterface::OUTPUT_RAW);
 
         return Command::SUCCESS;

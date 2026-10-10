@@ -9,6 +9,7 @@ use PhpGraph\Graph\Relation;
 use PhpGraph\Presentation\TextPresenter;
 use PhpGraph\Query\GraphQuery;
 use PhpGraph\Query\Result\ImpactedClass;
+use PhpGraph\Tests\Support\Dig;
 use PhpGraph\Tests\Support\TemporaryProject;
 use PHPUnit\Framework\TestCase;
 
@@ -207,8 +208,8 @@ final class ImpactTest extends TestCase
 
         $json = json_decode($presenter->impact('App\Notification::add', 3, 40, null, 'json'), true);
         self::assertIsArray($json);
-        self::assertSame('App\Notification::add', $json['changed']['id'] ?? null);
-        self::assertContains('Untested', $json['uncovered'] ?? []);
+        self::assertSame('App\Notification::add', Dig::at($json, 'changed', 'id') ?? null);
+        self::assertContains('Untested', Dig::list($json, 'uncovered'));
     }
 
     public function testReadersUsingWhatTheChangeWritesComeFirst(): void

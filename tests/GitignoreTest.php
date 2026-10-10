@@ -8,6 +8,7 @@ use PhpGraph\Builder\GraphBuilder;
 use PhpGraph\Mcp\McpServer;
 use PhpGraph\Project\ProjectGraph;
 use PhpGraph\Query\GraphQueryProvider;
+use PhpGraph\Tests\Support\Dig;
 use PhpGraph\Tests\Support\TemporaryProject;
 use PHPUnit\Framework\TestCase;
 
@@ -57,9 +58,9 @@ final class GitignoreTest extends TestCase
 
         $project = ProjectGraph::reusingSavedOptions($this->root, $this->root . '/phpgraph-out', null, checkInterval: 0.0);
         $server = new McpServer(GraphQueryProvider::forProject($project));
-        $call = static fn (string $tool, array $arguments = []): string => (string) ($server->handle(
+        $call = static fn (string $tool, array $arguments = []): string => Dig::text($server->handle(
             ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/call', 'params' => ['name' => $tool, 'arguments' => $arguments]],
-        )['result']['content'][0]['text'] ?? '');
+        ), 'result', 'content', 0, 'text');
 
         self::assertStringContainsString('Empty graph: no PHP file was read, yet the directory holds 1 PHP files', $call('overview'));
         self::assertStringStartsWith('Empty graph', $call('get_node', ['name' => 'Order']));

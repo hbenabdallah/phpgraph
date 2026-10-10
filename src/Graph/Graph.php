@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace PhpGraph\Graph;
 
+use PhpGraph\Values;
+
 final class Graph
 {
     /** @var array<string, Node> */
@@ -101,17 +103,17 @@ final class Graph
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param array<mixed> $data
      */
     public static function fromArray(array $data): self
     {
         $graph = new self();
 
-        foreach ($data['nodes'] ?? [] as $node) {
+        foreach (Values::records($data['nodes'] ?? null) as $node) {
             $graph->addNode(Node::fromArray($node));
         }
 
-        foreach ($data['edges'] ?? [] as $edge) {
+        foreach (Values::records($data['edges'] ?? null) as $edge) {
             $graph->addEdge(Edge::fromArray($edge));
         }
 

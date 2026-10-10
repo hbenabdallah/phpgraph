@@ -8,6 +8,7 @@ use PhpGraph\Presentation\OutlineReport;
 use PhpGraph\Presentation\TextPresenter;
 use PhpGraph\Query\Direction;
 use PhpGraph\Query\GraphQueryProvider;
+use PhpGraph\Values;
 
 final class McpServer
 {
@@ -71,7 +72,7 @@ final class McpServer
     }
 
     /**
-     * @param array<string, mixed> $request
+     * @param array<mixed> $request
      *
      * @return array<string, mixed>|null
      */
@@ -109,7 +110,7 @@ final class McpServer
     }
 
     /**
-     * @param array<string, mixed> $params
+     * @param array<mixed> $params
      *
      * @return array<string, mixed>
      */
@@ -277,7 +278,7 @@ final class McpServer
     }
 
     /**
-     * @param array<string, mixed> $params
+     * @param array<mixed> $params
      *
      * @return array<string, mixed>
      */
@@ -296,8 +297,8 @@ final class McpServer
             $text = match ($name) {
                 'query_graph' => $presenter->query(
                     $this->requireString($arguments, 'question'),
-                    max(1, (int) ($arguments['depth'] ?? 2)),
-                    max(1, (int) ($arguments['limit'] ?? 40)),
+                    max(1, Values::number($arguments['depth'] ?? 2)),
+                    max(1, Values::number($arguments['limit'] ?? 40)),
                 ),
                 'get_node' => $presenter->explain($this->requireString($arguments, 'name')),
                 'get_neighbors' => $presenter->explain(
@@ -313,12 +314,12 @@ final class McpServer
                 ),
                 'impact_of' => $presenter->impact(
                     $this->requireString($arguments, 'name'),
-                    max(1, (int) ($arguments['depth'] ?? 3)),
-                    max(0, (int) ($arguments['limit'] ?? 40)),
+                    max(1, Values::number($arguments['depth'] ?? 3)),
+                    max(0, Values::number($arguments['limit'] ?? 40)),
                     \is_string($arguments['section'] ?? null) && \in_array($arguments['section'], TextPresenter::IMPACT_SECTIONS, true) ? $arguments['section'] : null,
                     \is_string($arguments['format'] ?? null) && \in_array($arguments['format'], TextPresenter::IMPACT_FORMATS, true) ? $arguments['format'] : 'text',
                 ),
-                default => $presenter->godNodes(max(1, (int) ($arguments['limit'] ?? 15))),
+                default => $presenter->godNodes(max(1, Values::number($arguments['limit'] ?? 15))),
             };
             $warning = $presenter->warning();
             if ($warning !== null && $name !== 'overview') {
@@ -334,7 +335,7 @@ final class McpServer
     }
 
     /**
-     * @param array<string, mixed> $arguments
+     * @param array<mixed> $arguments
      */
     private function requireString(array $arguments, string $key): string
     {

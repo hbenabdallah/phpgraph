@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpGraph\Command;
 
+use PhpGraph\Values;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -26,9 +27,9 @@ final class QueryCommand extends AbstractGraphCommand
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $output->writeln($this->loadPresenter($input)->query(
-            (string) $input->getArgument('question'),
-            max(1, (int) $input->getOption('depth')),
-            max(1, (int) $input->getOption('limit')),
+            Values::text($input->getArgument('question')),
+            max(1, Values::number($input->getOption('depth'))),
+            max(1, Values::number($input->getOption('limit'))),
         ), OutputInterface::OUTPUT_RAW);
 
         return Command::SUCCESS;

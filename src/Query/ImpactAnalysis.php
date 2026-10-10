@@ -392,35 +392,10 @@ final class ImpactAnalysis
      */
     private function chains(string $handler, string $changed, array $callers): array
     {
-        /** @var list<list<string>> $chains */
         $chains = [];
         // Every simple path is exponential on a dense graph: the walk stops after a fixed number of steps.
         $steps = 0;
-        /** @param list<string> $path */
-        $walk = function (string $node, array $path) use (&$walk, &$chains, &$steps, $changed, $callers): void {
-            if (\count($chains) > self::MAX_CHAINS || \count($path) > 30 || ++$steps > self::MAX_CHAIN_STEPS) {
-                return;
-            }
-            $path[] = $node;
-            if ($node === $changed) {
-                $chains[] = array_values($path);
-
-                return;
-            }
-            foreach (array_keys($callers[$node] ?? []) as $from) {
-                $from = (string) $from;
-                if (\in_array($from, $path, true)) {
-                    continue;
-                }
-                // A tagged member is on the way only when a class of the chain holds it: the estimate use case runs
-                // the estimate rules, not those of the customer orders.
-                if (!$this->heldOnTheWay($from, $path)) {
-                    continue;
-                }
-                $walk($from, $path);
-            }
-        };
-        $walk($handler, []);
+        $this->walkChains($handler, [], $changed, $callers, $chains, $steps);
 
         return $chains;
     }
@@ -446,6 +421,36 @@ final class ImpactAnalysis
         unset($distinct[implode('>', \array_slice($first, 0, 4))]);
 
         return \array_slice(array_values($distinct), 0, self::MAX_CHAINS);
+    }
+
+    /**
+     * @param list<string>                       $path    the chain so far, from the handler
+     * @param array<string, array<string, true>> $callers
+     * @param list<list<string>>                 $chains  the chains found
+     */
+    private function walkChains(string $node, array $path, string $changed, array $callers, array &$chains, int &$steps): void
+    {
+        if (\count($chains) > self::MAX_CHAINS || \count($path) > 30 || ++$steps > self::MAX_CHAIN_STEPS) {
+            return;
+        }
+        $path[] = $node;
+        if ($node === $changed) {
+            $chains[] = $path;
+
+            return;
+        }
+        foreach (array_keys($callers[$node] ?? []) as $from) {
+            $from = (string) $from;
+            if (\in_array($from, $path, true)) {
+                continue;
+            }
+            // A tagged member is on the way only when a class of the chain holds it: the estimate use case runs the
+            // estimate rules, not those of the customer orders.
+            if (!$this->heldOnTheWay($from, $path)) {
+                continue;
+            }
+            $this->walkChains($from, $path, $changed, $callers, $chains, $steps);
+        }
     }
 
     /**

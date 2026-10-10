@@ -6,6 +6,7 @@ namespace PhpGraph\Command;
 
 use PhpGraph\Presentation\OutlineReport;
 use PhpGraph\Presentation\TextPresenter;
+use PhpGraph\Values;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -39,7 +40,7 @@ final class OutlineCommand extends AbstractGraphCommand
 
             return Command::INVALID;
         }
-        $output->writeln($this->loadPresenter($input)->outline((string) $input->getArgument('topic'), $format, $section), OutputInterface::OUTPUT_RAW);
+        $output->writeln($this->loadPresenter($input)->outline(Values::text($input->getArgument('topic')), $format, $section), OutputInterface::OUTPUT_RAW);
 
         return Command::SUCCESS;
     }

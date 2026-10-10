@@ -13,6 +13,7 @@ use PhpGraph\Graph\Relation;
 use PhpGraph\Query\Direction;
 use PhpGraph\Query\GraphQuery;
 use PhpGraph\Query\Result\Connection;
+use PhpGraph\Query\Result\ImpactedClass;
 use PhpGraph\Query\Result\LayerViolation;
 use PhpGraph\Query\Result\NamespaceGroup;
 use PhpGraph\Query\Result\PathMode;
@@ -756,6 +757,7 @@ final class TextPresenter
         // Complete lists: the search itself goes further than its usual 200 classes.
         $impact = $this->query->impactOf($node, $depth, $limit === 0 ? 5000 : 200);
         $isTestCase = fn (string $class): bool => preg_match('/(Test|TestCase|Cest|Spec|Context|Feature)$/', $this->query->label($class)) === 1;
+        /** @var array{direct: list<ImpactedClass>, routes: list<ImpactedClass>, state: list<ImpactedClass>, tests: list<ImpactedClass>, stateTests: list<ImpactedClass>, helpers: list<ImpactedClass>} $groups */
         $groups = ['direct' => [], 'routes' => [], 'state' => [], 'tests' => [], 'stateTests' => [], 'helpers' => []];
         foreach ($impact->classes as $class) {
             $key = match (true) {
@@ -770,11 +772,11 @@ final class TextPresenter
         // What is reached through the state only possibly depends on the change: the classes and tests in the modules
         // of the direct dependents first (their first two namespace segments).
         $module = static fn (string $class): string => implode('\\', \array_slice(explode('\\', $class), 0, 2));
-        $modules = array_fill_keys(array_map(static fn ($class): string => $module($class->class), $groups['direct']), true);
+        $modules = array_fill_keys(array_map(static fn (ImpactedClass $class): string => $module($class->class), $groups['direct']), true);
         // Readers filtering on what it writes (INFERRED) before those reading everything (AMBIGUOUS), then by module.
-        $rank = static fn ($class): int => $class->confidence === \PhpGraph\Graph\Confidence::Ambiguous ? 1 : 0;
+        $rank = static fn (ImpactedClass $class): int => $class->confidence === \PhpGraph\Graph\Confidence::Ambiguous ? 1 : 0;
         foreach (['state', 'stateTests'] as $key) {
-            usort($groups[$key], static fn ($a, $b): int => [$rank($a), isset($modules[$module($b->class)]), $a->depth] <=> [$rank($b), isset($modules[$module($a->class)]), $b->depth]);
+            usort($groups[$key], static fn (ImpactedClass $a, ImpactedClass $b): int => [$rank($a), isset($modules[$module($b->class)]), $a->depth] <=> [$rank($b), isset($modules[$module($a->class)]), $b->depth]);
         }
 
         $lines = [
@@ -797,7 +799,7 @@ final class TextPresenter
                 $limit === 0 ? 'everything' : \sprintf('the first %d classes and %d call sites per class', $limit, self::IMPACT_SITES),
             ),
         ];
-        $sites = function ($class, int $perClass = self::IMPACT_SITES) use ($limit): array {
+        $sites = function (ImpactedClass $class, int $perClass = self::IMPACT_SITES) use ($limit): array {
             $lines = [];
             $shown = $limit === 0 ? $class->sites : \array_slice($class->sites, 0, $perClass);
             foreach ($shown as $edge) {
@@ -810,7 +812,6 @@ final class TextPresenter
             return $lines;
         };
         $wanted = static fn (string $name): bool => $section === null || $section === $name;
-        $slice = static fn (array $entries): array => $limit === 0 ? $entries : \array_slice($entries, 0, $limit);
         $more = static function (array $entries) use ($limit, &$lines): void {
             if ($limit > 0 && \count($entries) > $limit) {
                 $lines[] = \sprintf('  - ... %d more', \count($entries) - $limit);
@@ -819,13 +820,13 @@ final class TextPresenter
 
         if ($wanted('direct')) {
             for ($level = 1; $level <= $impact->maxDepth; ++$level) {
-                $atDepth = array_values(array_filter($groups['direct'], static fn ($class): bool => $class->depth === $level));
+                $atDepth = array_values(array_filter($groups['direct'], static fn (ImpactedClass $class): bool => $class->depth === $level));
                 if ($atDepth === []) {
                     continue;
                 }
                 $lines[] = '';
                 $lines[] = $level === 1 ? 'Direct dependents:' : \sprintf('%d relations away:', $level);
-                foreach ($slice($atDepth) as $class) {
+                foreach ($this->sliced($atDepth, $limit) as $class) {
                     $lines[] = \sprintf(
                         '  - %s [%s]%s%s  %s',
                         $this->query->label($class->class),
@@ -845,7 +846,7 @@ final class TextPresenter
         if ($wanted('routes') && $groups['routes'] !== []) {
             $lines[] = '';
             $lines[] = 'Routes reaching it (the entry points to check):';
-            foreach ($slice($groups['routes']) as $route) {
+            foreach ($this->sliced($groups['routes'], $limit) as $route) {
                 $lines[] = \sprintf('  - %s [%s]  %s', $this->query->label($route->class), $route->confidence->value, $this->classLocation($route->class));
                 $lines[] = '      via ' . ($route->chain === [] ? $this->formatEdge($route->edge) : $this->chain($route->chain));
             }
@@ -857,7 +858,7 @@ final class TextPresenter
             $lines[] = 'Possibly affected through the state it changes: they call a method reading what it writes. Those '
                 . 'reading what it records (the method tests the constant it writes, INFERRED) come first, then those reading '
                 . 'all of it (AMBIGUOUS), in the modules of the direct dependents first. Not followed further:';
-            foreach ($slice($groups['state']) as $class) {
+            foreach ($this->sliced($groups['state'], $limit) as $class) {
                 $lines[] = \sprintf('  - %s [%s]  %s', $this->query->label($class->class), $class->confidence->value, $this->classLocation($class->class));
                 array_push($lines, ...$sites($class));
             }
@@ -873,7 +874,7 @@ final class TextPresenter
                 continue;
             }
             // Tests are listed further by default, one call site each: an agent runs them all.
-            $shown = $key === 'helpers' || $limit === 0 ? $slice($groups[$key]) : \array_slice($groups[$key], 0, max($limit, self::IMPACT_TESTS));
+            $shown = $key === 'helpers' || $limit === 0 ? $this->sliced($groups[$key], $limit) : \array_slice($groups[$key], 0, max($limit, self::IMPACT_TESTS));
             $lines[] = '';
             $lines[] = $title;
             foreach ($shown as $class) {
@@ -985,6 +986,16 @@ final class TextPresenter
     private function namespaceGroup(NamespaceGroup $group): string
     {
         return \sprintf('%s (%d)%s', $group->name, $group->classes, $group->layers === [] ? '' : ' [' . $this->counts(\array_slice($group->layers, 0, 4, true)) . ']');
+    }
+
+    /**
+     * @param list<ImpactedClass> $entries
+     *
+     * @return list<ImpactedClass>
+     */
+    private function sliced(array $entries, int $limit): array
+    {
+        return $limit === 0 ? $entries : \array_slice($entries, 0, $limit);
     }
 
     /**

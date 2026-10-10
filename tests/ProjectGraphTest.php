@@ -8,6 +8,7 @@ use PhpGraph\Mcp\McpServer;
 use PhpGraph\Project\BuildOptions;
 use PhpGraph\Project\ProjectGraph;
 use PhpGraph\Query\GraphQueryProvider;
+use PhpGraph\Tests\Support\Dig;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -111,7 +112,9 @@ final class ProjectGraphTest extends TestCase
         $path = $this->root . '/phpgraph-out/graph.json';
         $data = json_decode((string) file_get_contents($path), true);
         self::assertIsArray($data);
-        $data['meta']['phpgraph']['builder'] = 'an older phpgraph';
+        $meta = Dig::list($data, 'meta');
+        $meta['phpgraph'] = ['builder' => 'an older phpgraph'] + Dig::list($meta, 'phpgraph');
+        $data['meta'] = $meta;
         file_put_contents($path, json_encode($data));
 
         self::assertTrue($this->project()->refresh(), 'same sources, other builder');
@@ -146,7 +149,7 @@ final class ProjectGraphTest extends TestCase
 
         self::assertStringContainsString('Other languages, not in the graph: TypeScript (2 files).', $this->text($server->handle(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/call', 'params' => ['name' => 'overview', 'arguments' => []]])), 'minified and node_modules/ files left out');
         $initialize = $server->handle(['jsonrpc' => '2.0', 'id' => 2, 'method' => 'initialize', 'params' => []]);
-        self::assertStringStartsWith('Knowledge graph', (string) ($initialize['result']['instructions'] ?? ''), 'some PHP: the usual instructions');
+        self::assertStringStartsWith('Knowledge graph', Dig::text($initialize, 'result', 'instructions'), 'some PHP: the usual instructions');
     }
 
     public function testAProjectWithoutPhpIsToldAtOnce(): void
@@ -156,7 +159,7 @@ final class ProjectGraphTest extends TestCase
         $server = new McpServer(GraphQueryProvider::forProject($this->project()));
 
         $initialize = $server->handle(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'initialize', 'params' => []]);
-        self::assertStringStartsWith('No PHP code: this project is written in Java (1 file).', (string) ($initialize['result']['instructions'] ?? ''), 'before any build');
+        self::assertStringStartsWith('No PHP code: this project is written in Java (1 file).', Dig::text($initialize, 'result', 'instructions'), 'before any build');
         self::assertStringContainsString('its tools cannot help here', $this->text($server->handle(['jsonrpc' => '2.0', 'id' => 2, 'method' => 'tools/call', 'params' => ['name' => 'get_node', 'arguments' => ['name' => 'Main']]])));
     }
 
@@ -175,7 +178,7 @@ final class ProjectGraphTest extends TestCase
      */
     private function text(?array $response): string
     {
-        $text = $response['result']['content'][0]['text'] ?? null;
+        $text = Dig::at($response, 'result', 'content', 0, 'text') ?? null;
         self::assertIsString($text);
 
         return $text;
