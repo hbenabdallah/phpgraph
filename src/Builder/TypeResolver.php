@@ -80,6 +80,47 @@ final class TypeResolver
     }
 
     /**
+     * The class of a receiver a method is called on: the member of a union declaring the method.
+     */
+    public function resolveReceiver(TypeExpr $type, string $method, bool &$leftProject = false): ?string
+    {
+        $resolved = $this->resolveGeneric($type, $leftProject);
+        $resolved = $resolved === null ? null : $this->narrow($resolved, $method, false);
+        $base = $resolved === null ? null : GenericType::base($resolved);
+
+        return $base !== null && GenericType::isClass($base) ? $base : null;
+    }
+
+    /**
+     * The member of a union a method is called on (or a property read on): the one declaring it. Members inheriting
+     * the same method all do; members declaring different ones leave the call unresolved.
+     */
+    private function narrow(string $type, string $member, bool $isProperty): ?string
+    {
+        if (!GenericType::isUnion($type)) {
+            return $type;
+        }
+
+        $chosen = null;
+        $found = [];
+        foreach (GenericType::members($type) as $candidate) {
+            $class = GenericType::base($candidate);
+            if (!GenericType::isClass($class)) {
+                continue;
+            }
+            $declared = $isProperty
+                ? ($this->genericProperty($candidate, $member) ?? $this->findProperty($class, $member))
+                : $this->findMethod($class, strtolower($member));
+            if ($declared !== null) {
+                $chosen ??= $candidate;
+                $found[$declared] = true;
+            }
+        }
+
+        return \count($found) === 1 ? $chosen : null;
+    }
+
+    /**
      * The type with its arguments: `ScalarNodeDefinition<NodeBuilder<ArrayNodeDefinition<TreeBuilder>>>`, so that
      * the next call of a chain binds the templates of its class (`end()` returns `TParent`).
      */
@@ -120,6 +161,10 @@ final class TypeResolver
         if ($type->member === null) {
             return $this->elementOf($receiverType);
         }
+        $receiverType = $this->narrow($receiverType, $type->member, $type->isProperty);
+        if ($receiverType === null) {
+            return null;
+        }
         $receiver = GenericType::base($receiverType);
         if (!GenericType::isClass($receiver)) {
             return null;
@@ -143,6 +188,9 @@ final class TypeResolver
             $leftProject = true;
 
             return null;
+        }
+        if ($type->closure !== null) {
+            return $this->closureParameter($method, $receiverType, ...$type->closure);
         }
 
         if ($type->isElement) {
@@ -242,6 +290,23 @@ final class TypeResolver
         $returned = GenericType::substitute($generic, $this->bindings($receiverType, $owner), $receiverType);
 
         return $returned === null ? null : $this->canonicalType($returned);
+    }
+
+    /**
+     * What a method documents it passes to a parameter of the closure it takes, seen from the receiver: `$this` is the
+     * receiver, the templates of its class are bound by the receiver's arguments.
+     */
+    private function closureParameter(string $method, string $receiverType, int|string $argument, int $parameter): ?string
+    {
+        $owner = substr($method, 0, (int) strrpos($method, '::'));
+        $parameters = $this->generics->callables[$method] ?? $this->vendorSignature($owner)->callableParameters[$method] ?? [];
+        $documented = $parameters[$argument][$parameter] ?? null;
+        if ($documented === null || $documented === GenericType::UNKNOWN) {
+            return null;
+        }
+        $type = GenericType::substitute($documented, $this->bindings($receiverType, $owner), $receiverType);
+
+        return $type === null ? null : $this->canonicalType($type);
     }
 
     private function genericProperty(string $receiverType, string $name): ?string

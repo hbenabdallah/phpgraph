@@ -19,6 +19,8 @@ final readonly class TypeExpr
      * @param ?string      $generic   the type with its arguments, a GenericType string, when it has some: `Collection<?,Item>`
      * @param list<string> $functions the function called, `response()`: the names it may have, its namespace's first
      * @param list<string> $arguments what the call passes, by position: `null`, `class:Foo` (Foo::class) or `?`
+     * @param array{int|string, int}|null $closure the closure argument of the method call, by position or name, and
+     *                                             the parameter of the closure
      */
     private function __construct(
         public ?string $className,
@@ -29,7 +31,20 @@ final readonly class TypeExpr
         public ?string $generic = null,
         public array $functions = [],
         public array $arguments = [],
+        public ?array $closure = null,
     ) {
+    }
+
+    /**
+     * A parameter of a closure passed to a method, typed by what the method documents it receives:
+     * `$query->when($search, fn ($query) => ...)` with `@param (callable($this, TWhenParameter): mixed) $callback`.
+     *
+     * @param int|string $argument  position or name of the argument
+     * @param int        $parameter position of the parameter in the closure
+     */
+    public static function closureParameter(self $receiver, string $method, int|string $argument, int $parameter): self
+    {
+        return new self(null, $receiver, $method, false, false, null, [], [], [$argument, $parameter]);
     }
 
     /**
@@ -101,7 +116,7 @@ final readonly class TypeExpr
 
         return $this->receiver === null
             ? new self($this->className === null ? null : $map($this->className), null, null, false, false, $this->generic === null ? null : GenericType::mapNames($this->generic, $map))
-            : new self(null, $this->receiver->map($map), $this->member, $this->isProperty, $this->isElement);
+            : new self(null, $this->receiver->map($map), $this->member, $this->isProperty, $this->isElement, null, [], [], $this->closure);
     }
 
     public function key(): string
@@ -114,6 +129,9 @@ final readonly class TypeExpr
         }
         if ($this->member === null) {
             return $this->receiver->key() . '[]';
+        }
+        if ($this->closure !== null) {
+            return $this->receiver->key() . '->' . $this->member . '(#' . $this->closure[0] . ':' . $this->closure[1] . ')';
         }
 
         return $this->receiver->key() . ($this->isProperty ? '->$' : '->') . $this->member . ($this->isProperty ? '' : '()') . ($this->isElement ? '[]' : '');

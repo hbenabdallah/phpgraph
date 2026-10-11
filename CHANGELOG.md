@@ -3,6 +3,22 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## Unreleased
+
+### Added
+- Unions are typed: a call on `Response|ResponseFactory` (a `@return`, `@var` or `@param`, or a union declared in the
+  code, `JsonResponse|AuthenticatedIdentity`) resolves to the member declaring the method, only when one member does
+  (or they all inherit the same one). Scalars are left out, `mixed` leaves the union unknown, and a template of the
+  method is set aside (`$this|TWhenReturnType` is the receiver). A single class declared in the code wins over a
+  documented union.
+- An untyped parameter of a closure passed to a method is typed by what the method documents it passes:
+  `@param (callable($this, mixed): mixed) $callback` makes `$query` in `->when($city, fn ($query) => $query->where())`
+  the receiver; by position or by named argument.
+- `/** @use HasFactory<HotelFactory> */` on a trait use binds the templates of the trait: `Hotel::factory()->count()`.
+- Application calls with an unknown receiver: StayHub 12.7% → 1.2%, art-gallery 20.8% → 6.5%, Akeneo 11.3% → 10.0%,
+  WordPress 7.2% → 6.4%. No INFERRED edge lost on the corpus; the AMBIGUOUS ones gone were wrong guesses (Mockery's
+  `with()` taken for a project method) or became INFERRED.
+
 ## 1.2.0 (2026-10-10)
 
 ### Added

@@ -164,6 +164,7 @@ final class VendorSignatures
                 array_intersect_key($extraction->genericReturns, array_flip($class['methods'])),
                 $genericProperties,
                 $extraction->mixins[$name] ?? [],
+                array_intersect_key($extraction->callableParameters, array_flip($class['methods'])),
             );
         }
     }

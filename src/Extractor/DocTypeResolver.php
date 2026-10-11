@@ -87,6 +87,13 @@ final class DocTypeResolver extends NodeVisitorAbstract
     public const GENERICS = 'phpgraph.generics';
 
     /**
+     * array<int|string, list<string>>: the parameters of the closure a method takes, by position and by name of its
+     * parameter, as GenericType strings (`?` unknown): `@param (callable($this, TWhenParameter): mixed)|null $callback`
+     * gives `['static', '?']`.
+     */
+    public const CALLABLE_PARAMETERS = 'phpgraph.callableParameters';
+
+    /**
      * Iterables whose last argument is their elements; Generator has its own place for them.
      */
     private const ITERABLES = ['array', 'list', 'non-empty-list', 'non-empty-array', 'iterable'];
@@ -102,6 +109,9 @@ final class DocTypeResolver extends NodeVisitorAbstract
     /** @var list<?string> */
     private array $classNames = [];
 
+    /** @var list<Stmt\ClassLike> */
+    private array $classNodes = [];
+
     public function __construct(private readonly NameContext $names)
     {
     }
@@ -114,17 +124,11 @@ final class DocTypeResolver extends NodeVisitorAbstract
             $templates = $doc === null ? [] : $this->templates($doc);
             $this->classTemplates[] = $templates;
             $this->classNames[] = $node->namespacedName?->toString();
+            $this->classNodes[] = $node;
             if ($templates !== []) {
                 $node->setAttribute(self::TEMPLATES, $templates);
             }
-            $parents = [];
-            preg_match_all('/@(?:phpstan-|psalm-)?(?:template-)?(?:extends|implements|use)\s+(\S+<.+)/', $doc ?? '', $matches);
-            foreach ($matches[1] as $text) {
-                [$base, $arguments] = GenericType::parse((string) $this->generic($this->firstType(trim($text)), []));
-                if ($arguments !== [] && GenericType::isClass($base)) {
-                    $parents[$base] = $arguments;
-                }
-            }
+            $parents = $this->parentArguments($doc ?? '');
             if ($parents !== []) {
                 $node->setAttribute(self::PARENT_ARGUMENTS, $parents);
             }
@@ -152,9 +156,21 @@ final class DocTypeResolver extends NodeVisitorAbstract
             return null;
         }
 
+        // `/** @use HasFactory<HotelFactory> */` on the trait use, in the class body.
+        if ($node instanceof Stmt\TraitUse) {
+            $class = end($this->classNodes);
+            $parents = $this->parentArguments($doc);
+            if ($class !== false && $parents !== []) {
+                $declared = $class->getAttribute(self::PARENT_ARGUMENTS);
+                $class->setAttribute(self::PARENT_ARGUMENTS, (\is_array($declared) ? $declared : []) + $parents);
+            }
+
+            return null;
+        }
+
         if ($node instanceof Stmt\ClassMethod || $node instanceof Stmt\Function_) {
             if (preg_match('/@return\s+(.+)/', $doc, $match) === 1) {
-                $type = $this->resolve($match[1], $this->templates($doc));
+                $type = $this->resolve($match[1], $this->templates($doc)) ?? $this->single($this->firstType(trim($match[1])), $this->templates($doc));
                 if ($type !== null) {
                     $node->setAttribute(self::RETURN_TYPE, $type);
                 }
@@ -177,7 +193,7 @@ final class DocTypeResolver extends NodeVisitorAbstract
                     $node->setAttribute(self::RETURN_CONDITIONAL, json_encode($conditional));
                 }
             }
-            $elements = $types = $generics = [];
+            $elements = $types = $generics = $callables = [];
             foreach (preg_split('/\R/', $doc) ?: [] as $line) {
                 if (preg_match('/@(?:phpstan-|psalm-)?param\s+(.+)/', $line, $match) === 1) {
                     $token = $this->firstType(trim($match[1]));
@@ -188,7 +204,7 @@ final class DocTypeResolver extends NodeVisitorAbstract
                     if ($element !== null) {
                         $elements[$variable[1]] = $element;
                     }
-                    $type = $this->resolve($token, $this->templates($doc));
+                    $type = $this->resolve($token, $this->templates($doc)) ?? $this->single($token, $this->templates($doc));
                     if ($type !== null && $type !== TypeExpr::STATIC) {
                         $types[$variable[1]] = $type;
                     }
@@ -196,7 +212,19 @@ final class DocTypeResolver extends NodeVisitorAbstract
                     if ($generic !== null && GenericType::isGeneric($generic)) {
                         $generics[$variable[1]] = $generic;
                     }
+                    $callable = $this->callableParameters($token, $this->templates($doc));
+                    if ($callable !== null) {
+                        $callables[$variable[1]] = $callable;
+                    }
                 }
+            }
+            foreach ($node->params as $position => $param) {
+                if ($param->var instanceof AstNode\Expr\Variable && \is_string($param->var->name) && isset($callables[$param->var->name])) {
+                    $callables[$position] = $callables[$param->var->name];
+                }
+            }
+            if ($callables !== []) {
+                $node->setAttribute(self::CALLABLE_PARAMETERS, $callables);
             }
             if ($generics !== []) {
                 $node->setAttribute(self::GENERICS, $generics);
@@ -225,7 +253,7 @@ final class DocTypeResolver extends NodeVisitorAbstract
                 $rest = trim(substr($text, \strlen($token)));
                 $name = preg_match('/^\$(\w+)/', $rest, $variable) === 1 ? $variable[1] : '';
             }
-            $type = $this->resolve($token);
+            $type = $this->resolve($token) ?? $this->single($token, []);
             if ($type !== null) {
                 $types[$name] = $type;
             }
@@ -289,6 +317,7 @@ final class DocTypeResolver extends NodeVisitorAbstract
         if ($node instanceof Stmt\ClassLike) {
             array_pop($this->classTemplates);
             array_pop($this->classNames);
+            array_pop($this->classNodes);
         }
 
         return null;
@@ -353,7 +382,10 @@ final class DocTypeResolver extends NodeVisitorAbstract
             $this->split($text, '|'),
             static fn (string $part): bool => !\in_array(strtolower(trim($part)), ['null', 'false', 'void'], true),
         ));
-        if (\count($parts) !== 1) {
+        if (\count($parts) > 1) {
+            return $this->union($parts, $methodTemplates);
+        }
+        if ($parts === []) {
             return null;
         }
         // An intersection, `NodeDefinition&ParentNodeDefinitionInterface`: its first class.
@@ -413,6 +445,94 @@ final class DocTypeResolver extends NodeVisitorAbstract
         };
 
         return GenericType::format($resolved, $arguments);
+    }
+
+    /**
+     * The arguments a docblock gives the templates of parents: `@extends Repository<Order>`, `@use HasFactory<F>`.
+     *
+     * @return array<string, list<string>>
+     */
+    private function parentArguments(string $doc): array
+    {
+        $parents = [];
+        preg_match_all('/@(?:phpstan-|psalm-)?(?:template-)?(?:extends|implements|use)\s+(\S+<.+)/', $doc, $matches);
+        foreach ($matches[1] as $text) {
+            [$base, $arguments] = GenericType::parse((string) $this->generic($this->firstType(trim($text)), []));
+            if ($arguments !== [] && GenericType::isClass($base)) {
+                $parents[$base] = $arguments;
+            }
+        }
+
+        return $parents;
+    }
+
+    /**
+     * The parameters of a closure type, `callable(Builder<TModel>, int): void` or `Closure($this): mixed`, alone or in
+     * a union; null when it says nothing about them.
+     *
+     * @param list<string> $methodTemplates
+     *
+     * @return list<string>|null
+     */
+    private function callableParameters(string $text, array $methodTemplates): ?array
+    {
+        if (preg_match('/(?:^|[(|])\s*\\\\?(?:callable|Closure)\(/i', $text, $match, \PREG_OFFSET_CAPTURE) !== 1) {
+            return null;
+        }
+        $open = $match[0][1] + \strlen($match[0][0]) - 1;
+        $close = $this->closingParenthesis(substr($text, $open));
+        if ($close < 1) {
+            return null;
+        }
+        $parameters = [];
+        foreach ($this->split(substr($text, $open + 1, $close - 1), ',') as $parameter) {
+            // `callable(Builder $query): void`: the type, without the name.
+            $parameter = (string) preg_replace('/(?<=\S)\s+&?(?:\.\.\.)?\$\w+$/', '', trim($parameter));
+            $parameters[] = $parameter === '' ? GenericType::UNKNOWN : $this->generic($this->firstType($parameter), $methodTemplates) ?? GenericType::UNKNOWN;
+        }
+
+        return array_filter($parameters, static fn (string $type): bool => $type !== GenericType::UNKNOWN) === [] ? null : $parameters;
+    }
+
+    /**
+     * The one class a union leaves once its scalars and the templates of the method are set aside: `Foo|string`,
+     * `$this|TWhenReturnType`.
+     *
+     * @param list<string> $methodTemplates
+     */
+    private function single(string $text, array $methodTemplates): ?string
+    {
+        $generic = $this->generic($text, $methodTemplates);
+
+        return $generic !== null && !GenericType::isGeneric($generic) && ($generic === TypeExpr::STATIC || GenericType::isClass($generic)) ? $generic : null;
+    }
+
+    /**
+     * A union as a GenericType: the members a method can be called on, `Response|ResponseFactory`. Scalars and arrays
+     * are left out, and so is a template of the method, bound by the arguments (`$this|TWhenReturnType`: the closure
+     * passed to when() returns the builder it receives, most of the time). `mixed` or `object` may be anything: null.
+     *
+     * @param list<string> $parts
+     * @param list<string> $methodTemplates
+     */
+    private function union(array $parts, array $methodTemplates): ?string
+    {
+        $members = [];
+        foreach ($parts as $part) {
+            $lower = strtolower(trim($part, " ()\t"));
+            if ($lower === 'mixed' || $lower === 'object') {
+                return null;
+            }
+            if (\in_array(trim($part), $methodTemplates, true)) {
+                continue;
+            }
+            $member = $this->generic($part, $methodTemplates);
+            if ($member !== null && GenericType::base($member) !== GenericType::ARRAY) {
+                array_push($members, ...GenericType::members($member));
+            }
+        }
+
+        return GenericType::union($members);
     }
 
     /**

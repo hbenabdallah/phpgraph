@@ -64,6 +64,8 @@ final readonly class FileExtraction
      * @param array<string, list<string>> $mixins class => the classes it forwards unknown calls to (`@mixin`)
      * @param array<string, string> $conditionalReturns callable id => its conditional return type, as JSON
      *                                             (DocTypeResolver::RETURN_CONDITIONAL)
+     * @param array<string, array<int|string, list<string>>> $callableParameters method id => the parameters of the
+     *                                             closures it takes, by position and name (DocTypeResolver::CALLABLE_PARAMETERS)
      */
     public function __construct(
         public array $nodes,
@@ -99,6 +101,7 @@ final readonly class FileExtraction
         public array $documentedMethods = [],
         public array $mixins = [],
         public array $conditionalReturns = [],
+        public array $callableParameters = [],
     ) {
     }
 }

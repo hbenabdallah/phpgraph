@@ -133,6 +133,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<string, string> callable id => its conditional return type, as JSON (DocTypeResolver) */
     private array $conditionalReturns = [];
 
+    /** @var array<string, array<int|string, list<string>>> method id => the parameters of the closures it takes */
+    private array $callableParameters = [];
+
     /** @var array<string, string> parameter of the current callable => class of its elements (`@param Rule[] $rules`) */
     private array $parameterElements = [];
 
@@ -228,6 +231,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->documentedMethods,
             $this->mixins,
             $this->conditionalReturns,
+            $this->callableParameters,
         );
     }
 
@@ -594,7 +598,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             if ($returnType !== null && $returnType !== TypeExpr::STATIC) {
                 $this->returnTypes[$id] = $returnType;
             }
-            $generic = $node->getAttribute(DocTypeResolver::RETURN_GENERIC);
+            $generic = $this->returnGeneric($node);
             if (\is_string($generic) && !str_contains($generic, TypeExpr::STATIC)) {
                 $this->genericReturns[$id] = $generic;
             }
@@ -612,9 +616,14 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             if ($returnType !== null) {
                 $this->returnTypes[$id] = $returnType;
             }
-            $generic = $node->getAttribute(DocTypeResolver::RETURN_GENERIC);
+            $generic = $this->returnGeneric($node);
             if (\is_string($generic)) {
                 $this->genericReturns[$id] = $generic;
+            }
+            $callables = $node->getAttribute(DocTypeResolver::CALLABLE_PARAMETERS);
+            if (\is_array($callables)) {
+                /** @var array<int|string, list<string>> $callables */
+                $this->callableParameters[$id] = $callables;
             }
             $element = $node->getAttribute(DocTypeResolver::RETURN_ELEMENT);
             $element = \is_string($element) ? $this->documentedClass($element) : null;
@@ -674,7 +683,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         foreach ($params as $param) {
             if ($param->var instanceof Expr\Variable && \is_string($param->var->name)) {
                 $type = $this->singleType($param->type);
-                $generic = $this->usableGeneric($generics[$param->var->name] ?? null);
+                $generic = $this->usableGeneric($generics[$param->var->name] ?? $this->nativeUnion($param->type));
                 $this->assignLocal($param->var->name, match (true) {
                     $generic !== null => TypeExpr::generic($generic),
                     $type !== null => TypeExpr::named($type),
@@ -692,6 +701,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     {
         if ($type === null || str_starts_with($type, '@')) {
             return null;
+        }
+        if (GenericType::isUnion($type)) {
+            return array_filter(GenericType::members($type), fn (string $member): bool => $this->usableGeneric($member) === null && !GenericType::isClass($member)) === [] ? $type : null;
         }
         [$base, $arguments] = GenericType::parse($type);
 
@@ -732,6 +744,18 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         $this->typeParameters($node->params);
+
+        // An untyped parameter of a closure passed to a method: what the method documents it passes, resolved later.
+        [$call, $argument] = $this->closureArguments[spl_object_id($node)] ?? [null, null];
+        $receiver = $call === null ? null : $this->pending[$call]->receiver ?? null;
+        if ($receiver === null || $argument === null) {
+            return;
+        }
+        foreach ($node->params as $position => $param) {
+            if ($param->type === null && $param->var instanceof Expr\Variable && \is_string($param->var->name)) {
+                $this->assignLocal($param->var->name, TypeExpr::closureParameter($receiver, $this->pending[$call]->method, $argument, $position));
+            }
+        }
     }
 
     /**
@@ -2049,6 +2073,42 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         $names = $this->typeNames($type);
 
         return \count($names) === 1 ? $names[0] : null;
+    }
+
+    /**
+     * The GenericType a callable returns: documented, or a union declared in the code. A documented union gives way to
+     * a single class declared in the code (`: ResponseInterface` with `@return Response|JsonResponse`): its members
+     * may each declare the method a call needs, the declared class always does.
+     */
+    private function returnGeneric(Stmt\ClassMethod|Stmt\Function_ $node): ?string
+    {
+        $documented = $node->getAttribute(DocTypeResolver::RETURN_GENERIC);
+        if (!\is_string($documented)) {
+            return $this->nativeUnion($node->returnType);
+        }
+
+        return GenericType::isUnion($documented) && $this->singleType($node->returnType) !== null ? null : $documented;
+    }
+
+    /**
+     * A union of classes declared in the code, `JsonResponse|AuthenticatedIdentity`, as a GenericType: a call on it
+     * picks the member declaring its method. Scalars are left out; null for one class or none.
+     */
+    private function nativeUnion(?AstNode $type): ?string
+    {
+        if ($type instanceof NullableType || !$type instanceof UnionType) {
+            return null;
+        }
+        $names = [];
+        foreach ($type->types as $inner) {
+            if ($inner instanceof IntersectionType) {
+                return null;
+            }
+            array_push($names, ...$this->typeNames($inner));
+        }
+        $names = array_values(array_unique($names));
+
+        return \count($names) > 1 ? implode('|', $names) : null;
     }
 
     /**

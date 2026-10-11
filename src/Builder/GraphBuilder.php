@@ -153,6 +153,8 @@ final class GraphBuilder
         $mixins = [];
         /** @var array<string, string> $conditionals */
         $conditionals = [];
+        /** @var array<string, array<int|string, list<string>>> $callables */
+        $callables = [];
         /** @var array<string, array{method: string, types: list<string>|true|null}> $guards */
         $guards = [];
         /** @var array<string, list<array{string, int, list<?string>, list<?string>}>> $callArguments */
@@ -220,6 +222,9 @@ final class GraphBuilder
             }
             foreach ($extraction->conditionalReturns as $callable => $conditional) {
                 $conditionals[$id($callable)] ??= $conditional;
+            }
+            foreach ($extraction->callableParameters as $method => $parameters) {
+                $callables[$id($method)] ??= array_map(static fn (array $types): array => array_map(static fn (string $type): string => GenericType::mapNames($type, $id), $types), $parameters);
             }
             foreach ($extraction->mixins as $class => $classes) {
                 $mixins[$id($class)] ??= array_map($id, $classes);
@@ -329,7 +334,7 @@ final class GraphBuilder
         }
 
         $methodsByClass = $this->methodsByClass($graph);
-        $types = new TypeResolver($graph, $names, $methodsByClass, $returnTypes, $propertyTypes, $vendor, $returnElements, new Generics($templates, $parentArguments, $genericReturns, $genericProperties, $documentedMethods, $mixins, $conditionals));
+        $types = new TypeResolver($graph, $names, $methodsByClass, $returnTypes, $propertyTypes, $vendor, $returnElements, new Generics($templates, $parentArguments, $genericReturns, $genericProperties, $documentedMethods, $mixins, $conditionals, $callables));
 
         // A method reading a property typed as an enum (`$violation->type`) uses that enum: what it outputs depends on it.
         foreach ($propertyReads as [$reader, $property]) {
@@ -670,7 +675,7 @@ final class GraphBuilder
         $name = strtolower($call->method);
 
         $leftProject = false;
-        $class = $call->receiver === null ? null : $types->resolve($call->receiver, $leftProject);
+        $class = $call->receiver === null ? null : $types->resolveReceiver($call->receiver, $call->method, $leftProject);
 
         if ($class !== null) {
             $found = $types->findMethod($class, $name);
