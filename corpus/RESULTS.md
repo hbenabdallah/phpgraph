@@ -6,17 +6,17 @@ phpgraph could not type, the main target of type inference work. Arrows compare 
 
 | Project | Files | Failed | Duplicates | Classes | Methods | Edges | Vendor files read | Seconds | Memory MB |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4179 | 107 | 0.53 | 28 |
-| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140472 | 613 | 8.88 | 558 |
-| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 217472 | 693 | 13.67 | 666 |
-| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 185221 | 604 | 12.97 | 588 |
-| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6797 | 62 | 0.67 | 34 |
-| bookstack | 1513 | 0 | 0 | 698 | 4076 | 22784 | 355 | 3.61 | 136 |
-| wordpress | 1899 | 0 | 50 | 840 | 7580 | 42358 | 0 | 6.78 | 145 |
-| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 110 | 0.49 | 38 |
-| art-gallery | 266 | 0 | 0 | 140 | 148 | 1692 | 94 | 0.66 | 46 |
-| ticket-booking | 366 | 0 | 0 | 291 | 737 | 5021 | 210 | 0.74 | 32 |
-| stayhub | 260 | 0 | 0 | 112 | 323 | 2026 | 119 | 1.28 | 50 |
+| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4179 | 110 | 0.55 | 28 |
+| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140422 | 614 | 9.92 | 656 |
+| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 217519 | 717 | 14.35 | 698 |
+| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 186668 | 607 | 14.90 | 628 |
+| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6801 | 64 | 0.73 | 36 |
+| bookstack | 1513 | 0 | 0 | 698 | 4076 | 22826 | 380 | 4.00 | 148 |
+| wordpress | 1899 | 0 | 50 | 840 | 7580 | 42372 | 0 | 6.91 | 165 |
+| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 110 | 0.51 | 38 |
+| art-gallery | 266 | 0 | 0 | 140 | 148 | 1692 | 94 | 0.69 | 46 |
+| ticket-booking | 366 | 0 | 0 | 291 | 737 | 5021 | 217 | 0.76 | 32 |
+| stayhub | 260 | 0 | 0 | 112 | 323 | 2029 | 152 | 1.47 | 52 |
 
 ## Method calls in application code
 
@@ -24,17 +24,17 @@ The main indicator: test code (see `TestFiles`) is left out.
 
 | Project | Call sites | Inferred | Ambiguous | Outside project | Unknown receiver | of which chain left project |
 |---|---:|---:|---:|---:|---:|---:|
-| php-ddd-example | 666 | 67.0% | 0.5% | 31.1% | 1.5% | 0.6% |
-| sylius | 19687 | 23.2% | 0.0% | 73.4% | 3.4% | 1.8% |
-| akeneo-pim | 33853 | 51.6% | 0.7% | 37.7% | 10.0% | 3.3% |
-| prestashop | 75968 | 53.0% | 2.4% | 36.3% | 8.3% | 2.5% |
+| php-ddd-example | 666 | 67.0% | 0.5% | 31.5% | 1.1% | 0.2% |
+| sylius | 19687 | 23.4% | 0.0% | 73.5% | 3.1% | 1.6% |
+| akeneo-pim | 33853 | 51.8% | 0.6% | 38.0% | 9.6% | 3.0% |
+| prestashop | 75968 | 58.4% | 1.3% | 36.3% | 3.9% | 2.4% |
 | ecotone-quickstart | 948 | 25.1% | 0.2% | 69.1% | 5.6% | 5.4% |
-| bookstack | 7468 | 45.3% | 2.2% | 47.2% | 5.3% | 3.4% |
-| wordpress | 26448 | 82.7% | 8.0% | 2.9% | 6.4% | 0.2% |
+| bookstack | 7468 | 45.6% | 2.0% | 48.7% | 3.8% | 1.9% |
+| wordpress | 26448 | 82.8% | 8.0% | 2.9% | 6.4% | 0.2% |
 | laravel-rabbitmq-microservices | 136 | 1.5% | 3.7% | 89.0% | 5.9% | 1.5% |
 | art-gallery | 586 | 4.1% | 0.2% | 89.2% | 6.5% | 4.4% |
-| ticket-booking | 1646 | 34.2% | 1.0% | 57.4% | 7.4% | 3.6% |
-| stayhub | 981 | 28.3% | 0.4% | 70.0% | 1.2% | 1.0% |
+| ticket-booking | 1646 | 34.2% | 1.0% | 57.5% | 7.4% | 3.5% |
+| stayhub | 981 | 28.3% | 0.4% | 70.5% | 0.7% | 0.5% |
 
 ## Method calls in test code
 
@@ -43,11 +43,11 @@ Mocks and specs make test code harder to type; read it apart.
 | Project | Call sites | Inferred | Ambiguous | Outside project | Unknown receiver | of which chain left project |
 |---|---:|---:|---:|---:|---:|---:|
 | php-ddd-example | 680 | 69.0% | 0.7% | 29.1% | 1.2% | 0.0% |
-| sylius | 82914 | 22.3% | 0.1% | 49.8% | 27.9% | 27.5% |
-| akeneo-pim | 125181 | 35.1% | 1.2% | 37.8% | 25.9% | 8.4% |
-| prestashop | 40938 | 47.6% | 0.5% | 47.9% | 4.0% | 1.2% |
-| ecotone-quickstart | 415 | 13.5% | 0.2% | 85.3% | 1.0% | 1.0% |
-| bookstack | 18033 | 32.2% | 1.5% | 54.8% | 11.4% | 5.2% |
+| sylius | 82914 | 22.3% | 0.0% | 50.1% | 27.6% | 27.2% |
+| akeneo-pim | 125181 | 35.1% | 1.2% | 38.2% | 25.6% | 8.2% |
+| prestashop | 40938 | 48.2% | 0.4% | 48.1% | 3.3% | 1.2% |
+| ecotone-quickstart | 415 | 14.7% | 0.0% | 85.3% | 0.0% | 0.0% |
+| bookstack | 18033 | 32.8% | 1.3% | 56.6% | 9.4% | 3.2% |
 | wordpress | 0 | - | - | - | - | - |
 | laravel-rabbitmq-microservices | 10 | 0.0% | 0.0% | 60.0% | 40.0% | 0.0% |
 | art-gallery | 75 | 0.0% | 0.0% | 89.3% | 10.7% | 0.0% |
@@ -60,17 +60,17 @@ Application and test code together.
 
 | Project | Call sites | Inferred | Ambiguous | Outside project | Unknown receiver | of which chain left project |
 |---|---:|---:|---:|---:|---:|---:|
-| php-ddd-example | 1346 | 68.0% | 0.6% | 30.1% | 1.3% | 0.3% |
-| sylius | 102601 | 22.4% | 0.1% | 54.3% | 23.2% | 22.6% |
-| akeneo-pim | 159034 | 38.6% | 1.1% | 37.8% | 22.5% | 7.3% |
-| prestashop | 116906 | 51.1% | 1.7% | 40.4% | 6.8% | 2.0% |
-| ecotone-quickstart | 1363 | 21.6% | 0.2% | 74.0% | 4.2% | 4.0% |
-| bookstack | 25501 | 36.1% | 1.7% | 52.6% | 9.6% | 4.7% |
-| wordpress | 26448 | 82.7% | 8.0% | 2.9% | 6.4% | 0.2% |
+| php-ddd-example | 1346 | 68.0% | 0.6% | 30.3% | 1.1% | 0.1% |
+| sylius | 102601 | 22.5% | 0.0% | 54.6% | 22.9% | 22.3% |
+| akeneo-pim | 159034 | 38.6% | 1.1% | 38.1% | 22.2% | 7.1% |
+| prestashop | 116906 | 54.8% | 1.0% | 40.4% | 3.7% | 2.0% |
+| ecotone-quickstart | 1363 | 21.9% | 0.1% | 74.0% | 3.9% | 3.7% |
+| bookstack | 25501 | 36.5% | 1.5% | 54.3% | 7.7% | 2.8% |
+| wordpress | 26448 | 82.8% | 8.0% | 2.9% | 6.4% | 0.2% |
 | laravel-rabbitmq-microservices | 146 | 1.4% | 3.4% | 87.0% | 8.2% | 1.4% |
 | art-gallery | 661 | 3.6% | 0.2% | 89.3% | 7.0% | 3.9% |
-| ticket-booking | 1674 | 33.8% | 1.0% | 57.9% | 7.3% | 3.6% |
-| stayhub | 1324 | 21.0% | 0.3% | 77.3% | 1.4% | 0.8% |
+| ticket-booking | 1674 | 33.8% | 1.0% | 57.9% | 7.3% | 3.5% |
+| stayhub | 1324 | 21.0% | 0.3% | 77.6% | 1.1% | 0.4% |
 
 ## Architecture of application code
 

@@ -222,7 +222,7 @@ final class McpServer
                         'name' => $name,
                         'depth' => $integer('How many relations away to follow (default 3).'),
                         'limit' => $integer('Entries per list (default 40); 0 for complete lists, instead of reading the cut ones node by node.'),
-                        'section' => ['type' => 'string', 'enum' => TextPresenter::IMPACT_SECTIONS, 'description' => 'Only one list: direct (the call chain), routes, state (possibly affected through the state it changes), tests (to run), state-tests (reaching what reads the state), helpers.'],
+                        'section' => ['type' => 'string', 'enum' => TextPresenter::IMPACT_SECTIONS, 'description' => 'Only one list: direct (the call chain), routes, operations (OpenAPI or gRPC operations implemented by what it reaches), state (possibly affected through the state it changes), tests (to run), state-tests (reaching what reads the state), helpers.'],
                         'format' => ['type' => 'string', 'enum' => TextPresenter::IMPACT_FORMATS, 'description' => 'text (default, compact: one line per class with its call sites), full (every relation spelled out) or json.'],
                     ],
                     'required' => ['name'],

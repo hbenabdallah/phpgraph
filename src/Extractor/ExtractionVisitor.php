@@ -136,6 +136,21 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<string, array<int|string, list<string>>> method id => the parameters of the closures it takes */
     private array $callableParameters = [];
 
+    /** @var array<string, array<string, array{string, int}>> callable id => how a call binds its templates */
+    private array $templateBinders = [];
+
+    /** @var array<string, string> "Class::attribute" => the class an Eloquent cast gives it (`'paid_at' => 'datetime'`) */
+    private array $casts = [];
+
+    /** @var array<int, ?TypeExpr> closure passed as an argument => what it returns, once read */
+    private array $closureReturns = [];
+
+    /** @var list<int> the closures being read, innermost last */
+    private array $closureNodes = [];
+
+    /** @var array<int, list<?TypeExpr>> closure being read => the types of its return statements */
+    private array $closureReturned = [];
+
     /** @var array<string, string> parameter of the current callable => class of its elements (`@param Rule[] $rules`) */
     private array $parameterElements = [];
 
@@ -179,6 +194,24 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
     /** @var list<array{string, string, TypeExpr, string, int|string}> */
     private array $parameterPasses = [];
+
+    /**
+     * The classes Eloquent's built-in casts give an attribute, by cast name.
+     */
+    private const CASTS = [
+        'date' => 'Illuminate\\Support\\Carbon',
+        'datetime' => 'Illuminate\\Support\\Carbon',
+        'custom_datetime' => 'Illuminate\\Support\\Carbon',
+        'immutable_date' => 'Carbon\\CarbonImmutable',
+        'immutable_datetime' => 'Carbon\\CarbonImmutable',
+        'immutable_custom_datetime' => 'Carbon\\CarbonImmutable',
+        'collection' => 'Illuminate\\Support\\Collection',
+    ];
+
+    /**
+     * The longest key of an argument type a call keeps: the types of the arguments are part of the call's.
+     */
+    private const ARGUMENT_KEY = 200;
 
     public function __construct(private readonly string $path)
     {
@@ -232,6 +265,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->mixins,
             $this->conditionalReturns,
             $this->callableParameters,
+            $this->templateBinders,
+            $this->casts,
         );
     }
 
@@ -356,7 +391,12 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->forgetAssigned($node->var);
         }
 
+        if ($node instanceof Stmt\Return_ && $node->expr !== null && $this->closureNodes !== []) {
+            $this->closureReturned[end($this->closureNodes)][] = $this->typeOf($node->expr);
+        }
+
         if ($node instanceof Expr\Closure || $node instanceof Expr\ArrowFunction) {
+            $this->onClosureReturn($node);
             $this->localTypes = array_pop($this->outerScopes) ?? [];
             array_pop($this->closures);
             array_pop($this->visibleParameters);
@@ -493,6 +533,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             /** @var array<string, list<string>> $parentArguments */
             $this->parentArguments[$fqcn] = $parentArguments;
         }
+        foreach ($this->collectCasts($node) as $attribute => $class) {
+            $this->casts[$fqcn . '::' . $attribute] = $class;
+        }
         $holds = $this->collectPropertyHolds($node);
         if ($holds !== []) {
             $this->propertyHolds[$fqcn] = $holds;
@@ -591,6 +634,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         $conditional = $node->getAttribute(DocTypeResolver::RETURN_CONDITIONAL);
         if (\is_string($conditional)) {
             $this->conditionalReturns[$id] = $conditional;
+        }
+        $binders = $node->getAttribute(DocTypeResolver::TEMPLATE_BINDERS);
+        if (\is_array($binders)) {
+            /** @var array<string, array{string, int}> $binders */
+            $this->templateBinders[$id] = $binders;
         }
         // A function's return type types the calls to it: `now()->addDay()`, `response()->json()`.
         if ($kind === NodeKind::Func) {
@@ -712,6 +760,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
     private function enterClosure(Expr\Closure|Expr\ArrowFunction $node): void
     {
+        $this->closureNodes[] = spl_object_id($node);
         $this->outerScopes[] = $this->localTypes;
         $this->closures[] = $this->closureArguments[spl_object_id($node)] ?? end($this->closures) ?: null;
 
@@ -756,6 +805,28 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                 $this->assignLocal($param->var->name, TypeExpr::closureParameter($receiver, $this->pending[$call]->method, $argument, $position));
             }
         }
+    }
+
+    /**
+     * What a closure returns, when it is known and the same for every return statement: its native return type, its
+     * expression for an arrow function. Read while its variables are still in scope.
+     */
+    private function onClosureReturn(Expr\Closure|Expr\ArrowFunction $node): void
+    {
+        $id = (int) array_pop($this->closureNodes);
+        $returned = $this->closureReturned[$id] ?? [];
+        unset($this->closureReturned[$id]);
+        $native = $this->singleType($node->returnType);
+        if ($native !== null) {
+            $this->closureReturns[$id] = TypeExpr::named($native);
+
+            return;
+        }
+        if ($node instanceof Expr\ArrowFunction) {
+            $returned = [$this->typeOf($node->expr)];
+        }
+        $keys = array_unique(array_map(static fn (?TypeExpr $type): string => $type?->key() ?? '', $returned));
+        $this->closureReturns[$id] = \count($keys) === 1 && $returned[0] !== null ? $returned[0] : null;
     }
 
     /**
@@ -1830,6 +1901,76 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     }
 
     /**
+     * What a call passes, by position, up to the first unpacked or named argument: `null`, `class:Foo` (Foo::class),
+     * `fn` (a closure) or `?`, and the types known: of a value, or what a closure returns.
+     *
+     * @param array<AstNode\Arg|AstNode\ArgPlaceholder|AstNode\VariadicPlaceholder> $args
+     *
+     * @return array{list<string>, array<int, TypeExpr>}
+     */
+    private function callArgumentsOf(array $args): array
+    {
+        $arguments = $types = [];
+        foreach (array_values($args) as $position => $argument) {
+            if (!$argument instanceof AstNode\Arg || $argument->unpack || $argument->name !== null) {
+                break;
+            }
+            $value = $argument->value;
+            // A class named by a string, as WordPress does: `_get_list_table('WP_Posts_List_Table')`.
+            $class = $this->classConstant($value)
+                ?? ($value instanceof AstNode\Scalar\String_ && preg_match('/^\\\\?[A-Z][A-Za-z0-9_]*(\\\\[A-Za-z_][A-Za-z0-9_]*)*$/', $value->value) === 1 ? ltrim($value->value, '\\') : null);
+            $isClosure = $value instanceof Expr\Closure || $value instanceof Expr\ArrowFunction;
+            $arguments[] = match (true) {
+                $class !== null => 'class:' . $class,
+                $value instanceof Expr\ConstFetch && strtolower($value->name->toString()) === 'null' => 'null',
+                $isClosure => 'fn',
+                default => '?',
+            };
+            $type = $isClosure ? $this->closureReturn($value) : ($class === null ? $this->typeOf($value) : null);
+            // Bounded: `$html = apply_filters('x', $html, $html)` repeated would nest the type in itself, doubling it.
+            if ($type !== null && \strlen($type->key()) <= self::ARGUMENT_KEY) {
+                $types[$position] = $type;
+            }
+        }
+
+        return [$arguments, $types];
+    }
+
+    /**
+     * What a closure argument returns: read with its body (onClosureReturn), or before it when it does not depend on
+     * the body, as the chain `transaction(fn (): Order => ...)->ship()` needs: its native return type, the expression
+     * of an arrow function without parameters (it sees the variables of the scope it is written in).
+     */
+    private function closureReturn(Expr\Closure|Expr\ArrowFunction $closure): ?TypeExpr
+    {
+        $id = spl_object_id($closure);
+        if (\array_key_exists($id, $this->closureReturns)) {
+            return $this->closureReturns[$id];
+        }
+        $native = $this->singleType($closure->returnType);
+        if ($native !== null) {
+            return TypeExpr::named($native);
+        }
+
+        return $closure instanceof Expr\ArrowFunction && $closure->params === [] ? $this->typeOf($closure->expr) : null;
+    }
+
+    /**
+     * The arguments of a method call, when they may bind the templates of the method: none when nothing is known of
+     * them, so that the call keeps the key it has without them.
+     *
+     * @param array<AstNode\Arg|AstNode\ArgPlaceholder|AstNode\VariadicPlaceholder> $args
+     *
+     * @return array{list<string>, array<int, TypeExpr>}
+     */
+    private function bindingArguments(array $args): array
+    {
+        [$arguments, $types] = $this->callArgumentsOf($args);
+
+        return $types === [] && array_filter($arguments, static fn (string $argument): bool => str_starts_with($argument, 'class:')) === [] ? [[], []] : [$arguments, $types];
+    }
+
+    /**
      * The type of an expression, possibly depending on other files: chains of calls and property fetches.
      */
     private function typeOf(Expr $expr): ?TypeExpr
@@ -1857,14 +1998,22 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
         if (($expr instanceof Expr\MethodCall || $expr instanceof Expr\NullsafeMethodCall) && $expr->name instanceof Identifier) {
             $receiver = $this->typeOf($expr->var);
+            if ($receiver === null) {
+                return null;
+            }
+            [$arguments, $types] = $this->bindingArguments($expr->args);
 
-            return $receiver === null ? null : TypeExpr::returnOf($receiver, $expr->name->toString());
+            return TypeExpr::returnOf($receiver, $expr->name->toString(), $arguments, $types);
         }
 
         if ($expr instanceof Expr\StaticCall && $expr->class instanceof Name && $expr->name instanceof Identifier) {
             $class = $this->resolveName($expr->class);
+            if ($class === null) {
+                return null;
+            }
+            [$arguments, $types] = $this->bindingArguments($expr->args);
 
-            return $class === null ? null : TypeExpr::returnOf(TypeExpr::named($class), $expr->name->toString());
+            return TypeExpr::returnOf(TypeExpr::named($class), $expr->name->toString(), $arguments, $types);
         }
 
         if ($expr instanceof Expr\FuncCall && $expr->name instanceof Name) {
@@ -1873,20 +2022,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $names = $expr->name->isFullyQualified() || !$namespaced instanceof Name
                 ? [$expr->name->toString()]
                 : [$namespaced->toString(), $expr->name->toString()];
-            $arguments = [];
-            foreach ($expr->args as $argument) {
-                if (!$argument instanceof AstNode\Arg || $argument->unpack || $argument->name !== null) {
-                    break;
-                }
-                $class = $this->classConstant($argument->value);
-                $arguments[] = match (true) {
-                    $class !== null => 'class:' . $class,
-                    $argument->value instanceof Expr\ConstFetch && strtolower($argument->value->name->toString()) === 'null' => 'null',
-                    default => '?',
-                };
-            }
+            [$arguments, $types] = $this->callArgumentsOf($expr->args);
 
-            return TypeExpr::returnOfFunction($names, $arguments);
+            return TypeExpr::returnOfFunction($names, $arguments, $types);
         }
 
         if ($expr instanceof Expr\New_ && $expr->class instanceof Name) {
@@ -1904,6 +2042,58 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         return null;
+    }
+
+    /**
+     * The attributes an Eloquent model casts, from its `$casts` property or its `casts()` method, and the class each
+     * becomes: a date (Carbon), a collection, an enum or a value object (`X::class`, a cast class resolved later).
+     *
+     * @return array<string, string>
+     */
+    private function collectCasts(Stmt\ClassLike $node): array
+    {
+        if (!$node instanceof Stmt\Class_ || $node->extends === null) {
+            return [];
+        }
+        $array = null;
+        foreach ($node->stmts as $statement) {
+            if ($statement instanceof Stmt\Property && $statement->props[0]->name->toString() === 'casts' && $statement->props[0]->default instanceof Expr\Array_) {
+                $array = $statement->props[0]->default;
+            } elseif ($statement instanceof Stmt\ClassMethod && strtolower($statement->name->toString()) === 'casts') {
+                foreach ($statement->stmts ?? [] as $inner) {
+                    if ($inner instanceof Stmt\Return_ && $inner->expr instanceof Expr\Array_) {
+                        $array = $inner->expr;
+                    }
+                }
+            }
+        }
+        $casts = [];
+        foreach ($array === null ? [] : $array->items as $item) {
+            if (!$item->key instanceof AstNode\Scalar\String_) {
+                continue;
+            }
+            $value = $item->value;
+            // `AsCollection::class . ':' . Item::class`, `AsCollection::of(Item::class)`: the cast class.
+            while ($value instanceof Expr\BinaryOp\Concat) {
+                $value = $value->left;
+            }
+            if ($value instanceof Expr\StaticCall && $value->class instanceof Name) {
+                $class = $this->resolveName($value->class);
+            } else {
+                $class = $this->classConstant($value);
+            }
+            if ($class === null && $value instanceof AstNode\Scalar\String_) {
+                $class = self::CASTS[strtolower(explode(':', $value->value)[0])] ?? null;
+                if (str_starts_with(strtolower($value->value), 'encrypted:')) {
+                    $class = self::CASTS[strtolower(explode(':', $value->value)[1])] ?? null;
+                }
+            }
+            if ($class !== null) {
+                $casts[$item->key->value] = $class;
+            }
+        }
+
+        return $casts;
     }
 
     /**
@@ -1929,6 +2119,14 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                         $types[$param->var->name] = $type;
                     }
                 }
+            }
+        }
+        // Magic properties the class documents: `@property-read Book $book`.
+        $documented = $node->getAttribute(DocTypeResolver::DOC_PROPERTIES);
+        foreach (\is_array($documented) ? $documented : [] as $name => $property) {
+            $class = \is_array($property) && \is_string($property[0] ?? null) && $property[0] !== TypeExpr::STATIC ? $this->documentedClass($property[0]) : null;
+            if ($class !== null) {
+                $types[(string) $name] ??= $class;
             }
         }
 
@@ -1989,6 +2187,12 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                         $generics[$name] = $types[$name];
                     }
                 }
+            }
+        }
+        $documented = $node->getAttribute(DocTypeResolver::DOC_PROPERTIES);
+        foreach (\is_array($documented) ? $documented : [] as $name => $property) {
+            if (\is_array($property) && \is_string($property[1] ?? null)) {
+                $generics[(string) $name] ??= $property[1];
             }
         }
 

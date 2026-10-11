@@ -29,7 +29,7 @@ final class ImpactReport
     private const TESTS = 100;
 
     /** @var array<string, list<ImpactedClass>> */
-    private array $groups = ['direct' => [], 'routes' => [], 'state' => [], 'quietState' => [], 'tests' => [], 'stateTests' => [], 'quietStateTests' => [], 'helpers' => []];
+    private array $groups = ['direct' => [], 'routes' => [], 'operations' => [], 'state' => [], 'quietState' => [], 'tests' => [], 'stateTests' => [], 'quietStateTests' => [], 'helpers' => []];
 
     private string $prefix;
 
@@ -44,6 +44,7 @@ final class ImpactReport
         foreach ($impact->classes as $class) {
             $key = match (true) {
                 str_starts_with($class->class, 'route:') || str_contains($class->class, '@route:') => 'routes',
+                str_starts_with($class->class, 'operation:') || str_contains($class->class, '@operation:') => 'operations',
                 $class->isTest && !$this->isTestCase($class->class) => 'helpers',
                 $class->isTest && $class->throughState && $class->confidence === Confidence::Ambiguous => 'quietStateTests',
                 $class->isTest => $class->throughState ? 'stateTests' : 'tests',
@@ -86,10 +87,11 @@ final class ImpactReport
         $lines = [
             \sprintf('Impact of changing %s [%s], %s', $this->changed->label, $this->changed->kind->value, $this->location($this->changed, false)),
             \sprintf(
-                '%d classes up to %d relations away, %d routes, %d more through the state%s; %d tests, %d through the state%s; %d helpers%s.',
+                '%d classes up to %d relations away, %d routes%s, %d more through the state%s; %d tests, %d through the state%s; %d helpers%s.',
                 \count($g['direct']),
                 $this->impact->maxDepth,
                 \count($g['routes']),
+                $g['operations'] === [] ? '' : \sprintf(', %d API operations', \count($g['operations'])),
                 \count($g['state']),
                 $g['quietState'] === [] ? '' : \sprintf(' (+%d reading all of it: section state)', \count($g['quietState'])),
                 \count($g['tests']),
@@ -130,6 +132,23 @@ final class ImpactReport
                 }
             }
             $more($g['routes'], $shown);
+        }
+
+        if ($wanted('operations') && $g['operations'] !== []) {
+            $lines[] = '';
+            $lines[] = 'API operations behind it (OpenAPI, .proto: the contract its clients rely on), ← what implements them:';
+            foreach ($shown = self::sliced($g['operations'], $limit, 0) as $operation) {
+                $marked = $operation->confidence === Confidence::Inferred ? '' : ' [' . $operation->confidence->value . ']';
+                $implementation = $this->query->graph()->node($operation->chain[0] ?? $operation->node ?? $operation->edge->target);
+                $lines[] = \sprintf(
+                    '  %s%s %s ← %s',
+                    $this->query->label($operation->class),
+                    $marked,
+                    $this->location($this->query->graph()->node($operation->class) ?? $this->changed),
+                    $implementation === null ? $operation->edge->target : $this->query->label($implementation->id) . ' ' . $this->location($implementation),
+                );
+            }
+            $more($g['operations'], $shown);
         }
 
         if ($wanted('direct')) {
@@ -239,6 +258,13 @@ final class ImpactReport
                 'confidence' => $route->confidence->value,
                 'chain' => $route->chain,
             ], $this->groups['routes']),
+            'operations' => array_map(fn (ImpactedClass $operation): array => [
+                'operation' => $this->query->label($operation->class),
+                'id' => $operation->class,
+                'file' => $this->file($operation->class),
+                'confidence' => $operation->confidence->value,
+                'implementedBy' => $operation->chain[0] ?? $operation->node ?? $operation->edge->target,
+            ], $this->groups['operations']),
             'direct' => array_map($class, $this->groups['direct']),
             'uncovered' => $this->uncovered(),
             'unused' => array_keys($this->unused()),

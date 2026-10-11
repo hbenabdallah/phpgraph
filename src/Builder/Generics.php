@@ -20,6 +20,8 @@ final readonly class Generics
      * @param array<string, string>                      $conditionals    callable id => conditional return type (JSON)
      * @param array<string, array<int|string, list<string>>> $callables   method id => the parameters of the closures it
      *                                                                     takes, by position and name, GenericType strings
+     * @param array<string, array<string, array{string, int}>> $binders callable id => how a call binds its templates
+     * @param array<string, string>                      $casts           "Class::attribute" => the class an Eloquent cast gives it
      */
     public function __construct(
         public array $templates = [],
@@ -30,6 +32,8 @@ final readonly class Generics
         public array $mixins = [],
         public array $conditionals = [],
         public array $callables = [],
+        public array $binders = [],
+        public array $casts = [],
     ) {
     }
 }

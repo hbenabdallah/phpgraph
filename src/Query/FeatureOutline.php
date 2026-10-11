@@ -93,7 +93,7 @@ final class FeatureOutline
         }
 
         [$entries, $closures, $inside, $fromFamilies] = $this->calls($core, $inCore, $members);
-        [$routes, $routeEntries] = $this->routes($entries, $inside, $members);
+        [$routes, $routeEntries] = $this->routes($entries, $inside, $members, $core);
         // The entries followed to the routes first, then those called by the most classes.
         uksort($entries, fn (string $a, string $b): int => [!\in_array($a, $routeEntries, true), -\count($this->classesOf($entries[$a]))]
             <=> [!\in_array($b, $routeEntries, true), -\count($this->classesOf($entries[$b]))]);
@@ -260,10 +260,12 @@ final class FeatureOutline
      * @param array<string, list<string>> $inside
      * @param array<string, string>       $members the members of the interface families: one rule among 34 on a
      *                                             chain is an arbitrary pick, a chain without one is preferred
+     * @param list<string>                $core    the classes of the feature: a route handled by one of them enters
+     *                                             it directly
      *
      * @return array{list<array{route: string, chain: list<string>}>, list<string>} the routes, the entries followed
      */
-    private function routes(array $entries, array $inside, array $members): array
+    private function routes(array $entries, array $inside, array $members, array $core): array
     {
         $ranked = [];
         foreach ($entries as $method => $callers) {
@@ -305,7 +307,7 @@ final class FeatureOutline
             }
             $isMain = \in_array($method, $main, true);
             foreach ($this->query->impactOf($node)->classes as $impacted) {
-                if (!str_starts_with($impacted->class, 'route:') || $impacted->chain === []
+                if (!self::isRoute($impacted->class) || $impacted->chain === []
                     || (!$isMain && (!isset($routes[$impacted->class]) || array_intersect_key(array_flip($impacted->chain), $ranInClosures) === []))) {
                     continue;
                 }
@@ -319,6 +321,18 @@ final class FeatureOutline
                 }
             }
         }
+        foreach ($core as $class) {
+            foreach ($this->graph->incident($class) as $method) {
+                if (!$method['forward'] || $method['edge']->relation !== Relation::HasMethod) {
+                    continue;
+                }
+                foreach ($this->graph->incident($method['other']) as $item) {
+                    if (!$item['forward'] && $item['edge']->relation === Relation::HandledBy && self::isRoute($item['other'])) {
+                        $routes[$item['other']] ??= [$method['other']];
+                    }
+                }
+            }
+        }
         $followed = array_map('strval', array_keys($followed));
         ksort($routes);
 
@@ -327,6 +341,11 @@ final class FeatureOutline
             array_map('strval', array_keys($routes)),
             array_values($routes),
         ), $followed];
+    }
+
+    private static function isRoute(string $id): bool
+    {
+        return str_starts_with($id, 'route:') || str_contains($id, '@route:');
     }
 
     /**

@@ -7,6 +7,9 @@ namespace PhpGraph\Tests;
 use PhpGraph\Graph\Confidence;
 use PhpGraph\Graph\NodeKind;
 use PhpGraph\Graph\Relation;
+use PhpGraph\Presentation\TextPresenter;
+use PhpGraph\Query\GraphQuery;
+use PhpGraph\Tests\Support\Dig;
 use PhpGraph\Tests\Support\TemporaryProject;
 use PHPUnit\Framework\TestCase;
 
@@ -53,6 +56,9 @@ final class ApiSchemasTest extends TestCase
         self::assertSame(9, $graph->node($show)->line);
         self::assertTrue($this->hasEdge($graph, $show, 'hotels@route:hotels/routes/api.php#GET /api/hotels/{hotel}', Relation::ImplementedBy, Confidence::Inferred), 'placeholders match whatever their names; the server path is the prefix');
         self::assertTrue($this->hasEdge($graph, 'root@operation:docs/openapi.yaml#POST /api/bookings/{id}/cancel', 'bookings@route:bookings/routes/api.php#POST /api/bookings/{booking}/cancel', Relation::ImplementedBy));
+
+        $outline = (new TextPresenter(new GraphQuery($graph, null, $this->root)))->outline('hotel controller');
+        self::assertStringContainsString('GET /api/hotels/{hotel} → HotelController::show() (API: GET /api/hotels/{hotelId} docs/openapi.yaml:9)', $outline, 'the routes of a service');
 
         $stats = $result->apiSchemas;
         self::assertSame([1, 5, 4], [$stats->documents, $stats->operations, $stats->implemented]);
@@ -124,5 +130,40 @@ final class ApiSchemasTest extends TestCase
 
         self::assertSame(1, $result->http->routes, 'the document declares no route');
         self::assertTrue($this->hasEdge($result->graph, 'operation:config/routes/openapi.yaml#GET /status', 'route:src/Status.php#GET /status', Relation::ImplementedBy));
+    }
+
+    private const CONTRACTS = [
+        'openapi.yaml' => "openapi: 3.0.0\npaths:\n  /orders:\n    get: {}\n  /status:\n    get: {}\n",
+        'src/Http/Orders.php' => 'namespace App\\Http; class Orders { public function __construct(private \\App\\Repository $repository) {}'
+            . ' #[\\Symfony\\Component\\Routing\\Attribute\\Route("/orders", methods: ["GET"])] public function list(): void { $this->repository->all(); } }',
+        'src/Repository.php' => 'namespace App; class Repository { public function all(): array { return []; } }',
+        'src/Status.php' => 'namespace App; class Status { #[\\Symfony\\Component\\Routing\\Attribute\\Route("/status", methods: ["GET"])] public function __invoke(): void {} }',
+        'proto/cinema.proto' => "syntax = \"proto3\";\npackage cinema;\noption php_namespace = \"Cinema\";\nservice CinemaService {\n    rpc Reserve (ReserveRequest) returns (ReserveResponse) {}\n}\n",
+        'src/CinemaServiceInterface.php' => 'namespace Cinema; interface CinemaServiceInterface { public function Reserve(): void; }',
+        'src/CinemaService.php' => 'namespace Cinema; class CinemaService implements CinemaServiceInterface { public function __construct(private \\App\\Repository $repository) {} public function Reserve(): void { $this->repository->all(); } }',
+    ];
+
+    public function testTheImpactOfAChangeListsTheOperationsBehindIt(): void
+    {
+        $result = $this->buildProject(self::CONTRACTS);
+        $presenter = new TextPresenter(new GraphQuery($result->graph));
+
+        $text = $presenter->impact('App\Repository::all');
+        self::assertStringContainsString(', 2 API operations,', $text);
+        self::assertStringContainsString('  GET /orders openapi.yaml L3 ← GET /orders src/Http/Orders.php L2', $text);
+        self::assertStringContainsString('  CinemaService.Reserve proto/cinema.proto L5 ← CinemaService::Reserve() src/CinemaService.php L2', $text);
+        self::assertStringNotContainsString('GET /status', $text);
+
+        $json = json_decode($presenter->impact('App\Repository::all', 3, 40, 'operations', 'json'), true);
+        self::assertSame(['GET /orders', 'CinemaService.Reserve'], array_map(static fn (mixed $operation): string => Dig::text($operation, 'operation'), Dig::list($json, 'operations')));
+    }
+
+    public function testTheOutlineOfAFeatureNamesTheOperationsItServes(): void
+    {
+        $result = $this->buildProject(self::CONTRACTS);
+        $presenter = new TextPresenter(new GraphQuery($result->graph, null, $this->root));
+
+        self::assertStringContainsString('GET /orders → Orders::list() (API: GET /orders openapi.yaml:3)', $presenter->outline('orders'));
+        self::assertStringContainsString("API operations its methods implement:\n    CinemaService.Reserve proto/cinema.proto:5 → CinemaService::Reserve()", $presenter->outline('cinema service'));
     }
 }

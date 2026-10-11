@@ -21,6 +21,8 @@ final readonly class ClassSignature
      * @param list<string>          $mixins          classes it forwards unknown calls to (`@mixin`)
      * @param array<string, array<int|string, list<string>>> $callableParameters method id => the parameters of the
      *                                                closures it takes, by position and name
+     * @param array<string, array<string, array{string, int}>> $templateBinders method id => how a call binds the
+     *                                                templates of the method
      */
     public function __construct(
         public string $name,
@@ -34,6 +36,7 @@ final readonly class ClassSignature
         public array $genericProperties = [],
         public array $mixins = [],
         public array $callableParameters = [],
+        public array $templateBinders = [],
     ) {
     }
 }

@@ -727,7 +727,7 @@ final class TextPresenter
     /**
      * What depends on a class or a method, directly or not: what a change may break.
      */
-    public const IMPACT_SECTIONS = ['direct', 'routes', 'state', 'tests', 'state-tests', 'helpers'];
+    public const IMPACT_SECTIONS = ['direct', 'routes', 'operations', 'state', 'tests', 'state-tests', 'helpers'];
 
     public const IMPACT_FORMATS = ['text', 'full', 'json'];
 
@@ -796,11 +796,12 @@ final class TextPresenter
         // Complete lists: the search itself goes further than its usual 200 classes.
         $impact = $this->query->impactOf($node, $depth, $limit === 0 ? 5000 : 200);
         $isTestCase = fn (string $class): bool => preg_match('/(Test|TestCase|Cest|Spec|Context|Feature)$/', $this->query->label($class)) === 1;
-        /** @var array{direct: list<ImpactedClass>, routes: list<ImpactedClass>, state: list<ImpactedClass>, tests: list<ImpactedClass>, stateTests: list<ImpactedClass>, helpers: list<ImpactedClass>} $groups */
-        $groups = ['direct' => [], 'routes' => [], 'state' => [], 'tests' => [], 'stateTests' => [], 'helpers' => []];
+        /** @var array{direct: list<ImpactedClass>, routes: list<ImpactedClass>, operations: list<ImpactedClass>, state: list<ImpactedClass>, tests: list<ImpactedClass>, stateTests: list<ImpactedClass>, helpers: list<ImpactedClass>} $groups */
+        $groups = ['direct' => [], 'routes' => [], 'operations' => [], 'state' => [], 'tests' => [], 'stateTests' => [], 'helpers' => []];
         foreach ($impact->classes as $class) {
             $key = match (true) {
                 str_starts_with($class->class, 'route:') || str_contains($class->class, '@route:') => 'routes',
+                str_starts_with($class->class, 'operation:') || str_contains($class->class, '@operation:') => 'operations',
                 $class->isTest && !$isTestCase($class->class) => 'helpers',
                 $class->isTest => $class->throughState ? 'stateTests' : 'tests',
                 default => $class->throughState ? 'state' : 'direct',
@@ -834,7 +835,7 @@ final class TextPresenter
             ),
             'Each class comes with the weakest confidence on the way, then its methods reaching the change and their source lines. '
             . \sprintf(
-                'Lists show %s: impact_of with limit 0 (CLI: --all) gives every class and every call site, section (direct, routes, state, tests, helpers) one list.',
+                'Lists show %s: impact_of with limit 0 (CLI: --all) gives every class and every call site, section (direct, routes, operations, state, tests, helpers) one list.',
                 $limit === 0 ? 'everything' : \sprintf('the first %d classes and %d call sites per class', $limit, self::IMPACT_SITES),
             ),
         ];
@@ -890,6 +891,16 @@ final class TextPresenter
                 $lines[] = '      via ' . ($route->chain === [] ? $this->formatEdge($route->edge) : $this->chain($route->chain));
             }
             $more($groups['routes']);
+        }
+
+        if ($wanted('operations') && $groups['operations'] !== []) {
+            $lines[] = '';
+            $lines[] = 'API operations it may change (an OpenAPI document or a .proto: the contract its clients rely on):';
+            foreach ($this->sliced($groups['operations'], $limit) as $operation) {
+                $lines[] = \sprintf('  - %s [%s]  %s', $this->query->label($operation->class), $operation->confidence->value, $this->classLocation($operation->class));
+                $lines[] = '      via ' . ($operation->chain === [] ? $this->formatEdge($operation->edge) : $this->chain($operation->chain));
+            }
+            $more($groups['operations']);
         }
 
         if ($wanted('state') && $groups['state'] !== []) {

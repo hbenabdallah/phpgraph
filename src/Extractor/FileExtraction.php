@@ -66,6 +66,9 @@ final readonly class FileExtraction
      *                                             (DocTypeResolver::RETURN_CONDITIONAL)
      * @param array<string, array<int|string, list<string>>> $callableParameters method id => the parameters of the
      *                                             closures it takes, by position and name (DocTypeResolver::CALLABLE_PARAMETERS)
+     * @param array<string, array<string, array{string, int}>> $templateBinders callable id => how a call binds the
+     *                                             templates of the callable (DocTypeResolver::TEMPLATE_BINDERS)
+     * @param array<string, string> $casts "Class::attribute" => the class an Eloquent cast gives the attribute
      */
     public function __construct(
         public array $nodes,
@@ -102,6 +105,8 @@ final readonly class FileExtraction
         public array $mixins = [],
         public array $conditionalReturns = [],
         public array $callableParameters = [],
+        public array $templateBinders = [],
+        public array $casts = [],
     ) {
     }
 }

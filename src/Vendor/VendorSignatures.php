@@ -47,14 +47,15 @@ final class VendorSignatures
     /** @var array<string, string>|null lowercase function name => the autoloaded file declaring it */
     private ?array $functionFiles = null;
 
-    /** @var array<string, array{?string, ?string, ?string}> lowercase function name => return type, GenericType, conditional */
+    /** @var array<string, array{?string, ?string, ?string, array<string, array{string, int}>}> lowercase function name => return type, GenericType, conditional, template binders */
     private array $functions = [];
 
     /**
-     * What a function of the packages returns: its class, its GenericType, its conditional return type (JSON). The
-     * autoloaded files are scanned for the names they declare; the file declaring it is then read, never run.
+     * What a function of the packages returns: its class, its GenericType, its conditional return type (JSON), how a
+     * call binds its templates. The autoloaded files are scanned for the names they declare; the file declaring it is
+     * then read, never run.
      *
-     * @return array{?string, ?string, ?string}|null
+     * @return array{?string, ?string, ?string, array<string, array{string, int}>}|null
      */
     public function function(string $name): ?array
     {
@@ -85,7 +86,7 @@ final class VendorSignatures
         try {
             $extraction = $this->extractor->extract($code, $file);
         } catch (Error) {
-            return $this->functions[$key] = [null, null, null];
+            return $this->functions[$key] = [null, null, null, []];
         }
         ++$this->filesRead;
         foreach ($extraction->nodes as $node) {
@@ -94,11 +95,12 @@ final class VendorSignatures
                     $extraction->returnTypes[$node->id] ?? null,
                     $extraction->genericReturns[$node->id] ?? null,
                     $extraction->conditionalReturns[$node->id] ?? null,
+                    $extraction->templateBinders[$node->id] ?? [],
                 ];
             }
         }
 
-        return $this->functions[$key] ??= [null, null, null];
+        return $this->functions[$key] ??= [null, null, null, []];
     }
 
     public function filesRead(): int
@@ -165,6 +167,7 @@ final class VendorSignatures
                 $genericProperties,
                 $extraction->mixins[$name] ?? [],
                 array_intersect_key($extraction->callableParameters, array_flip($class['methods'])),
+                array_intersect_key($extraction->templateBinders, array_flip($class['methods'])),
             );
         }
     }

@@ -21,6 +21,8 @@ final readonly class TypeExpr
      * @param list<string> $arguments what the call passes, by position: `null`, `class:Foo` (Foo::class) or `?`
      * @param array{int|string, int}|null $closure the closure argument of the method call, by position or name, and
      *                                             the parameter of the closure
+     * @param array<int, self> $argumentTypes the types of the arguments the call passes, by position; for a closure,
+     *                                        what it returns: they bind the templates of the method (`@param T $value`)
      */
     private function __construct(
         public ?string $className,
@@ -32,6 +34,7 @@ final readonly class TypeExpr
         public array $functions = [],
         public array $arguments = [],
         public ?array $closure = null,
+        public array $argumentTypes = [],
     ) {
     }
 
@@ -50,12 +53,13 @@ final readonly class TypeExpr
     /**
      * What a function returns: `now()`, `response()` (its `@return` may depend on the arguments).
      *
-     * @param list<string> $names     the names the function may have: in the namespace of the call, then global
-     * @param list<string> $arguments
+     * @param list<string>     $names         the names the function may have: in the namespace of the call, then global
+     * @param list<string>     $arguments
+     * @param array<int, self> $argumentTypes
      */
-    public static function returnOfFunction(array $names, array $arguments): self
+    public static function returnOfFunction(array $names, array $arguments, array $argumentTypes = []): self
     {
-        return new self(null, null, null, false, false, null, $names, $arguments);
+        return new self(null, null, null, false, false, null, $names, $arguments, null, $argumentTypes);
     }
 
     public static function named(string $className): self
@@ -81,9 +85,13 @@ final readonly class TypeExpr
         return new self(null, $collection, null, false, true);
     }
 
-    public static function returnOf(self $receiver, string $method): self
+    /**
+     * @param list<string>     $arguments     what the call passes, when it binds the templates of the method
+     * @param array<int, self> $argumentTypes
+     */
+    public static function returnOf(self $receiver, string $method, array $arguments = [], array $argumentTypes = []): self
     {
-        return new self(null, $receiver, $method);
+        return new self(null, $receiver, $method, false, false, null, [], $arguments, null, $argumentTypes);
     }
 
     /**
@@ -107,22 +115,24 @@ final readonly class TypeExpr
      */
     public function map(\Closure $map): self
     {
+        $arguments = array_map(
+            static fn (string $argument): string => str_starts_with($argument, 'class:') ? 'class:' . $map(substr($argument, 6)) : $argument,
+            $this->arguments,
+        );
+        $argumentTypes = array_map(static fn (self $type): self => $type->map($map), $this->argumentTypes);
         if ($this->functions !== []) {
-            return new self(null, null, null, false, false, null, array_map($map, $this->functions), array_map(
-                static fn (string $argument): string => str_starts_with($argument, 'class:') ? 'class:' . $map(substr($argument, 6)) : $argument,
-                $this->arguments,
-            ));
+            return new self(null, null, null, false, false, null, array_map($map, $this->functions), $arguments, null, $argumentTypes);
         }
 
         return $this->receiver === null
             ? new self($this->className === null ? null : $map($this->className), null, null, false, false, $this->generic === null ? null : GenericType::mapNames($this->generic, $map))
-            : new self(null, $this->receiver->map($map), $this->member, $this->isProperty, $this->isElement, null, [], [], $this->closure);
+            : new self(null, $this->receiver->map($map), $this->member, $this->isProperty, $this->isElement, null, [], $arguments, $this->closure, $argumentTypes);
     }
 
     public function key(): string
     {
         if ($this->functions !== []) {
-            return strtolower(implode('|', $this->functions)) . '(' . implode(',', $this->arguments) . ')';
+            return strtolower(implode('|', $this->functions)) . '(' . $this->argumentsKey() . ')';
         }
         if ($this->receiver === null) {
             return strtolower($this->generic ?? (string) $this->className);
@@ -134,6 +144,17 @@ final readonly class TypeExpr
             return $this->receiver->key() . '->' . $this->member . '(#' . $this->closure[0] . ':' . $this->closure[1] . ')';
         }
 
-        return $this->receiver->key() . ($this->isProperty ? '->$' : '->') . $this->member . ($this->isProperty ? '' : '()') . ($this->isElement ? '[]' : '');
+        return $this->receiver->key() . ($this->isProperty ? '->$' : '->') . $this->member . ($this->isProperty ? '' : '(' . $this->argumentsKey() . ')') . ($this->isElement ? '[]' : '');
+    }
+
+    private function argumentsKey(): string
+    {
+        $arguments = $this->arguments;
+        foreach ($this->argumentTypes as $position => $type) {
+            $arguments[$position] = ($arguments[$position] ?? '?') . ':' . $type->key();
+        }
+        ksort($arguments);
+
+        return implode(',', $arguments);
     }
 }

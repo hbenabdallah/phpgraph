@@ -22,6 +22,25 @@ use PhpGraph\Vendor\VendorSignatures;
  */
 final class TypeResolver
 {
+    private const MODEL = 'Illuminate\\Database\\Eloquent\\Model';
+
+    private const CARBON = 'Illuminate\\Support\\Carbon';
+
+    private const CASTS_ATTRIBUTES = 'Illuminate\\Contracts\\Database\\Eloquent\\CastsAttributes';
+
+    private const CASTABLE = 'Illuminate\\Contracts\\Database\\Eloquent\\Castable';
+
+    /**
+     * Eloquent's castables, by the class they give an attribute.
+     */
+    private const CASTABLES = [
+        'Illuminate\\Database\\Eloquent\\Casts\\AsCollection' => 'Illuminate\\Support\\Collection',
+        'Illuminate\\Database\\Eloquent\\Casts\\AsEnumCollection' => 'Illuminate\\Support\\Collection',
+        'Illuminate\\Database\\Eloquent\\Casts\\AsArrayObject' => 'Illuminate\\Database\\Eloquent\\Casts\\ArrayObject',
+        'Illuminate\\Database\\Eloquent\\Casts\\AsEnumArrayObject' => 'Illuminate\\Database\\Eloquent\\Casts\\ArrayObject',
+        'Illuminate\\Database\\Eloquent\\Casts\\AsStringable' => 'Illuminate\\Support\\Stringable',
+    ];
+
     /** @var array<string, ?string> */
     private array $methods = [];
 
@@ -144,7 +163,7 @@ final class TypeResolver
     private function resolveUncached(TypeExpr $type, bool &$leftProject): ?string
     {
         if ($type->functions !== []) {
-            return $this->functionReturn($type->functions, $type->arguments);
+            return $this->functionReturn($type);
         }
         if ($type->receiver === null) {
             if ($type->generic !== null) {
@@ -175,7 +194,7 @@ final class TypeResolver
             if ($generic !== null) {
                 return $generic;
             }
-            $property = $this->findProperty($receiver, $type->member);
+            $property = $this->findProperty($receiver, $type->member) ?? $this->modelAttribute($receiver, $type);
             if ($property === null) {
                 $leftProject = true;
             }
@@ -198,17 +217,23 @@ final class TypeResolver
             if ($element !== null) {
                 return $this->names->canonical($element);
             }
-            $returned = $this->genericReturn($method, $receiverType);
+            $returned = $this->genericReturn($method, $receiverType, $type);
 
             return $returned === null ? null : $this->elementOf($returned);
         }
 
-        $generic = $this->genericReturn($method, $receiverType);
+        $generic = $this->genericReturn($method, $receiverType, $type);
         if ($generic !== null) {
             return $generic;
         }
 
         $returned = $this->returnTypes[$method] ?? $this->vendorReturnType($method);
+        if ($returned === null) {
+            $inherited = $this->inheritedReturn($method, $receiverType, $type);
+            if ($inherited !== null) {
+                return $inherited;
+            }
+        }
         if ($returned === null && !$this->graph->hasNode($method)) {
             $leftProject = true;
         }
@@ -221,30 +246,143 @@ final class TypeResolver
     }
 
     /**
-     * What a function returns to this call: the project's function first, then a function of the packages; a
-     * conditional `@return` is evaluated against the arguments (`response()` without content: the factory).
-     *
-     * @param list<string> $names
-     * @param list<string> $arguments
+     * What a method declaring no return type returns, as the method it overrides declares it (`@inheritDoc`):
+     * `BelongsTo::getResults()` returns the `TResult` of Relation, `?TRelatedModel` there.
      */
-    private function functionReturn(array $names, array $arguments): ?string
+    private function inheritedReturn(string $method, string $receiverType, TypeExpr $call): ?string
     {
-        foreach ($names as $name) {
-            $id = $this->names->canonical($name);
-            [$returned, $generic, $conditional] = isset($this->returnTypes[$id]) || isset($this->generics->conditionals[$id]) || isset($this->generics->returns[$id])
-                ? [$this->returnTypes[$id] ?? null, $this->generics->returns[$id] ?? null, $this->generics->conditionals[$id] ?? null]
-                : ($this->vendor?->function($name) ?? [null, null, null]);
-            if ($conditional !== null) {
-                $decided = json_decode($conditional, true);
-
-                return \is_array($decided) ? $this->decide($decided, $arguments) : null;
+        $name = strtolower(substr($method, (int) strrpos($method, '::') + 2));
+        $owner = strtolower(substr($method, 0, (int) strrpos($method, '::')));
+        $below = true;
+        foreach ($this->supertypes($receiverType) as $supertype) {
+            $class = GenericType::base($supertype);
+            if ($below) {
+                $below = strtolower($class) !== $owner;
+                continue;
             }
-            if ($generic !== null || $returned !== null) {
-                return $this->canonicalType($generic ?? (string) $returned);
+            $parent = $this->methodsByClass[$class][$name] ?? $this->vendorSignature($class)?->methods[$name] ?? null;
+            if ($parent === null || $parent === $method) {
+                continue;
+            }
+            $generic = $this->genericReturn($parent, $receiverType, $call);
+            if ($generic !== null) {
+                return $generic;
+            }
+            $returned = $this->returnTypes[$parent] ?? $this->vendorReturnType($parent);
+            if ($returned !== null) {
+                return $returned === TypeExpr::STATIC ? $receiverType : $this->names->canonical($returned);
             }
         }
 
         return null;
+    }
+
+    /**
+     * An attribute of an Eloquent model no property declares: its cast (`'paid_at' => 'datetime'`), a timestamp, or
+     * the relation of the same name (`$page->book`, what `book()->getResults()` returns).
+     */
+    private function modelAttribute(string $class, TypeExpr $type): ?string
+    {
+        $lineage = $this->lineage($class);
+        if (!\in_array(self::MODEL, $lineage, true) || $type->receiver === null || $type->member === null) {
+            return null;
+        }
+        foreach ($lineage as $owner) {
+            $cast = $this->generics->casts[$owner . '::' . $type->member] ?? null;
+            if ($cast !== null) {
+                return $this->castClass($cast);
+            }
+        }
+        if (\in_array($type->member, ['created_at', 'updated_at', 'deleted_at'], true)) {
+            return self::CARBON;
+        }
+        if ($this->findMethod($class, strtolower($type->member)) === null) {
+            return null;
+        }
+        $left = false;
+
+        return $this->resolve(TypeExpr::returnOf(TypeExpr::returnOf($type->receiver, $type->member), 'getResults'), $left);
+    }
+
+    /**
+     * The class a cast gives an attribute: the `TGet` of a cast class, the class of a built-in castable, the class
+     * itself otherwise (an enum, a value object).
+     */
+    private function castClass(string $cast): ?string
+    {
+        $lineage = $this->lineage($cast);
+        if (\in_array(self::CASTS_ATTRIBUTES, $lineage, true)) {
+            $get = $this->bindings($cast, self::CASTS_ATTRIBUTES)['TGet'] ?? null;
+            $base = $get === null ? null : GenericType::base($get);
+
+            return $base !== null && GenericType::isClass($base) ? $base : null;
+        }
+        if (\in_array(self::CASTABLE, $lineage, true)) {
+            return self::CASTABLES[$cast] ?? null;
+        }
+
+        return $cast;
+    }
+
+    /**
+     * What a function returns to this call: the project's function first, then a function of the packages; a
+     * conditional `@return` is evaluated against the arguments (`response()` without content: the factory).
+     *
+     * A template of the function bound by the arguments (`@param T $value`, `@return T`) gives the argument's type.
+     */
+    private function functionReturn(TypeExpr $call): ?string
+    {
+        foreach ($call->functions as $name) {
+            $id = $this->names->canonical($name);
+            [$returned, $generic, $conditional, $binders] = isset($this->returnTypes[$id]) || isset($this->generics->conditionals[$id]) || isset($this->generics->returns[$id])
+                ? [$this->returnTypes[$id] ?? null, $this->generics->returns[$id] ?? null, $this->generics->conditionals[$id] ?? null, $this->generics->binders[$id] ?? []]
+                : ($this->vendor?->function($name) ?? [null, null, null, []]);
+            if ($conditional !== null) {
+                $decided = json_decode($conditional, true);
+
+                return \is_array($decided) ? $this->decide($decided, $call->arguments) : null;
+            }
+            if ($generic !== null) {
+                $bound = GenericType::substitute($generic, $this->methodBindings($binders, $call), null);
+                if ($bound !== null || $returned === null) {
+                    return $bound === null ? null : $this->canonicalType($bound);
+                }
+            }
+            if ($returned !== null) {
+                return $this->canonicalType($returned);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The templates of a method or a function a call binds by its arguments, as `#T` (DocTypeResolver::TEMPLATE_BINDERS):
+     * the class an argument names (`class-string<T>`), the type of a value (`T $value`), what a closure returns
+     * (`callable(): T`).
+     *
+     * @param array<string, array{string, int}> $binders
+     *
+     * @return array<string, string>
+     */
+    private function methodBindings(array $binders, TypeExpr $call): array
+    {
+        $bindings = [];
+        foreach ($binders as $template => [$kind, $position]) {
+            $argument = $call->arguments[$position] ?? null;
+            $type = $call->argumentTypes[$position] ?? null;
+            $left = false;
+            $bound = match (true) {
+                $kind === 'class' => $argument !== null && str_starts_with($argument, 'class:') ? $this->names->canonical(substr($argument, 6)) : null,
+                $type === null || ($kind === 'closure') !== ($argument === 'fn') => null,
+                default => $this->resolveGeneric($type, $left),
+            };
+            if ($bound !== null) {
+                $bindings['#' . $template] = $bound;
+            }
+        }
+
+        return $bindings;
     }
 
     /**
@@ -280,14 +418,16 @@ final class TypeResolver
      * What a method documented with a generic type returns to this receiver: its templates bound by the receiver's
      * arguments, through the parents that pass them on.
      */
-    private function genericReturn(string $method, string $receiverType): ?string
+    private function genericReturn(string $method, string $receiverType, TypeExpr $call): ?string
     {
         $owner = substr($method, 0, (int) strrpos($method, '::'));
         $generic = $this->generics->returns[$method] ?? $this->vendorSignature($owner)?->genericReturns[$method] ?? null;
         if ($generic === null) {
             return null;
         }
-        $returned = GenericType::substitute($generic, $this->bindings($receiverType, $owner), $receiverType);
+        $binders = $this->generics->binders[$method] ?? $this->vendorSignature($owner)->templateBinders[$method] ?? [];
+        $bindings = $this->bindings($receiverType, $owner) + ($binders === [] ? [] : $this->methodBindings($binders, $call));
+        $returned = GenericType::substitute($generic, $bindings, $receiverType);
 
         return $returned === null ? null : $this->canonicalType($returned);
     }

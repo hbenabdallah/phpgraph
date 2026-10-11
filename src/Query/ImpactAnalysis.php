@@ -350,6 +350,31 @@ final class ImpactAnalysis
             );
         }
 
+        // The API operations behind what the change reaches: an OpenAPI operation implemented by a route reaching it,
+        // a gRPC method implemented by a method it reaches. The contract its clients rely on.
+        $operations = [];
+        foreach (array_keys($routes) as $route) {
+            $impacted = $classes[(string) $route] ?? null;
+            if ($impacted === null) {
+                continue;
+            }
+            foreach ($this->graph->incident((string) $route) as $item) {
+                if (!$item['forward'] && $item['edge']->relation === Relation::ImplementedBy && $this->graph->node($item['other'])?->kind === NodeKind::Operation) {
+                    $operations[$item['other']] ??= [$impacted->depth + 1, $item['edge'], $this->weakest($impacted->confidence, $item['edge']->confidence), [(string) $route, ...$impacted->chain], null];
+                }
+            }
+        }
+        foreach ($confidence as $id => $reached) {
+            foreach (str_contains((string) $id, '::') ? $this->graph->incident((string) $id) : [] as $item) {
+                if (!$item['forward'] && $item['edge']->relation === Relation::ImplementedBy && $this->graph->node($item['other'])?->kind === NodeKind::Operation) {
+                    $operations[$item['other']] ??= [($classes[$this->classOf((string) $id)]->depth ?? 0) + 1, $item['edge'], $this->weakest($reached, $item['edge']->confidence), [], (string) $id];
+                }
+            }
+        }
+        foreach ($operations as $operation => [$depth, $edge, $reached, $chain, $node]) {
+            $classes[$operation] ??= new ImpactedClass($operation, $depth, $edge, $reached, false, false, null, false, [], $chain, false, $node);
+        }
+
         $withSites = [];
         foreach ($classes as $class => $impacted) {
             if ($impacted->isTest && !$this->testServesTheChange($class, $impacted->node, $parent, $reachedClasses)) {

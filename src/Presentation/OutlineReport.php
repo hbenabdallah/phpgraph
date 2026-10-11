@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpGraph\Presentation;
 
 use PhpGraph\Extractor\ClassFacts;
+use PhpGraph\Graph\NodeKind;
 use PhpGraph\Graph\Relation;
 use PhpGraph\Query\GraphQuery;
 use PhpGraph\Query\Layers;
@@ -167,7 +168,16 @@ final class OutlineReport
             if ($outline->routes !== []) {
                 $lines[] = \sprintf('  Routes (%d), from their handler into the core:', \count($outline->routes));
                 foreach (self::limited($all, $outline->routes, self::LIST) as $route) {
-                    $lines[] = '    ' . $this->query->label($route['route']) . ' → ' . $this->chain($route['chain']);
+                    $operations = $this->operations($route['route']);
+                    $lines[] = '    ' . $this->query->label($route['route']) . ' → ' . $this->chain($route['chain'])
+                        . ($operations === [] ? '' : ' (API: ' . implode(', ', array_map(fn (string $operation): string => $this->operationLabel($operation), $operations)) . ')');
+                }
+            }
+            $rpcs = $this->rpcs($outline->core);
+            if ($rpcs !== []) {
+                $lines[] = '  API operations its methods implement:';
+                foreach (self::limited($all, array_keys($rpcs), self::LIST) as $operation) {
+                    $lines[] = '    ' . $this->operationLabel((string) $operation) . ' → ' . $this->query->label($rpcs[$operation]);
                 }
             }
             // The methods called from outside, then those called only by the members of a family.
@@ -437,6 +447,56 @@ final class OutlineReport
     }
 
     /**
+     * The API operations a route or a method implements (OpenAPI, .proto).
+     *
+     * @return list<string>
+     */
+    private function operations(string $id): array
+    {
+        $operations = [];
+        foreach ($this->query->graph()->incident($id) as $item) {
+            if (!$item['forward'] && $item['edge']->relation === Relation::ImplementedBy && $this->query->graph()->node($item['other'])?->kind === NodeKind::Operation) {
+                $operations[] = $item['other'];
+            }
+        }
+
+        return $operations;
+    }
+
+    /**
+     * The operations the methods of the core implement: gRPC methods.
+     *
+     * @param list<string> $core
+     *
+     * @return array<string, string> operation => method
+     */
+    private function rpcs(array $core): array
+    {
+        $rpcs = [];
+        foreach ($core as $class) {
+            foreach ($this->query->graph()->incident($class) as $item) {
+                if ($item['forward'] && $item['edge']->relation === Relation::HasMethod) {
+                    foreach ($this->operations($item['other']) as $operation) {
+                        $rpcs[$operation] ??= $item['other'];
+                    }
+                }
+            }
+        }
+
+        return $rpcs;
+    }
+
+    /**
+     * `GET /orders openapi.yaml:3`
+     */
+    private function operationLabel(string $operation): string
+    {
+        $node = $this->query->graph()->node($operation);
+
+        return $this->query->label($operation) . ($node?->file === null ? '' : ' ' . $node->file . ($node->line === null ? '' : ':' . $node->line));
+    }
+
+    /**
      * A chain from a route's handler down into the core, the closure a method runs shown where it runs:
      * `UseCase::handle() → ValidationPipelineRunner::run() (closure) → Builder::build()`.
      *
@@ -501,7 +561,8 @@ final class OutlineReport
             ], static fn (mixed $value): bool => $value !== null), $outline->core),
             'sourcesRead' => $outline->sourcesRead,
             'families' => $outline->families,
-            'routes' => array_map(fn (array $route): array => ['route' => $this->query->label($route['route']), 'id' => $route['route'], 'chain' => $route['chain']], $outline->routes),
+            'routes' => array_map(fn (array $route): array => ['route' => $this->query->label($route['route']), 'id' => $route['route'], 'chain' => $route['chain']] + (($operations = $this->operations($route['route'])) === [] ? [] : ['operations' => $operations]), $outline->routes),
+            'operations' => $this->rpcs($outline->core),
             'entries' => $outline->entries,
             'fromFamilies' => $outline->fromFamilies,
             'closures' => $outline->closures,

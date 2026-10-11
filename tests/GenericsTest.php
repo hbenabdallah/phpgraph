@@ -75,7 +75,7 @@ final class GenericsTest extends TestCase
         }
     }
 
-    public function testATemplateOfTheMethodIsUnknownNotGuessed(): void
+    public function testAnUnboundTemplateIsUnknownNotGuessed(): void
     {
         $result = $this->buildProject([
             'src/Container.php' => 'namespace App; class Container { /** @template T @param class-string<T> $class @return T */ public function make(string $class): object { return new $class(); } }',
@@ -84,8 +84,8 @@ final class GenericsTest extends TestCase
             'src/Use.php' => 'namespace App; class UseIt { public function run(Container $c, Box $box): void { $c->make(Mailer::class)->send(); $box->get()->send(); } }',
         ]);
 
-        self::assertFalse($this->hasEdge($result->graph, 'App\UseIt::run', 'App\Mailer::send', Relation::Calls, Confidence::Inferred));
-        self::assertSame(0, $result->calls->inferred - 2, 'only make() and get() are typed');
+        self::assertTrue($this->hasEdge($result->graph, 'App\UseIt::run', 'App\Mailer::send', Relation::Calls, Confidence::Inferred), 'the class make() is given');
+        self::assertSame(3, $result->calls->inferred, 'make(), get() and the send() of the Mailer: Box has no argument');
     }
 
     public function testAClassGivingItsParentAConcreteArgument(): void

@@ -16,7 +16,7 @@ rely on what this page lists: it changes only in a major version (2.0.0), announ
 | `explain <name>` | `-d, --direction` (`in`, `out`, `both`), `-g, --graph` |
 | `path <from> <to>` | `-g, --graph` |
 | `outline <topic>` | `-s, --section` (`core`, `families`, `flow`, `behaviour`, `wiring`, `users`), `-f, --format` (`text`, `full`, `json`), `-g, --graph` |
-| `impact <name>` | `-d, --depth`, `-l, --limit`, `-a, --all`, `-s, --section` (`direct`, `routes`, `state`, `tests`, `state-tests`, `helpers`), `-f, --format` (`text`, `full`, `json`), `-g, --graph` |
+| `impact <name>` | `-d, --depth`, `-l, --limit`, `-a, --all`, `-s, --section` (`direct`, `routes`, `operations`, `state`, `tests`, `state-tests`, `helpers`), `-f, --format` (`text`, `full`, `json`), `-g, --graph` |
 | `check [path]` | `-o, --output`, `-b, --baseline`, `--generate-baseline` |
 | `mcp-config [agent]` | agent `sherpa`, `claude`, `codex`, `cursor` or `json`; `-p, --project`, `--docker` |
 

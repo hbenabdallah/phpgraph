@@ -3,7 +3,7 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
-## Unreleased
+## 1.3.0 (2026-10-11)
 
 ### Added
 - Unions are typed: a call on `Response|ResponseFactory` (a `@return`, `@var` or `@param`, or a union declared in the
@@ -15,6 +15,26 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
   `@param (callable($this, mixed): mixed) $callback` makes `$query` in `->when($city, fn ($query) => $query->where())`
   the receiver; by position or by named argument.
 - `/** @use HasFactory<HotelFactory> */` on a trait use binds the templates of the trait: `Hotel::factory()->count()`.
+- The templates of a method or a function are bound by the arguments of each call: the class an argument names
+  (`@param class-string<T>`: `$em->getRepository(Order::class)->find($id)`, or a string, `_get_list_table('WP_Posts_List_Table')`),
+  the type of a value (`@param T $value`), what a closure returns (`@param callable(): T`: its return statements, its
+  native return type, the expression of an arrow function). Unbound, the class of `@return` stays.
+- `@phpstan-return` and `@psalm-return` are read before `@return` (`Collection::getValues()` is a `list<T>`); a
+  condition the arguments do not decide, `(TAsync is false ? Response : PromiseInterface)`, is the union of its branches.
+- A method declaring no return type returns what the method it overrides declares (`@inheritDoc`, `{@inheritdoc}`).
+- `static|mixed` is the receiver: Eloquent's `scopes()` carries the chain on.
+- Magic properties documented with `@property` and `@property-read` carry chains on. On an Eloquent model, so do the
+  casts (`$casts` or `casts()`: dates are Carbon, `X::class` the enum or value object, the `TGet` of a cast class,
+  Eloquent's castables), the timestamps, and the relations read as properties (`$page->book`: what `book()->getResults()`
+  returns).
+- `impact` lists the API operations behind a change: the OpenAPI operations its routes implement, the gRPC methods it
+  reaches (section `operations`, in the text and in JSON). `outline` names the operations of the routes it shows, and the
+  rpcs its classes implement; it now shows the routes handled by a class of the feature, and the routes of a service in
+  a repository of several.
+- With the templates of methods, `@phpstan-return`, inherited return types and Eloquent attributes, application calls
+  with an unknown receiver: PrestaShop 8.2% → 3.9%, BookStack 5.4% → 3.8%, Akeneo 10.0% → 9.6%, Sylius 3.4% → 3.1%,
+  StayHub 1.2% → 0.7%. No INFERRED edge lost on the corpus but for WordPress's `WP_List_Table` calls, now linked to the
+  subclass the string names; the AMBIGUOUS ones gone were wrong guesses (Mink's `getText()`) or became INFERRED.
 - Application calls with an unknown receiver: StayHub 12.7% → 1.2%, art-gallery 20.8% → 6.5%, Akeneo 11.3% → 10.0%,
   WordPress 7.2% → 6.4%. No INFERRED edge lost on the corpus; the AMBIGUOUS ones gone were wrong guesses (Mockery's
   `with()` taken for a project method) or became INFERRED.
