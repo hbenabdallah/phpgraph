@@ -3,6 +3,12 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## Unreleased
+
+### Added
+- Each release tag publishes the version to the official MCP registry (`release.yml`, logged in by the OIDC token of
+  the workflow, no secret).
+
 ## 1.3.1 (2026-10-12)
 
 ### Added

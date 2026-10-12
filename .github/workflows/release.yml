@@ -4,7 +4,9 @@ name: Release
 # - the PHAR and its checksum, attached to a GitHub release (download counts on the release page);
 # - executables needing no PHP, for Linux and macOS (x86_64, aarch64) and Windows (x86_64), with their checksums,
 #   attached to the same release (built by binaries.yml);
-# - the Docker image ghcr.io/<owner>/phpgraph, for amd64 and arm64 (pull counts on the package page).
+# - the Docker image ghcr.io/<owner>/phpgraph, for amd64 and arm64 (pull counts on the package page);
+# - the entry io.github.hbenabdallah/phpgraph of the official MCP registry (server.json, pointing at that image), for a
+#   version that is not a pre-release (also when published again from the Actions tab).
 # Packagist follows the tags by itself once the package is submitted there.
 #
 # A release whose publication failed is published again from the Actions tab (Run workflow, with its tag): the code
@@ -81,3 +83,26 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: PHPGRAPH_VERSION=${{ github.ref_name }}
+
+  # The registry checks the label of the image, so after it; server.json takes the version of the tag. Logged in by
+  # the OIDC token of the workflow, no secret. Run workflow with a tag publishes it there too (image already pushed).
+  mcp-registry:
+    needs: docker
+    if: ${{ !cancelled() && (needs.docker.result == 'success' || github.event_name == 'workflow_dispatch') && !contains(inputs.tag || github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - run: curl -sSfL https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz | tar xz mcp-publisher
+      - env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          version="${TAG#v}"
+          jq --arg v "$version" '.version = $v | .packages[0].identifier = "ghcr.io/hbenabdallah/phpgraph:" + $v' server.json > server.tmp
+          mv server.tmp server.json
+      - run: ./mcp-publisher login github-oidc
+      - run: ./mcp-publisher publish
