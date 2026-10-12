@@ -3,6 +3,12 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## 1.3.1 (2026-10-12)
+
+### Added
+- Listed in the official MCP registry as `io.github.hbenabdallah/phpgraph`: `server.json` describes the Docker image,
+  which carries the `io.modelcontextprotocol.server.name` label the registry checks.
+
 ## 1.3.0 (2026-10-11)
 
 ### Added

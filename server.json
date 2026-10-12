@@ -1,0 +1,36 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.hbenabdallah/phpgraph",
+  "title": "phpgraph",
+  "description": "Knowledge graph of a PHP codebase by static analysis: calls, routes, buses, layers, impact",
+  "repository": {
+    "url": "https://github.com/hbenabdallah/phpgraph",
+    "source": "github"
+  },
+  "version": "1.3.1",
+  "packages": [
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/hbenabdallah/phpgraph:1.3.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "runtimeArguments": [
+        {
+          "type": "named",
+          "name": "--mount",
+          "value": "type=bind,src={project_path},dst=/project",
+          "description": "The PHP project to analyse, mounted at /project",
+          "isRequired": true,
+          "variables": {
+            "project_path": {
+              "description": "Absolute path of the PHP project on the host",
+              "format": "filepath",
+              "isRequired": true
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
