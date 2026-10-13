@@ -156,11 +156,30 @@ final class SourceFiles
      * Path, modification time and size of every source file, of the composer.lock files and of the installed
      * dependencies: changes when a file is added, removed, edited, or when dependencies are updated.
      *
-     * @param list<string> $excludePatterns
+     * @param list<string>        $excludePatterns
+     * @param list<ActionMapping> $actions the routing files of phpgraph.yaml and the files quoting their codes, read too
      */
-    public static function fingerprint(string $root, array $excludePatterns = []): string
+    public static function fingerprint(string $root, array $excludePatterns = [], array $actions = []): string
     {
         $hash = hash_init('xxh128');
+        $extensions = [];
+        foreach ($actions as $mapping) {
+            hash_update($hash, $mapping->file . ':' . (@filemtime($root . '/' . $mapping->file) ?: 0) . ':' . (@filesize($root . '/' . $mapping->file) ?: 0) . "\n");
+            foreach ($mapping->citedIn as $extension) {
+                $extensions['*.' . $extension] = true;
+            }
+        }
+        if ($extensions !== []) {
+            $gitignore = new ProjectGitignore($root);
+            $finder = Finder::create()->files()->in($root)->name(array_keys($extensions))->exclude(self::DEFAULT_EXCLUDES)
+                ->filter(static fn (SplFileInfo $file): bool => !$gitignore->isIgnored($file->getPathname()))->sortByName();
+            foreach ($excludePatterns as $pattern) {
+                $finder->notPath($pattern);
+            }
+            foreach ($finder as $file) {
+                hash_update($hash, $file->getRelativePathname() . ':' . $file->getMTime() . ':' . $file->getSize() . "\n");
+            }
+        }
 
         foreach (self::finder($root, $excludePatterns)->name('composer.lock')->name(self::CONFIG) as $file) {
             hash_update($hash, $file->getRelativePathname() . ':' . $file->getMTime() . ':' . $file->getSize() . "\n");

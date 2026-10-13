@@ -65,7 +65,9 @@ rebuilds a graph built by another version of phpgraph.
 
 ### Files and variables
 
-- `phpgraph.yaml` at the project root: the key `services` (a list of service directories). Unknown keys are refused.
+- `phpgraph.yaml` at the project root: the keys `services` (a list of service directories) and `actions` (routing
+  files of the project's own making: `file`, `element`, `code`, `controller`, `method`, `controller_file`,
+  `controller_class`, `target`, `forward`, `cited_in`). Unknown keys are refused.
 - `phpgraph-baseline.json`, written by `check --generate-baseline`: `{"layerViolations": [...]}`.
 - `phpgraph-out/`: `graph.json`, `GRAPH_REPORT.md` and the extraction cache `cache.bin`.
 - Environment: `PHPGRAPH_MEMORY_LIMIT` (unlimited by default), `PHPGRAPH_INSTALL_DIR` and `PHPGRAPH_VERSION` for the

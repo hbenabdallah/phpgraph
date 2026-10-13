@@ -584,6 +584,46 @@ final class TextPresenter
             }
         }
 
+        $actions = $summary?->actions;
+        if ($actions !== null && !$actions->isEmpty()) {
+            $lines[] = '';
+            $lines[] = '## Actions';
+            $lines[] = 'Action codes the front end sends, mapped to controller methods by the routing files of phpgraph.yaml: route:<file>#ACTION <code> --handled_by--> method; '
+                . '--references--> the action or template it goes on to (via target, forward <result>); a file quoting the code --references--> the action (AMBIGUOUS). '
+                . 'query_graph("<code> routes") finds one; outline of its method starts its flow from it.';
+            $lines[] = \sprintf(
+                '- %d actions: %d handled by a controller method%s%s.',
+                $actions->actions,
+                $actions->linked,
+                $actions->toClass > 0 ? \sprintf(', %d by a controller lacking the method', $actions->toClass) : '',
+                $actions->unlinkedCount - $actions->toClass > 0 ? \sprintf(', %d without a controller', $actions->unlinkedCount - $actions->toClass) : '',
+            );
+            if ($actions->unlinked !== []) {
+                $lines[] = \sprintf('  Not handled by a method: %s%s.', implode('; ', $actions->unlinked), $actions->unlinkedCount > \count($actions->unlinked) ? '; ...' : '');
+            }
+            if ($actions->forwards > 0) {
+                $lines[] = \sprintf(
+                    '- %d targets and forwards: %d lead to an action or a file of the project (%d files)%s.',
+                    $actions->forwards,
+                    $actions->forwardsLinked,
+                    $actions->templates,
+                    $actions->unresolvedTargetCount > 0 ? \sprintf(
+                        '; %d lead nowhere found, to %d distinct targets (a template of another name or in several places, a page outside the project): %s%s',
+                        $actions->forwards - $actions->forwardsLinked,
+                        $actions->unresolvedTargetCount,
+                        implode(', ', $actions->unresolvedTargets),
+                        $actions->unresolvedTargetCount > \count($actions->unresolvedTargets) ? ', ...' : '',
+                    ) : '',
+                );
+            }
+            if ($actions->citingFiles > 0) {
+                $lines[] = \sprintf('- %d files quote action codes (%d links, AMBIGUOUS): the screens sending them.', $actions->citingFiles, $actions->citations);
+            }
+            if ($actions->unreadable !== []) {
+                $lines[] = \sprintf('- Routing files missing or not valid XML: %s.', implode(', ', $actions->unreadable));
+            }
+        }
+
         if ($overview->routes !== []) {
             array_push($lines, '', ...$this->routeList($overview->routes));
         }
@@ -689,7 +729,7 @@ final class TextPresenter
                 );
             }
         }
-        $lines[] = '- Not modelled: calls to global functions, dynamic calls ($obj->$name(), __call), routes declared in XML, '
+        $lines[] = '- Not modelled: calls to global functions, dynamic calls ($obj->$name(), __call), routes declared in XML (unless phpgraph.yaml maps them: actions), '
             . 'services built at runtime (compiler passes, bundle extensions, ids computed in code), and API schemas other than OpenAPI and protobuf (GraphQL, AsyncAPI).';
 
         return implode("\n", $lines);

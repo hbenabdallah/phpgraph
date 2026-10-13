@@ -38,6 +38,7 @@ final readonly class BuildResult
         public int $phpFilesNotRead = 0,
         public InjectionStats $injections = new InjectionStats(),
         public ApiSchemaStats $apiSchemas = new ApiSchemaStats(),
+        public ActionStats $actions = new ActionStats(),
     ) {
     }
 

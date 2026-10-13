@@ -1,0 +1,6 @@
+actions:
+  - file: Framework/actions.xml
+    controller_file: '{dir}/control/{name}CTRL.php'
+    target: target
+    forward: { element: forward, result: result, target: target }
+    cited_in: [html, js]

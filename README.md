@@ -210,6 +210,28 @@ services:
 </details>
 
 <details>
+<summary><b>Routing files of your own: action codes in XML</b></summary>
+
+Legacy applications often route by an action code the screen sends (`value="saveReservation"`), mapped to a controller method by an XML file of their own. `phpgraph.yaml` describes the format, nothing is hard-coded:
+
+```yaml
+actions:
+  - file: Framework/jacActions.xml
+    element: //action                                 # XPath of the action elements
+    code: code                                        # their attributes (these are the defaults)
+    controller: controller
+    method: method
+    controller_file: '{dir}/control/{name}CTRL.php'   # _Stock/Reservation → _Stock/control/ReservationCTRL.php
+    target: target                                    # the action or template it goes on to
+    forward: { element: forward, result: result, target: target }
+    cited_in: [html, js]                              # the screens quoting the codes
+```
+
+Each action is a route node, `ACTION saveReservation`, `handled_by` its method (EXTRACTED), and referencing its controller (`via` `controller`) when the method is inherited. Its target and forwards are `references` to the next action or to the template (`_Stock/SO_080/Resa.html` finds `_Stock/views/SO_080/Resa.html`), `via` `target` or `forward KO`. A file of `cited_in` quoting a code (`value="saveReservation"`, `'saveReservation&id='`) references the action, AMBIGUOUS: `impact_of` lists those screens under the route. A code that is a plain word (`default`, `login`) is not looked for, nor are minified files. `overview` counts the actions and lists those whose controller or method is missing; `outline` of a method starts its flow from its action; `query_graph("saveReservation routes")` finds it. `controller_class: '{name}CTRL'` finds the class by name instead of by file.
+
+</details>
+
+<details>
 <summary><b>How it works</b></summary>
 
 1. Every PHP file is parsed into facts: declarations, calls with the expression typing their receiver, message sends and handlers, routes, HTTP calls.
@@ -283,7 +305,7 @@ Sylius (the corpus commit), October 2026, without any LLM: phpgraph 1.0.2, [code
 - Generics are read from docblocks (`@template`, `@extends Repository<Order>`, `@return Collection<int, Item>`, `ScalarNodeDefinition<$this>`), in the project and in `vendor/`: a template is bound by the type of the receiver and the parents passing it on, and a `foreach` walks the elements of any typed collection. A union (`Response|ResponseFactory`, documented or declared) is called on the member declaring the method, and only when one member does; a closure passed to a method gets the parameters the method documents it passes (`@param callable($this): mixed`, Laravel's `when(fn ($query) => ...)`); `@use HasFactory<HotelFactory>` on a trait use binds its templates. A template of a method is bound by the arguments of each call: the class an argument names (`getRepository(Order::class)` with `@param class-string<T>`), the type of a value (`@param T $value`), what a closure returns (`@param callable(): T`, its return statements or native type). `@phpstan-return` and `@psalm-return` are read before `@return`; a condition the arguments do not decide (`TAsync is false ? Response : PromiseInterface`) gives the union of its branches. Magic properties documented with `@property` and `@property-read` carry chains on; on an Eloquent model, so do the casts (`'paid_at' => 'datetime'` is a Carbon, an enum, the `TGet` of a cast class), the timestamps and the relations read as properties (`$page->book`, what `book()->getResults()` returns). A method declaring no return type returns what the method it overrides declares (`@inheritDoc`). Conditions on a type (`$id is array ? Collection : Model`) are not evaluated, and a facade method documented as `mixed` (`DB::transaction()`) stays unknown.
 - Chains stop at magic methods and at dependencies without a usable return type. PHP's own classes (`DateTime`, `ArrayObject`, `SplObjectStorage`, `PDO`...) are known from signatures generated once (`tools/internal-classes.php`); those of the `intl` and `mysqli` extensions are not.
 - Without an installed `vendor/`, call chains stop at the first dependency.
-- Services built at runtime (compiler passes, bundle extensions, ids computed from values only known at runtime), XML routes, API Platform resources declared in XML or YAML, and API schemas other than OpenAPI and protobuf (GraphQL, AsyncAPI) are not read; an OpenAPI path rewritten by a gateway is not followed; injections that cannot be linked are listed by `overview`.
+- Services built at runtime (compiler passes, bundle extensions, ids computed from values only known at runtime), XML routes (but action files mapped in `phpgraph.yaml`), API Platform resources declared in XML or YAML, and API schemas other than OpenAPI and protobuf (GraphQL, AsyncAPI) are not read; an OpenAPI path rewritten by a gateway is not followed; injections that cannot be linked are listed by `overview`.
 - Two services declaring a message class of the same name are assumed to share it.
 
 ## Contributing

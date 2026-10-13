@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpGraph\Query;
 
+use PhpGraph\Builder\ActionRoutes;
 use PhpGraph\Builder\TestFiles;
 use PhpGraph\Graph\Confidence;
 use PhpGraph\Graph\Graph;
@@ -196,7 +197,8 @@ final class GraphQuery
             $this->groups($namespaces, \count($root), 3),
             $layers,
             $suffixes,
-            $this->routes(),
+            // The actions of a routing file of the project's own making have their own section.
+            array_values(array_filter($this->routes(), static fn (RouteEntry $route): bool => $route->methods !== [ActionRoutes::METHOD])),
         );
     }
 
@@ -226,6 +228,24 @@ final class GraphQuery
         usort($routes, static fn (RouteEntry $a, RouteEntry $b): int => [$a->path, $a->route->label, $a->route->id] <=> [$b->path, $b->route->label, $b->route->id]);
 
         return $routes;
+    }
+
+    /**
+     * The files quoting the code of an action (a template, a script): the screens sending it, AMBIGUOUS.
+     *
+     * @return array<string, list<int>> file => lines
+     */
+    public function screens(string $route): array
+    {
+        $screens = [];
+        foreach ($this->graph->incident($route) as $item) {
+            if (!$item['forward'] && $item['edge']->relation === Relation::References && str_starts_with($item['other'], 'file:')) {
+                $screens[substr($item['other'], 5)] = $item['edge']->lines();
+            }
+        }
+        ksort($screens);
+
+        return $screens;
     }
 
     public function summary(): ?ProjectSummary

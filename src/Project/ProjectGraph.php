@@ -108,7 +108,8 @@ final class ProjectGraph
         $this->say(sprintf('building the graph of %s', $this->root));
 
         // Taken before reading: a file edited during the build makes the next refresh build again.
-        $fingerprint ??= SourceFiles::fingerprint($this->root, $this->options->excludes);
+        $config = ProjectConfig::load($this->root);
+        $fingerprint ??= SourceFiles::fingerprint($this->root, $this->options->excludes, $config->actions);
         // Files unchanged since the last build are not parsed again: their extraction is cached next to the graph,
         // and kept in memory by a long-running process (the MCP server) between its rebuilds.
         if ($this->cache) {
@@ -119,7 +120,7 @@ final class ProjectGraph
         // The last build of this process: unchanged files are not read again, and their calls not resolved again
         // when no declaration changed.
         $result = (new GraphBuilder($extractor, $this->options->readVendor))
-            ->build($this->root, $this->options->excludes, ProjectConfig::load($this->root)->services, $this->state);
+            ->build($this->root, $this->options->excludes, $config->services, $this->state, $config->actions);
         $this->state = $result->state;
         if ($extractor instanceof CachingExtractor) {
             $this->saveCache($extractor, array_keys($result->state->files ?? []));
@@ -223,7 +224,7 @@ final class ProjectGraph
             $saved = $meta['fingerprint'] ?? null;
             $this->builtFingerprint = \is_string($saved) ? $saved : '';
         }
-        $current = SourceFiles::fingerprint($this->root, $this->options->excludes);
+        $current = SourceFiles::fingerprint($this->root, $this->options->excludes, ProjectConfig::load($this->root)->actions);
         $this->checkedAt = microtime(true);
         if ($current === $this->builtFingerprint) {
             return false;

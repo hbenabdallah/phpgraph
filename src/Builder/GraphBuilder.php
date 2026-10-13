@@ -38,10 +38,11 @@ final class GraphBuilder
      * @param list<string>      $excludePatterns
      * @param list<string>|null $services        service directories, instead of detecting them (phpgraph.yaml)
      * @param BuildState|null   $previous        the last build of this process: what did not change is reused
+     * @param list<ActionMapping> $actions       routing files of the project's own making (phpgraph.yaml)
      */
-    public function build(string $root, array $excludePatterns = [], ?array $services = null, ?BuildState $previous = null): BuildResult
+    public function build(string $root, array $excludePatterns = [], ?array $services = null, ?BuildState $previous = null, array $actions = []): BuildResult
     {
-        $options = hash('xxh128', serialize([$excludePatterns, $services, $this->readVendor]));
+        $options = hash('xxh128', serialize([$excludePatterns, $services, $this->readVendor, $actions]));
         if ($previous?->options !== $options) {
             $previous = null;
         }
@@ -434,6 +435,7 @@ final class GraphBuilder
         $httpResolver = new HttpResolver($graph, $names, $types, $container);
         $http = $httpResolver->resolve($routes, $requests);
         $apiSchemas = (new ApiSchemas($graph))->resolve($root, $schemaFiles, $httpResolver->routes(), $serviceMap, $httpResolver->unmatchedRequests());
+        $actionStats = (new ActionRoutes($graph, $names, $types, $serviceMap))->resolve($root, $actions, $excludePatterns);
         $this->addExternalNodes($graph);
 
         return new BuildResult(
@@ -455,6 +457,7 @@ final class GraphBuilder
             $extractions === [] && $failures === [] ? SourceFiles::countPhpFiles($root) : 0,
             $injections,
             $apiSchemas,
+            $actionStats,
         );
     }
 

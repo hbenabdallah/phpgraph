@@ -207,6 +207,28 @@ services:
 </details>
 
 <details>
+<summary><b>Fichiers de routage maison : codes d'action en XML</b></summary>
+
+Les applications legacy routent souvent par un code d'action que l'écran envoie (`value="saveReservation"`), relié à une méthode de contrôleur par un fichier XML maison. `phpgraph.yaml` en décrit le format, rien n'est codé en dur :
+
+```yaml
+actions:
+  - file: Framework/jacActions.xml
+    element: //action                                 # XPath des éléments action
+    code: code                                        # leurs attributs (valeurs par défaut)
+    controller: controller
+    method: method
+    controller_file: '{dir}/control/{name}CTRL.php'   # _Stock/Reservation → _Stock/control/ReservationCTRL.php
+    target: target                                    # l'action ou le template qui suit
+    forward: { element: forward, result: result, target: target }
+    cited_in: [html, js]                              # les écrans qui citent les codes
+```
+
+Chaque action est un nœud route, `ACTION saveReservation`, `handled_by` sa méthode (EXTRACTED), et référence son contrôleur (`via` `controller`) quand la méthode est héritée. Sa cible et ses forwards sont des `references` vers l'action suivante ou le template (`_Stock/SO_080/Resa.html` trouve `_Stock/views/SO_080/Resa.html`), `via` `target` ou `forward KO`. Un fichier de `cited_in` qui cite un code (`value="saveReservation"`, `'saveReservation&id='`) référence l'action, en AMBIGUOUS : `impact_of` liste ces écrans sous la route. Un code qui est un mot courant (`default`, `login`) n'est pas cherché, ni les fichiers minifiés. `overview` compte les actions et liste celles dont le contrôleur ou la méthode manque ; l'`outline` d'une méthode part de son action ; `query_graph("saveReservation routes")` la trouve. `controller_class: '{name}CTRL'` trouve la classe par son nom plutôt que par son fichier.
+
+</details>
+
+<details>
 <summary><b>Fonctionnement</b></summary>
 
 1. Chaque fichier PHP est analysé en faits : déclarations, appels avec l'expression qui type leur récepteur, envois de messages et handlers, routes, appels HTTP.
@@ -279,7 +301,7 @@ Sylius (le commit du corpus), octobre 2026, sans LLM : phpgraph 1.0.2, [codebase
 - Les génériques ne sont lus que pour les collections : un `foreach` sur un paramètre ou une propriété documentés `Foo[]`, `array<Foo>`, `list<Foo>` ou `iterable<Foo>` est typé ; `Collection<Foo>` et les autres classes génériques sont lues comme `Collection`.
 - Les chaînes s'arrêtent aux méthodes magiques, aux classes internes de PHP et aux dépendances sans type de retour exploitable.
 - Sans `vendor/` installé, les chaînes d'appels s'arrêtent à la première dépendance.
-- Les services construits à l'exécution (passes de compilation, extensions de bundle, identifiants calculés à partir de valeurs connues seulement à l'exécution), les routes en XML, les ressources API Platform déclarées en XML ou YAML et les schémas d'API (OpenAPI, protobuf) ne sont pas lus ; les injections non reliées sont listées par `overview`.
+- Les services construits à l'exécution (passes de compilation, extensions de bundle, identifiants calculés à partir de valeurs connues seulement à l'exécution), les routes en XML (sauf les fichiers d'actions décrits dans `phpgraph.yaml`), les ressources API Platform déclarées en XML ou YAML et les schémas d'API (OpenAPI, protobuf) ne sont pas lus ; les injections non reliées sont listées par `overview`.
 - Deux services qui déclarent une classe de message du même nom sont supposés la partager.
 
 ## Contribuer

@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<action-mappings>
+  <module code='SO_080'>
+    <function code='_Reservation'>
+      <action code='showReservations' controller='_Stock/Reservation' method='showReservations' target='_Stock/SO_080/Reservations.html'/>
+      <action code='saveReservation' controller='_Stock/Reservation' method='saveReservation' target='showReservations'>
+        <forward result='KO' target='_Stock/SO_080/ReservationError.html'/>
+      </action>
+      <action code='default' controller='_Stock/Reservation' method='saveReservation'/>
+      <action code='printReservation' controller='_Stock/Reservation' method='printReservation' target='missing.html'/>
+    </function>
+  </module>
+</action-mappings>

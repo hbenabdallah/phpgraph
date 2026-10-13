@@ -5,6 +5,16 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 
 ## Unreleased
 
+### Added
+- Routing files of the project's own making, declared in `phpgraph.yaml` (`actions:`): XML elements mapping an action
+  code to a controller method (`controller_file: '{dir}/control/{name}CTRL.php'`). Each action is a route node
+  `ACTION <code>` handled by its method; its target and forwards reference the next action or the template; the files
+  of `cited_in` quoting a code reference its action (AMBIGUOUS; not a code that is a plain word, nor a minified
+  file), and `impact_of` lists them under the route.
+  `overview` counts the actions and lists those whose controller or method is missing. On a legacy project of 2,533
+  actions: 2,423 handled by a method, 1,680 citations from 744 screens (sampled: no false one; 16 in 20 send the
+  action, the others react to it), templates resolved without error on 35 samples.
+
 ### Changed
 - `outline` of a method (`ReservationCTRL::saveNewReservation`) is what the method runs: the methods it calls, 3 calls
   deep, each class with those methods only (a parent class shows the inherited methods called, not its 60 others).

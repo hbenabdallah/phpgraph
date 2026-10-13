@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpGraph\Project;
 
+use PhpGraph\Builder\ActionStats;
 use PhpGraph\Builder\ApiSchemaStats;
 use PhpGraph\Builder\BuildResult;
 use PhpGraph\Builder\BusStats;
@@ -44,6 +45,7 @@ final readonly class ProjectSummary
         public InjectionStats $injections = new InjectionStats(),
         public array $otherLanguages = [],
         public ApiSchemaStats $apiSchemas = new ApiSchemaStats(),
+        public ActionStats $actions = new ActionStats(),
     ) {
     }
 
@@ -73,6 +75,7 @@ final readonly class ProjectSummary
             $result->injections,
             $otherLanguages,
             $result->apiSchemas,
+            $result->actions,
         );
     }
 
@@ -117,6 +120,7 @@ final readonly class ProjectSummary
             InjectionStats::fromArray($list('injections')),
             $otherLanguages,
             ApiSchemaStats::fromArray($list('apiSchemas')),
+            ActionStats::fromArray($list('actions')),
         );
     }
 
@@ -145,6 +149,7 @@ final readonly class ProjectSummary
             'injections' => $this->injections->toArray(),
             'otherLanguages' => $this->otherLanguages,
             'apiSchemas' => $this->apiSchemas->toArray(),
+            'actions' => $this->actions->toArray(),
         ];
     }
 }

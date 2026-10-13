@@ -130,6 +130,15 @@ final class ImpactReport
                 foreach ($also as $chain) {
                     $lines[] = '    also ← ' . $this->chain($chain);
                 }
+                $screens = $this->query->screens($route->class);
+                if ($screens !== []) {
+                    $listed = $limit === 0 ? $screens : \array_slice($screens, 0, self::CHAINS * 2, true);
+                    $lines[] = \sprintf(
+                        '    screens quoting it [AMBIGUOUS]: %s%s',
+                        implode(', ', array_map(static fn (string $file, array $at): string => $file . ($at === [] ? '' : ' L' . implode(',', $at)), array_keys($listed), $listed)),
+                        \count($screens) > \count($listed) ? \sprintf(' (+%d: limit 0)', \count($screens) - \count($listed)) : '',
+                    );
+                }
             }
             $more($g['routes'], $shown);
         }
@@ -257,7 +266,7 @@ final class ImpactReport
                 'id' => $route->class,
                 'confidence' => $route->confidence->value,
                 'chain' => $route->chain,
-            ], $this->groups['routes']),
+            ] + (($screens = $this->query->screens($route->class)) === [] ? [] : ['screens' => $screens]), $this->groups['routes']),
             'operations' => array_map(fn (ImpactedClass $operation): array => [
                 'operation' => $this->query->label($operation->class),
                 'id' => $operation->class,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpGraph\Project;
 
+use PhpGraph\Builder\ActionMapping;
 use PhpGraph\Builder\SourceFiles;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
@@ -15,13 +16,17 @@ use Symfony\Component\Yaml\Yaml;
  *     services:            # the services of a multi-service repository, instead of detecting them
  *       - services/billing
  *       - services/shipping
+ *     actions:             # routing files of the project's own making: see ActionMapping
+ *       - file: Framework/actions.xml
+ *         controller_file: '{dir}/control/{name}CTRL.php'
  */
 final readonly class ProjectConfig
 {
     /**
-     * @param list<string>|null $services service directories relative to the root, null to detect them
+     * @param list<string>|null   $services service directories relative to the root, null to detect them
+     * @param list<ActionMapping> $actions  routing files mapping action codes to controller methods
      */
-    public function __construct(public ?array $services = null)
+    public function __construct(public ?array $services = null, public array $actions = [])
     {
     }
 
@@ -44,9 +49,9 @@ final readonly class ProjectConfig
             throw new \RuntimeException(sprintf('%s must be a map of settings.', SourceFiles::CONFIG));
         }
 
-        $unknown = array_diff(array_keys($data), ['services']);
+        $unknown = array_diff(array_keys($data), ['services', 'actions']);
         if ($unknown !== []) {
-            throw new \RuntimeException(sprintf('%s: unknown setting "%s". Known: services.', SourceFiles::CONFIG, implode('", "', $unknown)));
+            throw new \RuntimeException(sprintf('%s: unknown setting "%s". Known: services, actions.', SourceFiles::CONFIG, implode('", "', $unknown)));
         }
 
         $services = $data['services'] ?? null;
@@ -54,7 +59,15 @@ final readonly class ProjectConfig
             throw new \RuntimeException(sprintf('%s: services must be a list of directories.', SourceFiles::CONFIG));
         }
 
+        $actions = $data['actions'] ?? [];
+        if (!\is_array($actions) || array_filter($actions, static fn (mixed $entry): bool => !\is_array($entry)) !== []) {
+            throw new \RuntimeException(sprintf('%s: actions must be a list of routing files, each a map (file, controller_file...).', SourceFiles::CONFIG));
+        }
+
         /** @var array<string>|null $services */
-        return new self($services === null ? null : array_values($services));
+        return new self(
+            $services === null ? null : array_values($services),
+            array_values(array_map(static fn (array $entry): ActionMapping => ActionMapping::fromArray($entry, SourceFiles::CONFIG), array_filter($actions, 'is_array'))),
+        );
     }
 }
