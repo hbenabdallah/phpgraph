@@ -3,7 +3,7 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
-## Unreleased
+## 1.3.3 (2026-10-13)
 
 ### Changed
 - The MCP instructions tell the agent to use phpgraph before grep, glob or reading files, and the descriptions of
