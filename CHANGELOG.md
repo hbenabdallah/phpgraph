@@ -3,7 +3,7 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
-## Unreleased
+## 1.4.0 (2026-10-13)
 
 ### Added
 - Routing files of the project's own making, declared in `phpgraph.yaml` (`actions:`): XML elements mapping an action
