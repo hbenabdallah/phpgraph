@@ -12,8 +12,6 @@ use PhpParser\Node\Stmt;
 use PhpParser\NodeFinder;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
-use PhpParser\Parser;
-use PhpParser\ParserFactory;
 use PhpParser\PrettyPrinter\Standard;
 
 /**
@@ -25,7 +23,7 @@ final class SourceFacts
 {
     private const TEXT = 90;
 
-    private readonly Parser $parser;
+    private readonly PhpCodeParser $parser;
 
     private readonly Standard $printer;
 
@@ -39,7 +37,7 @@ final class SourceFacts
 
     public function __construct()
     {
-        $this->parser = (new ParserFactory())->createForNewestSupportedVersion();
+        $this->parser = new PhpCodeParser();
         $this->printer = new Standard();
     }
 
@@ -49,7 +47,7 @@ final class SourceFacts
     public function read(string $code): array
     {
         try {
-            $statements = $this->parser->parse($code) ?? [];
+            $statements = $this->parser->parse($code);
         } catch (\PhpParser\Error) {
             return [];
         }

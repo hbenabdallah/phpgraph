@@ -7,6 +7,7 @@ namespace PhpGraph\Query;
 use PhpGraph\Builder\TestFiles;
 use PhpGraph\Extractor\ClassFacts;
 use PhpGraph\Extractor\Hint;
+use PhpGraph\Extractor\PhpCodeParser;
 use PhpGraph\Extractor\SourceFacts;
 use PhpGraph\Graph\Confidence;
 use PhpGraph\Graph\Graph;
@@ -18,7 +19,6 @@ use PhpParser\Node\Expr;
 use PhpParser\Node\Name;
 use PhpParser\Node\Scalar;
 use PhpParser\NodeFinder;
-use PhpParser\ParserFactory;
 
 /**
  * Builds the outline of a feature from the classes a question names: the cluster of classes it is made of
@@ -645,7 +645,7 @@ final class FeatureOutline
         if (!\array_key_exists($file, $this->parsed)) {
             $code = $this->root === null ? false : @file_get_contents($this->root . '/' . $file);
             try {
-                $this->parsed[$file] = $code === false ? null : (new ParserFactory())->createForNewestSupportedVersion()->parse($code);
+                $this->parsed[$file] = $code === false ? null : (new PhpCodeParser())->parse($code);
             } catch (\PhpParser\Error) {
                 $this->parsed[$file] = null;
             }
