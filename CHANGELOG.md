@@ -3,6 +3,16 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## 1.3.4 (2026-10-13)
+
+### Fixed
+- A response the MCP server could not encode as JSON was written as an empty line, and the client waited for it
+  forever: `outline` on a project whose sources are in ISO-8859-1. Invalid UTF-8 is now replaced, and a response that
+  cannot be encoded anyway is an error with its id.
+- Sources that are not valid UTF-8 are read as Windows-1252 and converted before parsing: docblocks and strings of a
+  legacy ISO-8859-1 project show their accents in the MCP tools, the CLI and `GRAPH_REPORT.md`. Graphs and caches built
+  by an earlier version are rebuilt on their own.
+
 ## 1.3.3 (2026-10-13)
 
 ### Changed
