@@ -15,6 +15,9 @@ use PhpParser\PhpVersion;
  * (`$s{0}`, `=& new`, octals like `08`), which the PHP 5 grammar reads on the original source, lines and columns
  * unchanged. Only a file the newest grammar rejects is tried again: the PHP 5.6 lexer reads newer keywords
  * (`match`, `enum`, `#[`) as it did then.
+ *
+ * A source that is not UTF-8 (a legacy project in ISO-8859-1) is read as Windows-1252 and converted first: the texts
+ * taken from the code (docblocks, strings) are UTF-8 everywhere after, lines unchanged.
  */
 final class PhpCodeParser
 {
@@ -34,6 +37,7 @@ final class PhpCodeParser
      */
     public function parse(string $code): array
     {
+        $code = self::utf8($code);
         try {
             return $this->newest->parse($code) ?? [];
         } catch (Error $error) {
@@ -44,5 +48,10 @@ final class PhpCodeParser
                 throw $error;
             }
         }
+    }
+
+    public static function utf8(string $code): string
+    {
+        return mb_check_encoding($code, 'UTF-8') ? $code : mb_convert_encoding($code, 'UTF-8', 'Windows-1252');
     }
 }

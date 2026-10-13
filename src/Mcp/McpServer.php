@@ -10,7 +10,10 @@ use PhpGraph\Query\Direction;
 use PhpGraph\Query\GraphQueryProvider;
 use PhpGraph\Values;
 
-final class McpServer
+/**
+ * Not final: a test replaces handle() to check what run() writes.
+ */
+class McpServer
 {
     /**
      * The MCP protocol versions this server speaks, oldest first. It answers with the client's version when it is one
@@ -66,7 +69,7 @@ final class McpServer
                 : $this->error(null, -32700, 'Parse error');
 
             if ($response !== null) {
-                fwrite($output, json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n");
+                fwrite($output, $this->encode($response) . "\n");
                 fflush($output);
             }
         }
@@ -346,6 +349,22 @@ final class McpServer
         }
 
         return $value;
+    }
+
+    /**
+     * One line of JSON whatever the response holds: invalid UTF-8 becomes U+FFFD, and a response that cannot be encoded
+     * anyway is an error with its id. Never an empty line: the client would wait for the answer forever.
+     *
+     * @param array<string, mixed> $response
+     */
+    private function encode(array $response): string
+    {
+        $flags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE;
+        $json = json_encode($response, $flags);
+
+        return $json !== false
+            ? $json
+            : (string) json_encode($this->error($response['id'] ?? null, -32603, 'The response could not be encoded as JSON: ' . json_last_error_msg()), $flags);
     }
 
     /**

@@ -137,6 +137,36 @@ final class McpServerTest extends TestCase
         self::assertSame(['jsonrpc' => '2.0', 'id' => 8, 'result' => []], json_decode((string) stream_get_contents($output), true));
     }
 
+    public function testRunAnswersEveryRequestWithALineOfJsonWhateverTheResponseHolds(): void
+    {
+        $server = new class (new GraphQueryProvider($this->graphPath)) extends McpServer {
+            public function handle(array $request): array
+            {
+                $text = ($request['method'] ?? null) === 'latin1' ? "Contr\xF4leur" : NAN;
+
+                return ['jsonrpc' => '2.0', 'id' => $request['id'] ?? null, 'result' => ['content' => [['type' => 'text', 'text' => $text]]]];
+            }
+        };
+        $input = fopen('php://memory', 'r+');
+        $output = fopen('php://memory', 'r+');
+        self::assertIsResource($input);
+        self::assertIsResource($output);
+        fwrite($input, '{"jsonrpc":"2.0","id":7,"method":"latin1"}' . "\n" . '{"jsonrpc":"2.0","id":8,"method":"nan"}' . "\n");
+        rewind($input);
+
+        $server->run($input, $output);
+        rewind($output);
+        $lines = explode("\n", trim((string) stream_get_contents($output)));
+
+        self::assertCount(2, $lines);
+        $latin1 = json_decode($lines[0], true);
+        self::assertSame(7, Dig::at($latin1, 'id'));
+        self::assertSame("Contr\u{FFFD}leur", Dig::text($latin1, 'result', 'content', 0, 'text'), 'invalid UTF-8 replaced, the answer kept');
+        $unencodable = json_decode($lines[1], true);
+        self::assertSame(8, Dig::at($unencodable, 'id'));
+        self::assertSame(-32603, Dig::at($unencodable, 'error', 'code'), 'an error with the id, not an empty line');
+    }
+
     /**
      * @param array<string, mixed> $request
      *

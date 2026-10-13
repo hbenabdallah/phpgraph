@@ -8,6 +8,8 @@ use PhpGraph\Builder\GraphBuilder;
 use PhpGraph\Extractor\PhpCodeParser;
 use PhpGraph\Graph\Graph;
 use PhpGraph\Graph\Relation;
+use PhpGraph\Presentation\TextPresenter;
+use PhpGraph\Query\GraphQuery;
 use PhpParser\Error;
 use PhpParser\Node\Expr;
 use PhpParser\Node\InterpolatedStringPart;
@@ -67,6 +69,19 @@ final class LegacySyntaxTest extends TestCase
     public function testInvalidOctalLiteral(): void
     {
         self::assertSame([8], $this->lines('Calendar::august', 'Calendar::format'));
+    }
+
+    public function testASourceInIso88591IsReadAsUtf8(): void
+    {
+        $root = __DIR__ . '/Fixtures/latin1';
+        self::assertFalse(mb_check_encoding((string) file_get_contents($root . '/ReservationCTRL.php'), 'UTF-8'), 'the fixture is saved in ISO-8859-1');
+        $graph = (new GraphBuilder(readVendor: false))->build($root)->graph;
+
+        $text = (new TextPresenter(new GraphQuery($graph, null, $root)))->outline('ReservationCTRL');
+
+        self::assertTrue(mb_check_encoding($text, 'UTF-8'));
+        self::assertStringContainsString('Contrôleur des réservations : crée et annule une réservation.', $text);
+        self::assertStringContainsString('"Réservation introuvable ¤LAB_RS01¤"', $text, 'a string of the code, in the behaviour');
     }
 
     public function testAFileNoGrammarReadsKeepsTheErrorOfTheNewest(): void
