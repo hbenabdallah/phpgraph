@@ -56,8 +56,11 @@ final class McpConfigCommand extends Command
         $lines = match ($agent) {
             'sherpa' => [
                 $everyProject
-                    ? '# Sherpa: ~/.config/sherpa/mcp.json. Sherpa starts its MCP servers from the project it runs in: this serves every project.'
-                    : '# Sherpa: ~/.config/sherpa/mcp.json',
+                    ? '# Sherpa starts its MCP servers from the project it runs in: this serves every project.'
+                    : '# Sherpa:',
+                'sherpa mcp add phpgraph -- ' . implode(' ', array_map($this->shellArgument(...), [$command, ...$arguments])),
+                '',
+                '# Or add it to ~/.config/sherpa/mcp.json:',
                 $json,
             ],
             'claude' => [

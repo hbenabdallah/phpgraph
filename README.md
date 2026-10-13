@@ -73,22 +73,20 @@ docker pull ghcr.io/hbenabdallah/phpgraph          # nothing else to install
 **2. Connect your agent.** `mcp-config` prints a ready-to-paste configuration with the paths filled in (`vendor/bin/phpgraph` when installed with Composer):
 
 ```bash
-phpgraph mcp-config sherpa    # Sherpa: ~/.config/sherpa/mcp.json, one declaration for every project
+phpgraph mcp-config sherpa    # Sherpa: a `sherpa mcp add` command, one declaration for every project
 phpgraph mcp-config claude    # Claude Code: a `claude mcp add` command, or .mcp.json
 phpgraph mcp-config codex     # Codex: ~/.codex/config.toml
 phpgraph mcp-config cursor    # Cursor: .cursor/mcp.json, shareable with the team
 phpgraph mcp-config json      # any other MCP client over stdio
 ```
 
-With [Sherpa](https://github.com/hbenabdallah/sherpa), a terminal coding agent, one declaration in `~/.config/sherpa/mcp.json` serves every project: Sherpa starts its MCP servers from the project it runs in.
+With [Sherpa](https://github.com/hbenabdallah/sherpa), a terminal coding agent, one declaration serves every project: Sherpa starts its MCP servers from the project it runs in.
 
-```json
-{
-  "mcpServers": {
-    "phpgraph": { "command": "/home/you/.local/bin/phpgraph", "args": ["serve"] }
-  }
-}
+```bash
+sherpa mcp add phpgraph -- ~/.local/bin/phpgraph serve
 ```
+
+In a Sherpa session, `/mcp add` does the same, and the tools are there at once. Both write `~/.config/sherpa/mcp.json`.
 
 With Claude Code (absolute paths, as `mcp-config` prints them):
 
