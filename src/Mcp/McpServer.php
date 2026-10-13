@@ -22,7 +22,8 @@ final class McpServer
 
 
     private const INSTRUCTIONS = 'Knowledge graph of this PHP codebase, built by static analysis: deterministic facts, no guesses beyond '
-        . 'what each confidence level says. Call overview first: it gives the stack, the structure and what the graph cannot see. '
+        . 'what each confidence level says. Use it before grep, glob or reading files to explore or change the code, then read only the files it points to. '
+        . 'Call overview first: it gives the stack, the structure and what the graph cannot see. '
         . 'To explain a feature or how something works, call outline first, not query_graph (its classes, families, flow, behaviour, wiring and tests in one answer: '
         . 'read only the files it points to). Use query_graph to find code by topic when you do not know where it is, get_node or get_neighbors to read one class or method, and shortest_path '
         . 'to see how two pieces of code are connected, impact_of before changing a class or a method. Relations are EXTRACTED (read in the code), INFERRED (resolved from '
@@ -203,7 +204,7 @@ final class McpServer
             ],
             [
                 'name' => 'impact_of',
-                'description' => 'What may break when a class or a method changes: every class that depends on it, directly or '
+                'description' => 'Call this before changing a class or a method, instead of searching for its usages with grep. What may break when it changes: every class that depends on it, directly or '
                     . 'through others (callers, subclasses, implementations, code that instantiates or references it, senders '
                     . 'and handlers of a message), nearest first, each with the relation that reaches it and the weakest '
                     . 'confidence on the way, then its methods reaching the change with the source lines of their calls '
@@ -230,7 +231,7 @@ final class McpServer
             ],
             [
                 'name' => 'outline',
-                'description' => 'Call this first, instead of query_graph, whenever you are asked to explain, describe or document '
+                'description' => 'Call this first, instead of query_graph, grep or reading files, whenever you are asked to explain, describe or document '
                     . 'a feature or how something works ("explain the notification validation system", "how does stock '
                     . 'reservation work"), before reading any code. Returns its structural outline, enough to '
                     . 'read only the few files with non-obvious logic. From the classes the topic names, the cluster they '

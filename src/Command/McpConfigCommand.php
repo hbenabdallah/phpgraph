@@ -17,6 +17,13 @@ final class McpConfigCommand extends Command
 {
     private const AGENTS = ['sherpa', 'claude', 'codex', 'cursor', 'json'];
 
+    /**
+     * For the instructions file of the project: agents reach for grep first, even with the tools listed. Sherpa reads
+     * none, the MCP instructions say it.
+     */
+    private const INSTRUCTION = 'On PHP code, use phpgraph before grep or reading files: overview for the structure, outline to '
+        . 'understand a feature, impact_of before changing a class or a method. Then read only the files it points to.';
+
     protected function configure(): void
     {
         $this
@@ -89,6 +96,15 @@ final class McpConfigCommand extends Command
             ],
             default => ['# Any MCP client over stdio (mcpServers format)', $json],
         };
+        $file = match ($agent) {
+            'sherpa' => null,
+            'claude' => 'CLAUDE.md',
+            'codex', 'cursor' => 'AGENTS.md',
+            default => 'the instructions file of your agent (AGENTS.md, CLAUDE.md...)',
+        };
+        if ($file !== null) {
+            $lines = [...$lines, '', "# So that the agent reaches for phpgraph before grep, add to {$file}:", self::INSTRUCTION];
+        }
 
         $output->writeln($lines, OutputInterface::OUTPUT_RAW);
 

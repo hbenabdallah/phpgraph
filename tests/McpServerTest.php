@@ -40,6 +40,7 @@ final class McpServerTest extends TestCase
         }
         self::assertSame('phpgraph', Dig::at($response, 'result', 'serverInfo', 'name'));
         self::assertStringContainsString('Call overview first', Dig::text($response, 'result', 'instructions'));
+        self::assertStringContainsString('before grep', Dig::text($response, 'result', 'instructions'), 'Agents reach for grep first');
     }
 
     public function testNotificationsReceiveNoResponse(): void

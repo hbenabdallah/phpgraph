@@ -80,6 +80,8 @@ phpgraph mcp-config cursor    # Cursor: .cursor/mcp.json, shareable with the tea
 phpgraph mcp-config json      # any other MCP client over stdio
 ```
 
+Agents reach for grep first, even with phpgraph connected. `mcp-config` also prints a line for the instructions file of the project (`CLAUDE.md`, `AGENTS.md`) telling the agent to call phpgraph before grep or reading files; the MCP instructions of the server say it too.
+
 With [Sherpa](https://github.com/hbenabdallah/sherpa), a terminal coding agent, one declaration serves every project: Sherpa starts its MCP servers from the project it runs in.
 
 ```bash

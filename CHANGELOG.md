@@ -3,6 +3,13 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## Unreleased
+
+### Changed
+- The MCP instructions tell the agent to use phpgraph before grep, glob or reading files, and the descriptions of
+  `outline` and `impact_of` to call them instead of grep. `mcp-config` prints a line for `CLAUDE.md` or `AGENTS.md`
+  saying the same (not for Sherpa, which reads no instructions file).
+
 ## 1.3.2 (2026-10-13)
 
 ### Added

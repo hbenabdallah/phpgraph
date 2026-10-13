@@ -79,6 +79,8 @@ phpgraph mcp-config cursor    # Cursor : .cursor/mcp.json, à partager avec l'é
 phpgraph mcp-config json      # tout autre client MCP sur stdio
 ```
 
+Les agents commencent par grep, même avec phpgraph branché. `mcp-config` affiche aussi une ligne pour le fichier d'instructions du projet (`CLAUDE.md`, `AGENTS.md`), qui demande à l'agent d'appeler phpgraph avant grep ou la lecture des fichiers ; les instructions MCP du serveur le disent aussi.
+
 Avec [Sherpa](https://github.com/hbenabdallah/sherpa), un agent de code pour le terminal, une seule déclaration sert tous les projets : Sherpa lance ses serveurs MCP depuis le projet où il tourne.
 
 ```bash
