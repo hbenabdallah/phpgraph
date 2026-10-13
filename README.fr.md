@@ -265,7 +265,7 @@ Sylius (le commit du corpus), octobre 2026, sans LLM : phpgraph 1.0.2, [codebase
 
 **Exécute-t-il mon code ?** Non. Il analyse les fichiers PHP et lit la configuration JSON, YAML et XML. Même `autoload_classmap.php` et les configurateurs de services PHP sont analysés, pas inclus.
 
-**Quelles versions de PHP peut-il analyser ?** Tout ce que `nikic/php-parser` 5 sait lire : la syntaxe de PHP 7 et 8. phpgraph lui-même demande PHP 8.2 ou plus.
+**Quelles versions de PHP peut-il analyser ?** Tout ce que `nikic/php-parser` 5 sait lire : la syntaxe de PHP 7 et 8, et celle de PHP 4 et 5 retirée depuis (`$s{0}`, `=& new`, octaux comme `08`), pour un fichier que la grammaire la plus récente refuse. phpgraph lui-même demande PHP 8.2 ou plus.
 
 **Avec quels agents fonctionne-t-il ?** Tout client MCP sur stdio : [Sherpa](https://github.com/hbenabdallah/sherpa), Claude Code, Codex, Cursor, Claude Desktop, et d'autres. `mcp-config` affiche la configuration des plus courants.
 

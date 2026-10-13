@@ -3,11 +3,19 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
-## Unreleased
+## 1.3.2 (2026-10-13)
 
 ### Added
+- Legacy PHP 4 and 5 code is analysed: a file the newest grammar rejects is parsed again for PHP 5.6, which reads
+  `$s{0}`, `$this->x =& new Foo()` and octals like `08` on the original source, lines unchanged. Modern code is never
+  read by the old grammar, and a file neither reads keeps the error of the newest. On a legacy project of 4,800 files,
+  parse failures went from 366 to 3 (real errors in the source).
 - Each release tag publishes the version to the official MCP registry (`release.yml`, logged in by the OIDC token of
   the workflow, no secret).
+
+### Changed
+- `mcp-config sherpa` prints a `sherpa mcp add` command, then the `~/.config/sherpa/mcp.json` form; the README declares
+  phpgraph in Sherpa the same way.
 
 ## 1.3.1 (2026-10-12)
 
