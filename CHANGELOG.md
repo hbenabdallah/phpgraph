@@ -3,6 +3,24 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## Unreleased
+
+### Changed
+- `outline` of a method (`ReservationCTRL::saveNewReservation`) is what the method runs: the methods it calls, 3 calls
+  deep, each class with those methods only (a parent class shows the inherited methods called, not its 60 others).
+  A method called by 20 classes or more, or a singleton's `getInstance()`, is a hub: counted, not followed, and its
+  class joins only through another method. Behaviour and wiring keep what touches those methods, nearest first. On a
+  legacy project of 4,800 files: 40 classes and 37.6 KB before, 16 classes and 7.4 KB after. A class name or free words give the
+  outline of a feature as before, with the same rules: a class named exactly, case included, is the only seed
+  (`ReservationCTRL`, not every `*CTRL`; `promotion` stays a topic, `Promotion` is the class), and stays in the core
+  though its parent has a family; its parent class, when shared by 20 classes or more,
+  shows only the methods the core calls, and the actions of other controllers it handles are left out; a call to a
+  hub links no class to the core. `outline "ReservationCTRL"`: 38.6 KB with 6 seeds before, 26.4 KB after.
+
+### Fixed
+- `outline` of a feature with many large classes printed a PHP warning and lost the hints of the code running into
+  it: the regular expression of every method name exceeded what PCRE compiles.
+
 ## 1.3.4 (2026-10-13)
 
 ### Fixed

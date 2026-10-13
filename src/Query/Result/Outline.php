@@ -30,6 +30,9 @@ final readonly class Outline
      * @param list<string>                                                                                     $topTests test files touching the most core classes
      * @param list<string>                                                                                     $uncovered classes no test touches
      * @param array<string, bool>                                                                              $unused   class nothing in the application uses => used by tests
+     * @param ?string                                                                                          $method   the method the topic names: the core is what it runs (MethodCone)
+     * @param array<string, int>                                                                               $depths   with a method, the methods it runs => calls away from it
+     * @param array<string, int>                                                                               $hubs     with a method, the hubs it reaches, not followed => application classes calling them
      */
     public function __construct(
         public string $topic,
@@ -51,6 +54,9 @@ final readonly class Outline
         public array $topTests,
         public array $uncovered,
         public array $unused,
+        public ?string $method = null,
+        public array $depths = [],
+        public array $hubs = [],
     ) {
     }
 }

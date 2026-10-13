@@ -37,6 +37,8 @@ final class FeatureOutline
 
     private const MORE_ENTRIES = 12;
 
+    private const MAX_DEPTH = MethodCone::DEPTH + 1;
+
     private readonly Graph $graph;
 
     /** @var array<string, array<string, ClassFacts>|null> file => its classes' facts, null when unreadable */
@@ -55,9 +57,15 @@ final class FeatureOutline
 
     public function build(string $topic): ?Outline
     {
+        $method = $this->namedMethod($topic);
+        if ($method !== null) {
+            return $this->methodOutline($topic, $method);
+        }
+
         $subgraph = $this->query->subgraph($topic, 1, 10, false);
-        $seeds = [];
-        foreach ($subgraph->seeds as $seed) {
+        // A class named exactly is the seed, not every class sharing a word of its name (ReservationCTRL, not each *CTRL).
+        $seeds = array_fill_keys($this->namedClasses($topic), true);
+        foreach ($seeds !== [] ? [] : $subgraph->seeds as $seed) {
             $class = explode('::', $seed->id)[0];
             $node = $this->graph->node($class);
             if ($node !== null && $node->kind->isClassLike() && $node->file !== null) {
@@ -70,7 +78,9 @@ final class FeatureOutline
         $seeds = array_map('strval', array_keys($seeds));
 
         $cluster = new FeatureCluster($this->graph, $this->relevance);
-        ['core' => $core, 'families' => $families] = $cluster->grow($seeds, $subgraph->terms);
+        $named = $this->namedClasses($topic);
+        $terms = $named === [] ? $subgraph->terms : $this->distinctive($subgraph->terms);
+        ['core' => $core, 'families' => $families] = $cluster->grow($seeds, $terms, $named);
         $inCore = array_fill_keys($core, true);
         // The members of an interface family are the family's: counted with it, not as users of the core.
         $members = [];
@@ -82,18 +92,39 @@ final class FeatureOutline
             }
         }
 
+        // The parent of what is asked, shared by many (the parent of every controller), is in the core for what the
+        // core uses of it only: those methods, not its sixty others, its callers nor the actions of other controllers.
+        // A base class of the feature itself (the problem details of every response) stays whole.
+        $ancestors = $this->ancestors($seeds);
+        $shared = [];
+        foreach ($core as $class) {
+            if (isset($ancestors[$class]) && !\in_array($class, $seeds, true) && \count($cluster->membersOf($class)) >= MethodCone::HUB) {
+                $shared[$class] = $this->usedBy($class, $inCore);
+            }
+        }
+        $own = array_values(array_filter($core, static fn (string $class): bool => !isset($shared[$class])));
+
         $facts = [];
         $sourcesRead = true;
         foreach ($core as $class) {
             $found = $this->facts($class);
             $sourcesRead = $sourcesRead && $found !== null;
             if ($found !== null) {
-                $facts[$class] = $found;
+                $facts[$class] = isset($shared[$class]) ? $this->narrowed($found, $shared[$class], false) : $found;
+            }
+        }
+        $methodsShown = [];
+        foreach ($core as $class) {
+            foreach ($this->methods($class) as $method) {
+                $name = strtolower(substr($method, (int) strrpos($method, ':') + 1));
+                if (!isset($shared[$class]) || isset($shared[$class][$name])) {
+                    $methodsShown[$method] = 0;
+                }
             }
         }
 
-        [$entries, $closures, $inside, $fromFamilies] = $this->calls($core, $inCore, $members);
-        [$routes, $routeEntries] = $this->routes($entries, $inside, $members, $core);
+        [$entries, $closures, $inside, $fromFamilies] = $this->calls($own, $inCore, $members);
+        [$routes, $routeEntries] = $this->routes($entries, $inside, $members, $own, $core);
         // The entries followed to the routes first, then those called by the most classes.
         uksort($entries, fn (string $a, string $b): int => [!\in_array($a, $routeEntries, true), -\count($this->classesOf($entries[$a]))]
             <=> [!\in_array($b, $routeEntries, true), -\count($this->classesOf($entries[$b]))]);
@@ -114,18 +145,27 @@ final class FeatureOutline
             }
         }
         // Only what they check of the core: `returns null if $notification->hasErrors()`, not their own guards.
-        $names = [];
+        // A set, not one regular expression: the methods of a few large classes exceed what PCRE compiles.
+        $labels = [];
+        $methodNames = [];
         foreach ($core as $class) {
-            $names[] = preg_quote($this->query->label($class), '/');
+            $labels[] = $this->query->label($class);
             foreach ($this->methods($class) as $method) {
-                $names[] = '(->|::)' . preg_quote(substr($method, (int) strrpos($method, ':') + 1), '/') . '\(';
+                $methodNames[substr($method, (int) strrpos($method, ':') + 1)] = true;
             }
         }
-        $mentionsCore = '/' . implode('|', array_unique($names)) . '/';
+        $mentionsCore = static function (string $text) use ($labels, $methodNames): bool {
+            preg_match_all('/(?:->|::)(\w+)\(/', $text, $called);
+            if (array_intersect_key(array_flip($called[1]), $methodNames) !== []) {
+                return true;
+            }
+
+            return array_filter($labels, static fn (string $label): bool => str_contains($text, $label)) !== [];
+        };
         foreach (array_keys($callers) as $caller) {
             [$class, $method] = explode('::', (string) $caller, 2) + [1 => ''];
             foreach ($this->facts($class)->hints ?? [] as $hint) {
-                if (strcasecmp($hint->method, $method) === 0 && preg_match($mentionsCore, $hint->text) === 1) {
+                if (strcasecmp($hint->method, $method) === 0 && $mentionsCore($hint->text)) {
                     $hints[] = [$class, $hint];
                 }
             }
@@ -135,25 +175,11 @@ final class FeatureOutline
         // (`create()` returns null on errors), a comparison, a branch on constants, an early return naming its
         // outcome; type assertions, unguarded throws, boolean searches and constructor checks last.
         $outside = array_flip(array_keys($callers));
-        $rank = static function (string $class, Hint $hint) use ($outside): int {
-            $text = $hint->text;
-            $isCaller = isset($outside[$class . '::' . $hint->method]);
-
-            return match (true) {
-                strtolower($hint->method) === '__construct' => 6,
-                str_starts_with($text, 'throws') && (str_contains($text, 'instanceof') || preg_match('/ (if|unless) /', $text) !== 1) => 4,
-                str_starts_with($text, 'throws') => $isCaller ? 4 : 0,
-                $isCaller => preg_match('/^returns (null|false|early) /', $text) === 1 ? 1 : 4,
-                !str_starts_with($text, 'returns') => 1,
-                preg_match('/^returns [\\w\\\\]+::\\w+\\(\\) /', $text) === 1 => 2,
-                preg_match('/^returns (true|false) /', $text) === 1 => 5,
-                default => 3,
-            };
-        };
+        $rank = static fn (string $class, Hint $hint): int => self::rank($hint, isset($outside[$class . '::' . $hint->method]));
         uksort($hints, static fn (int $a, int $b): int => [$rank(...$hints[$a]), $a] <=> [$rank(...$hints[$b]), $b]);
         $hints = array_values($hints);
 
-        [$consumers, $consumerFiles, $tests, $topTests] = $this->users($core, $inCore, $members);
+        [$consumers, $consumerFiles, $tests, $topTests] = $this->users($core, $inCore, $members, $shared === [] ? null : [...$own, ...array_map('strval', array_keys($methodsShown))]);
 
         $usage = new Usage($this->graph);
         $onTheWay = $core;
@@ -189,7 +215,7 @@ final class FeatureOutline
             $closures,
             $inside,
             $hints,
-            $this->wiring($core),
+            $this->wiring($core, $shared === [] ? null : $methodsShown),
             $consumers,
             $consumerFiles,
             $tests,
@@ -197,6 +223,219 @@ final class FeatureOutline
             $uncovered,
             $unused,
         );
+    }
+
+    private static function rank(Hint $hint, bool $isCaller): int
+    {
+        $text = $hint->text;
+
+        return match (true) {
+            strtolower($hint->method) === '__construct' => 6,
+            str_starts_with($text, 'throws') && (str_contains($text, 'instanceof') || preg_match('/ (if|unless) /', $text) !== 1) => 4,
+            str_starts_with($text, 'throws') => $isCaller ? 4 : 0,
+            $isCaller => preg_match('/^returns (null|false|early) /', $text) === 1 ? 1 : 4,
+            !str_starts_with($text, 'returns') => 1,
+            preg_match('/^returns [\\w\\\\]+::\\w+\\(\\) /', $text) === 1 => 2,
+            preg_match('/^returns (true|false) /', $text) === 1 => 5,
+            default => 3,
+        };
+    }
+
+    /**
+     * The method a topic names, `OrderService::place` or `OrderService::place()`, when the graph has it.
+     */
+    private function namedMethod(string $topic): ?string
+    {
+        if (preg_match('/^\s*\\\\?([\w\\\\@]+::\w+)(\(\))?\s*$/', $topic, $match) !== 1) {
+            return null;
+        }
+        $needle = strtolower(ltrim($match[1], '\\'));
+        foreach ($this->query->candidates($match[1], 3) as $node) {
+            $id = strtolower(str_contains($node->id, '@') ? substr($node->id, (int) strpos($node->id, '@') + 1) : $node->id);
+            if ($node->kind === NodeKind::Method && ($id === $needle || str_ends_with($id, '\\' . $needle))) {
+                return $node->id;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The classes a topic names exactly, `ReservationCTRL` or `App\Sales\Order`: one, or those of that name in
+     * several namespaces.
+     *
+     * @return list<string>
+     */
+    private function namedClasses(string $topic): array
+    {
+        if (preg_match('/^\s*\\\\?([\w\\\\@]+)\s*$/', $topic, $match) !== 1) {
+            return [];
+        }
+        // Written as the class is, case included: "promotion" is a topic, "Promotion" the class.
+        $needle = ltrim($match[1], '\\');
+        $classes = [];
+        foreach ($this->query->candidates($match[1], 10) as $node) {
+            $id = str_contains($node->id, '@') ? substr($node->id, (int) strpos($node->id, '@') + 1) : $node->id;
+            if ($node->kind->isClassLike() && $node->kind !== NodeKind::External && $node->file !== null
+                && ($id === $needle || str_ends_with($id, '\\' . $needle))) {
+                $classes[] = $node->id;
+            }
+        }
+
+        return $classes;
+    }
+
+    /**
+     * The words of a class name that say its subject: not a suffix many classes end with (`CTRL`, `DAO`), else every
+     * controller would be on the topic of one.
+     *
+     * @param list<string> $terms
+     *
+     * @return list<string>
+     */
+    private function distinctive(array $terms): array
+    {
+        $endings = array_fill_keys($terms, 0);
+        foreach ($this->graph->nodes() as $node) {
+            if ($node->kind->isClassLike() && $node->file !== null) {
+                $label = strtolower($node->label);
+                foreach ($terms as $term) {
+                    if (str_ends_with($label, $term)) {
+                        ++$endings[$term];
+                    }
+                }
+            }
+        }
+
+        return array_values(array_filter($terms, static fn (string $term): bool => $endings[$term] < MethodCone::HUB));
+    }
+
+    /**
+     * The outline of what one method runs: its classes are those of the methods it calls a few calls deep, each
+     * with those methods only; hubs are counted, not followed; the behaviour nearest the method comes first.
+     */
+    private function methodOutline(string $topic, string $start): Outline
+    {
+        $cone = (new MethodCone($this->graph))->of($start);
+        $core = $cone['classes'];
+        $inCore = array_fill_keys($core, true);
+        $startClass = explode('::', $start)[0];
+        $byClass = [];
+        foreach ($cone['methods'] as $method => $depth) {
+            $byClass[explode('::', (string) $method)[0]][strtolower(substr((string) $method, (int) strrpos((string) $method, ':') + 1))] = $depth;
+        }
+
+        $facts = [];
+        $sourcesRead = true;
+        foreach ($core as $class) {
+            $found = $this->facts($class);
+            $sourcesRead = $sourcesRead && $found !== null;
+            if ($found !== null) {
+                $facts[$class] = $this->narrowed($found, $byClass[$class] ?? [], $class === $startClass);
+            }
+        }
+
+        // Nearest the method first, then what a reader cannot guess first.
+        $hints = [];
+        foreach ($facts as $class => $found) {
+            foreach ($found->hints as $hint) {
+                $hints[] = [$class, $hint, $byClass[$class][strtolower($hint->method)] ?? self::MAX_DEPTH];
+            }
+        }
+        uksort($hints, static fn (int $a, int $b): int => [$hints[$a][2], self::rank($hints[$a][1], false), $a] <=> [$hints[$b][2], self::rank($hints[$b][1], false), $b]);
+        $hints = array_values(array_map(static fn (array $hint): array => [$hint[0], $hint[1]], $hints));
+
+        // The routes running it, from their handler.
+        $routes = [];
+        $node = $this->graph->node($start);
+        foreach ($node === null ? [] : $this->query->impactOf($node)->classes as $impacted) {
+            if (self::isRoute($impacted->class) && $impacted->chain !== []) {
+                $routes[$impacted->class] = $impacted->chain;
+            }
+        }
+        $callers = [];
+        foreach ($this->graph->incident($start) as $item) {
+            if (!$item['forward'] && $item['edge']->relation === Relation::HandledBy && self::isRoute($item['other'])) {
+                $routes[$item['other']] = [$start];
+            }
+            $owner = $this->graph->node(explode('::', $item['other'])[0]);
+            if (!$item['forward'] && $item['edge']->relation === Relation::Calls && $owner !== null && $owner->file !== null && !TestFiles::isTest($owner->file)) {
+                $callers[] = $item['other'];
+            }
+        }
+        ksort($routes);
+        $calls = $cone['calls'];
+        uksort($calls, static fn (string $a, string $b): int => [$cone['methods'][$a] ?? 0, $a] <=> [$cone['methods'][$b] ?? 0, $b]);
+
+        [$consumers, $consumerFiles, $tests, $topTests] = $this->users($core, $inCore, [], [$start]);
+        $usage = new Usage($this->graph);
+        $uncovered = array_values(array_filter($core, fn (string $class): bool => $this->graph->node($class)?->kind === NodeKind::PhpClass && !$usage->touchedByTests($class)));
+
+        return new Outline(
+            $topic,
+            [$startClass],
+            $core,
+            $facts,
+            $sourcesRead,
+            [],
+            array_map(static fn (string $route, array $chain): array => ['route' => $route, 'chain' => $chain], array_map('strval', array_keys($routes)), array_values($routes)),
+            $callers === [] ? [] : [$start => array_values(array_unique($callers))],
+            [],
+            [],
+            $calls,
+            $hints,
+            $this->wiring($core, $cone['methods']),
+            $consumers,
+            $consumerFiles,
+            $tests,
+            $topTests,
+            $uncovered,
+            [],
+            $start,
+            $cone['methods'],
+            $cone['hubs'],
+        );
+    }
+
+    /**
+     * What a class's source says of the methods a method runs only: their signatures (the private ones too) and
+     * their hints; its constants for the class of the method itself.
+     *
+     * @param array<string, int> $methods lowercase name => calls away from the method
+     */
+    private function narrowed(ClassFacts $facts, array $methods, bool $own): ClassFacts
+    {
+        $signatures = [];
+        foreach ($methods as $name => $depth) {
+            $found = array_values(array_filter($facts->signatures, static fn (string $signature): bool => str_starts_with(strtolower($signature), $name . '(')));
+            $signatures[] = $found[0] ?? $this->methodName($facts->id, (string) $name) . '()';
+        }
+
+        return new ClassFacts(
+            $facts->id,
+            $facts->kind,
+            $facts->modifiers,
+            $facts->summary,
+            $signatures,
+            $own || str_starts_with($facts->kind, 'enum') ? $facts->constants : [],
+            $facts->cases,
+            array_values(array_filter($facts->hints, static fn (Hint $hint): bool => isset($methods[strtolower($hint->method)]))),
+        );
+    }
+
+    /**
+     * A method's name as declared, from its lowercase form.
+     */
+    private function methodName(string $class, string $name): string
+    {
+        foreach ($this->methods($class) as $method) {
+            $declared = substr($method, (int) strrpos($method, ':') + 1);
+            if (strtolower($declared) === $name) {
+                return $declared;
+            }
+        }
+
+        return $name;
     }
 
     /**
@@ -262,10 +501,12 @@ final class FeatureOutline
      *                                             chain is an arbitrary pick, a chain without one is preferred
      * @param list<string>                $core    the classes of the feature: a route handled by one of them enters
      *                                             it directly
+     * @param list<string>|null           $all     the core with its shared base classes: an action handled by a
+     *                                             method they share is the core's when it names a controller of it
      *
      * @return array{list<array{route: string, chain: list<string>}>, list<string>} the routes, the entries followed
      */
-    private function routes(array $entries, array $inside, array $members, array $core): array
+    private function routes(array $entries, array $inside, array $members, array $core, ?array $all = null): array
     {
         $ranked = [];
         foreach ($entries as $method => $callers) {
@@ -308,6 +549,7 @@ final class FeatureOutline
             $isMain = \in_array($method, $main, true);
             foreach ($this->query->impactOf($node)->classes as $impacted) {
                 if (!self::isRoute($impacted->class) || $impacted->chain === []
+                    || !\in_array($this->controllerOf($impacted->class) ?? $core[0] ?? '', $core, true)
                     || (!$isMain && (!isset($routes[$impacted->class]) || array_intersect_key(array_flip($impacted->chain), $ranInClosures) === []))) {
                     continue;
                 }
@@ -321,13 +563,14 @@ final class FeatureOutline
                 }
             }
         }
-        foreach ($core as $class) {
+        foreach ($all ?? $core as $class) {
             foreach ($this->graph->incident($class) as $method) {
                 if (!$method['forward'] || $method['edge']->relation !== Relation::HasMethod) {
                     continue;
                 }
                 foreach ($this->graph->incident($method['other']) as $item) {
-                    if (!$item['forward'] && $item['edge']->relation === Relation::HandledBy && self::isRoute($item['other'])) {
+                    if (!$item['forward'] && $item['edge']->relation === Relation::HandledBy && self::isRoute($item['other'])
+                        && \in_array($this->controllerOf($item['other']) ?? $class, $core, true)) {
                         $routes[$item['other']] ??= [$method['other']];
                     }
                 }
@@ -341,6 +584,67 @@ final class FeatureOutline
             array_map('strval', array_keys($routes)),
             array_values($routes),
         ), $followed];
+    }
+
+    /**
+     * The parent classes of the seeds, up the hierarchy.
+     *
+     * @param list<string> $seeds
+     *
+     * @return array<string, true>
+     */
+    private function ancestors(array $seeds): array
+    {
+        $found = [];
+        for ($queue = $seeds; $queue !== [];) {
+            $class = (string) array_shift($queue);
+            foreach ($this->graph->incident($class) as $item) {
+                if ($item['forward'] && $item['edge']->relation === Relation::Extends && !isset($found[$item['other']])) {
+                    $found[$item['other']] = true;
+                    $queue[] = $item['other'];
+                }
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * The methods of a class the other classes of the core call: lowercase name => 0.
+     *
+     * @param array<string, true> $inCore
+     *
+     * @return array<string, int>
+     */
+    private function usedBy(string $class, array $inCore): array
+    {
+        $used = [];
+        foreach ($this->methods($class) as $method) {
+            foreach ($this->graph->incident($method) as $item) {
+                $caller = explode('::', $item['other'])[0];
+                if (!$item['forward'] && $item['edge']->relation === Relation::Calls && $caller !== $class && isset($inCore[$caller])) {
+                    $used[strtolower(substr($method, (int) strrpos($method, ':') + 1))] = 0;
+                    break;
+                }
+            }
+        }
+
+        return $used;
+    }
+
+    /**
+     * The controller an action names when its method is inherited (`via` `controller`): a route handled by the parent
+     * of every controller is still that controller's.
+     */
+    private function controllerOf(string $route): ?string
+    {
+        foreach ($this->graph->incident($route) as $item) {
+            if ($item['forward'] && $item['edge']->relation === Relation::References && $item['edge']->via() === 'controller') {
+                return $item['other'];
+            }
+        }
+
+        return null;
     }
 
     private static function isRoute(string $id): bool
@@ -478,14 +782,16 @@ final class FeatureOutline
      * @param list<string>          $core
      * @param array<string, true>   $inCore
      * @param array<string, string> $members
+     * @param list<string>|null     $nodes   the nodes whose users count, the core's classes and methods by default
      *
      * @return array{array<string, int>, int, array<string, int>, list<string>}
      */
-    private function users(array $core, array $inCore, array $members): array
+    private function users(array $core, array $inCore, array $members, ?array $nodes = null): array
     {
         $consumers = $files = $tests = $touched = [];
-        foreach ($core as $class) {
-            foreach ([$class, ...$this->methods($class)] as $node) {
+        foreach ($nodes === null ? $core : [''] as $class) {
+            foreach ($nodes ?? [$class, ...$this->methods($class)] as $node) {
+                $class = explode('::', $node)[0];
                 foreach ($this->graph->incident($node) as $item) {
                     if ($item['forward'] || \in_array($item['edge']->relation, [Relation::Imports, Relation::Defines, Relation::HasMethod], true)) {
                         continue;
@@ -521,11 +827,12 @@ final class FeatureOutline
      * The configuration calling the core (a wiring helper), each call as written with its literal arguments, and
      * the services it defines that the container injects by id: which use case receives which pipeline.
      *
-     * @param list<string> $core
+     * @param list<string>            $core
+     * @param array<string, int>|null $only the methods whose calls count, every method of the core by default
      *
      * @return list<array{file: string, line: int, call: string, services: list<array{id: string, class: string, consumers: list<string>}>}>
      */
-    private function wiring(array $core): array
+    private function wiring(array $core, ?array $only = null): array
     {
         $services = [];
         $calls = [];
@@ -539,6 +846,9 @@ final class FeatureOutline
                 }
             }
             foreach ($this->methods($class) as $method) {
+                if ($only !== null && !isset($only[$method])) {
+                    continue;
+                }
                 foreach ($this->graph->incident($method) as $item) {
                     $caller = $this->graph->node($item['other']);
                     if ($item['forward'] || $item['edge']->relation !== Relation::Calls || $caller?->kind !== NodeKind::File) {

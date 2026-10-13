@@ -20,6 +20,7 @@ use PhpGraph\Graph\Relation;
  *   base class of the use cases). A class only using the core (a use case, an aggregate) is a client: the flow.
  * - An interface or a base class of the core implemented by several classes is a family: its members are counted,
  *   not listed (34 context rules).
+ * - A call to a hub (MethodCone::isHub) is no link: every DAO's getInstance() would join every class using it.
  */
 final class FeatureCluster
 {
@@ -40,20 +41,24 @@ final class FeatureCluster
     /** @var array<string, list<string>> class-like => the application classes implementing or extending it */
     private array $members = [];
 
+    private readonly MethodCone $hubs;
+
     public function __construct(
         private readonly Graph $graph,
         private readonly Relevance $relevance,
     ) {
+        $this->hubs = new MethodCone($graph);
     }
 
     /**
      * @param list<string> $seeds classes the question names
      * @param list<string> $stems
+     * @param list<string> $asked classes named exactly: in the core even when members of a family
      *
      * @return array{core: list<string>, families: array<string, list<string>>} the core classes, in the order they
      *                                                                          joined, and the families: class-like => its members
      */
-    public function grow(array $seeds, array $stems): array
+    public function grow(array $seeds, array $stems, array $asked = []): array
     {
         $core = [];
         foreach ($seeds as $seed) {
@@ -134,8 +139,11 @@ final class FeatureCluster
             }
         }
 
+        // A class asked about stays: it is no member of its parent's family (a controller among the 59 of its base).
+        $asked = array_fill_keys($asked, true);
+
         return [
-            'core' => array_values(array_filter($classes, static fn (string $class): bool => !isset($members[$class]))),
+            'core' => array_values(array_filter($classes, static fn (string $class): bool => !isset($members[$class]) || isset($asked[$class]))),
             'families' => $families,
         ];
     }
@@ -264,6 +272,10 @@ final class FeatureCluster
                 $edge = $item['edge'];
                 // A closure a method runs is its writer's code: the pipeline does not use each use case's builder.
                 if (!\in_array($edge->relation, self::STRONG, true) || str_starts_with($edge->via(), 'closure of ')) {
+                    continue;
+                }
+                // A call to a hub (a singleton's getInstance(), a method called by every class) links nothing.
+                if ($edge->relation === Relation::Calls && $this->hubs->isHub($item['forward'] ? $item['other'] : $member)) {
                     continue;
                 }
                 // A member of an injected list is the list's, not each holder's: counted as a family.

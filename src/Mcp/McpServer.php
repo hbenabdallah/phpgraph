@@ -243,11 +243,13 @@ class McpServer
                     . 'implementations by folder (0 stated) and the tags injecting them; the flow from the routes into it, '
                     . 'the closures it runs and the calls inside it; behaviour read in the bodies (guarded throws, early '
                     . 'returns, branches on constants, loop caps, state compared before and after); the container wiring '
-                    . 'with service ids; its users (tests counted by module), the classes no test touches and those nothing uses.',
+                    . 'with service ids; its users (tests counted by module), the classes no test touches and those nothing uses. '
+                    . 'A topic naming a method (OrderService::place) outlines what it runs: the methods it calls, 3 calls deep, '
+                    . 'each class with those methods only, the hubs it calls counted, its behaviour nearest first.',
                 'inputSchema' => [
                     'type' => 'object',
                     'properties' => [
-                        'topic' => $text('The feature, in words or class names: "notification validation", "stock reservation".'),
+                        'topic' => $text('The feature, in words or class names: "notification validation", "stock reservation"; or one method: "ReservationCTRL::saveNewReservation".'),
                         'section' => ['type' => 'string', 'enum' => OutlineReport::SECTIONS, 'description' => 'Only one section, uncut: what a "+N more: section ..." line names.'],
                         'format' => ['type' => 'string', 'enum' => TextPresenter::IMPACT_FORMATS, 'description' => 'text (default, compact, about 15 KB), full (every list uncut: often too large to read inline; prefer section) or json.'],
                     ],

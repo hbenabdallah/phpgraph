@@ -61,7 +61,9 @@ final class OutlineReport
                 'Outline of "%s": %d classes, from %s; paths under %s. From the graph%s: read the bodies for the rest.',
                 $outline->topic,
                 \count($outline->core),
-                implode(', ', array_map(fn (string $seed): string => $this->query->label($seed), $outline->seeds)),
+                $outline->method === null
+                    ? implode(', ', array_map(fn (string $seed): string => $this->query->label($seed), $outline->seeds))
+                    : \sprintf('%s and what it calls, %d calls deep (each class with those methods only)', $this->query->label($outline->method), max([0, ...$outline->depths])),
                 $this->prefix === '' ? 'the project' : $this->prefix,
                 $outline->sourcesRead ? ' and the sources' : ' (sources not found: no signatures nor hints)',
             ),
@@ -112,10 +114,11 @@ final class OutlineReport
                 return $common;
             }) ?? '';
             $lines[] = '';
+            $common = rtrim($common, '\\') === '' ? '' : $common;
             $lines[] = 'Core, by namespace' . ($common === '' ? '' : ' (under ' . rtrim($common, '\\') . ')') . ':';
             foreach ($byNamespace as $namespace => $classes) {
                 $layer = Layers::of(explode('\\', (string) $namespace));
-                $lines[] = '  ' . (substr((string) $namespace, \strlen($common)) ?: (string) $namespace) . ($layer === null ? '' : ' [' . $layer['segment'] . ']');
+                $lines[] = '  ' . ((string) $namespace === '' ? '(no namespace)' : (substr((string) $namespace, \strlen($common)) ?: (string) $namespace)) . ($layer === null ? '' : ' [' . $layer['segment'] . ']');
                 foreach ($classes as $class) {
                     array_push($lines, ...$this->classLines($class, $outline->facts[$class] ?? null, $all));
                 }
@@ -219,10 +222,22 @@ final class OutlineReport
                 $lines[] = \sprintf('  %s runs the closures written in %s', $this->query->label((string) $method), $full ? implode(', ', $parts) : $this->methodList(array_keys($sources), 5));
             }
             if ($outline->inside !== []) {
-                $lines[] = '  Inside the core:';
-                foreach (self::limited($all, $outline->inside, self::INSIDE) as $method => $callees) {
+                $lines[] = $outline->method === null ? '  Inside the core:' : '  Calls, nearest first:';
+                $inside = self::limited($all, $outline->inside, $outline->method === null ? self::INSIDE : self::HINTS);
+                foreach ($inside as $method => $callees) {
                     $lines[] = \sprintf('    %s → %s', $this->query->label($method), $this->methodList($callees, $full ? 0 : 4));
                 }
+                if (!$all && \count($outline->inside) > \count($inside)) {
+                    $lines[] = \sprintf('    +%d more: section flow', \count($outline->inside) - \count($inside));
+                }
+            }
+            if ($outline->hubs !== []) {
+                $hubs = self::limited($all, $outline->hubs, self::LIST);
+                $lines[] = \sprintf(
+                    '  Hubs it calls, not followed (application classes calling them): %s%s',
+                    implode(', ', array_map(fn (string $hub, int $classes): string => $this->query->label($hub) . ' ' . $classes, array_keys($hubs), $hubs)),
+                    $more($outline->hubs, $hubs),
+                );
             }
 
         }
@@ -270,13 +285,17 @@ final class OutlineReport
             $lines[] = '';
             $consumers = $outline->consumers;
             $shownConsumers = self::limited($all, $consumers, 8);
-            $lines[] = \sprintf(
-                'Used by %d files outside the core. Application%s: %s%s.',
-                $outline->consumerFiles,
-                ' (links)',
-                implode(', ', array_map(fn (string $class, int $links): string => $this->query->label($class) . ' ' . $links, array_keys($shownConsumers), $shownConsumers)),
-                $more($consumers, $shownConsumers),
-            );
+            if ($outline->method !== null && $consumers === []) {
+                $lines[] = \sprintf('No application class calls %s: an entry point%s.', $this->query->label($outline->method), $outline->routes === [] ? ' (no route found either: called by name, a hook, or dead)' : ', see its routes');
+            } else {
+                $lines[] = \sprintf(
+                    'Used by %d files outside the core. Application%s: %s%s.',
+                    $outline->consumerFiles,
+                    ' (links)',
+                    implode(', ', array_map(fn (string $class, int $links): string => $this->query->label($class) . ' ' . $links, array_keys($shownConsumers), $shownConsumers)),
+                    $more($consumers, $shownConsumers),
+                );
+            }
             if ($outline->tests !== []) {
                 $tests = $outline->tests;
                 $shownTests = self::limited($all, $tests, 4);
@@ -575,7 +594,7 @@ final class OutlineReport
             'topTests' => $outline->topTests,
             'uncovered' => $outline->uncovered,
             'unused' => array_keys($outline->unused),
-        ], \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+        ] + ($outline->method === null ? [] : ['method' => $outline->method, 'depths' => $outline->depths, 'hubs' => $outline->hubs]), \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
     }
 
     /**
