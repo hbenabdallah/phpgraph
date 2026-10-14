@@ -723,6 +723,15 @@ final class ImpactAnalysis
     }
 
     /**
+     * The controller of an action whose method is inherited (ActionRoutes): which controller the action belongs to,
+     * not a dependency. Only its handled_by method runs: else any method of the controller would reach the action.
+     */
+    private static function namesController(Edge $edge): bool
+    {
+        return $edge->relation === Relation::References && $edge->via() === 'controller';
+    }
+
+    /**
      * A route reached from its handler serves the change, unless the handler picks its work at run time: from a
      * locator of services (`tagged_locator`), or through an interface whose implementation the route's operation
      * chooses (`$payload->toQuery()`). Then only the routes naming a class the change reaches serve it: the operation
@@ -736,7 +745,7 @@ final class ImpactAnalysis
             return true;
         }
         foreach ($this->graph->incident($route) as $item) {
-            if ($item['forward'] && $item['edge']->relation === Relation::References && isset($reached[$item['other']])) {
+            if ($item['forward'] && $item['edge']->relation === Relation::References && !self::namesController($item['edge']) && isset($reached[$item['other']])) {
                 return true;
             }
         }
@@ -829,7 +838,7 @@ final class ImpactAnalysis
             $relation = $item['edge']->relation;
             // A closure run by a method (`$apply(...)`) depends on the code writing it, already its caller: the
             // method running every closure would else reach every use case passing one.
-            if (str_starts_with($item['edge']->via(), 'closure of ')) {
+            if (str_starts_with($item['edge']->via(), 'closure of ') || self::namesController($item['edge'])) {
                 continue;
             }
             if (!$item['forward'] && \in_array($relation, self::DEPENDENTS, true)) {
@@ -845,7 +854,7 @@ final class ImpactAnalysis
         // The routes naming the class of a changed method: an API Platform operation naming its use case.
         if (str_contains($id, '::')) {
             foreach ($this->graph->incident($this->classOf($id)) as $item) {
-                if (!$item['forward'] && $item['edge']->relation === Relation::References && $this->graph->node($item['other'])?->kind === NodeKind::Route) {
+                if (!$item['forward'] && $item['edge']->relation === Relation::References && !self::namesController($item['edge']) && $this->graph->node($item['other'])?->kind === NodeKind::Route) {
                     $dependents[] = [$item['other'], $item['edge'], $item['edge']->confidence, false, null];
                 }
             }

@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<action-mappings>
+  <action code='act' controller='_Achat/Ctrl' method='action'/>
+  <action code='imp' controller='_Achat/Ctrl' method='imprimer'/>
+  <action code='vue' controller='_Achat/Vue' method='__invoke'/>
+</action-mappings>

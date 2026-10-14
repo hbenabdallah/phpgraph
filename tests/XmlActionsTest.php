@@ -25,6 +25,8 @@ final class XmlActionsTest extends TestCase
 {
     private const FIXTURE = __DIR__ . '/Fixtures/xml-actions';
 
+    private const INHERITED = __DIR__ . '/Fixtures/xml-actions-inherited';
+
     private const SAVE = 'route:Framework/actions.xml#ACTION saveReservation';
 
     private const SHOW = 'route:Framework/actions.xml#ACTION showReservations';
@@ -86,6 +88,30 @@ final class XmlActionsTest extends TestCase
 
         self::assertStringContainsString('ACTION saveReservation → ReservationCTRL::saveReservation()', $presenter->outline('ReservationCTRL::saveReservation'));
         self::assertStringContainsString('ACTION showReservations → DefaultActionCTRL::showReservations()', $presenter->outline('ReservationCTRL'), 'an inherited method, the action of this controller');
+    }
+
+    public function testAnActionOfAnInheritedMethodIsReachedByThatMethodOnly(): void
+    {
+        $graph = (new GraphBuilder(readVendor: false))->build(self::INHERITED, [], null, null, ProjectConfig::load(self::INHERITED)->actions)->graph;
+        $query = new GraphQuery($graph, null, self::INHERITED);
+        $routes = static function (string $method) use ($query, $graph): array {
+            $node = $graph->node($method);
+            self::assertNotNull($node);
+
+            return array_values(array_filter(array_map(static fn ($impacted): string => $impacted->class, $query->impactOf($node)->classes), static fn (string $id): bool => str_starts_with($id, 'route:')));
+        };
+        $act = 'route:Framework/actions.xml#ACTION act';
+
+        self::assertSame(['route:Framework/actions.xml#ACTION imp'], $routes('Ctrl::imprimer'), 'not act: its method is Base::action(), the controller only names whose action it is');
+        self::assertSame([$act], $routes('Base::action'));
+        self::assertSame([$act], $routes('Base::autre'), 'through action()');
+        self::assertSame(['route:Framework/actions.xml#ACTION vue'], $routes('Vue::__invoke'), 'an invokable controller');
+        self::assertContains($act, array_map(static fn ($edge): string => $edge->source, array_filter(
+            $graph->edges(),
+            static fn ($edge): bool => $edge->target === 'Ctrl' && $edge->relation === Relation::References && $edge->via() === 'controller',
+        )), 'the edge stays, for the outline of the controller');
+        self::assertStringContainsString('ACTION act → Base::action()', (new TextPresenter($query))->outline('Base::action'));
+        self::assertStringNotContainsString('ACTION act', (new TextPresenter($query))->outline('Ctrl::imprimer'));
     }
 
     public function testTheConfigurationIsCheckedAndTheRoutingFileFingerprinted(): void

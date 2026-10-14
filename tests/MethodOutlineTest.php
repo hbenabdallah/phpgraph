@@ -81,6 +81,16 @@ final class MethodOutlineTest extends TestCase
         self::assertContains('purgeArchives($days)', $outline->facts['ReservationDAO']->signatures ?? []);
     }
 
+    public function testAMethodCalledFromItsOwnClassOnlyIsNoEntryPoint(): void
+    {
+        $presenter = new TextPresenter(new GraphQuery(self::graph(), null, self::FIXTURE));
+
+        $internal = $presenter->outline('A::interne');
+        self::assertStringNotContainsString('entry point', $internal);
+        self::assertStringContainsString('A::interne() is called only from its own class: publique().', $internal);
+        self::assertStringContainsString('No application class calls A::publique(): an entry point (no route found either', $presenter->outline('A::publique'), 'nothing calls it');
+    }
+
     public function testAClassOfManyMethodsPointsToTheOutlineOfOneOfThem(): void
     {
         $query = new GraphQuery(self::graph(), null, self::FIXTURE);

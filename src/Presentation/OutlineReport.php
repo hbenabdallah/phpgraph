@@ -306,8 +306,23 @@ final class OutlineReport
             $lines[] = '';
             $consumers = $outline->consumers;
             $shownConsumers = self::limited($all, $consumers, 8);
-            if ($outline->method !== null && $consumers === []) {
+            // No class outside the core calls the method: an entry point only when nothing calls it, its own class neither.
+            $callers = $outline->method === null ? [] : array_values(array_unique($outline->entries[$outline->method] ?? []));
+            if ($outline->method !== null && $consumers === [] && $callers === []) {
                 $lines[] = \sprintf('No application class calls %s: an entry point%s.', $this->query->label($outline->method), $outline->routes === [] ? ' (no route found either: called by name, a hook, or dead)' : ', see its routes');
+            } elseif ($outline->method !== null && $consumers === []) {
+                $class = explode('::', $outline->method)[0];
+                $own = array_filter($callers, static fn (string $caller): bool => explode('::', $caller)[0] === $class) === $callers;
+                $shown = $all ? $callers : \array_slice($callers, 0, self::ENTRIES);
+                $lines[] = \sprintf(
+                    '%s is called only from %s: %s%s.',
+                    $this->query->label($outline->method),
+                    $own ? 'its own class' : 'the core',
+                    implode(', ', array_map(fn (string $caller): string => $own
+                        ? substr($caller, (int) strrpos($caller, ':') + 1) . '()'
+                        : $this->query->label($caller), $shown)),
+                    $more($callers, $shown),
+                );
             } else {
                 $lines[] = \sprintf(
                     'Used by %d files outside the core. Application%s: %s%s.',
