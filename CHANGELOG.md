@@ -3,7 +3,7 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
-## Unreleased
+## 1.4.1 (2026-10-14)
 
 ### Added
 - `outline` of a class declaring 20 methods or more (a controller of fifty actions) opens with a line pointing to the
