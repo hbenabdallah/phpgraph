@@ -39,6 +39,14 @@ final class FeatureOutline
 
     private const MAX_DEPTH = MethodCone::DEPTH + 1;
 
+    /**
+     * A class named with this many methods or more is told to be outlined method by method. On a legacy project of
+     * 2,600 classes: 294 of them, the controllers of fifty actions and the DAOs of every table among them.
+     */
+    private const LARGE = 20;
+
+    private const ENTRIES = 5;
+
     private readonly Graph $graph;
 
     /** @var array<string, array<string, ClassFacts>|null> file => its classes' facts, null when unreadable */
@@ -222,7 +230,44 @@ final class FeatureOutline
             $topTests,
             $uncovered,
             $unused,
+            large: \count($named) === 1 ? $this->large($named[0]) : null,
         );
+    }
+
+    /**
+     * A class declaring many methods (a controller of fifty actions) mixes features: the outline of one of its methods
+     * follows only what it runs. Its entry points, the routed first, then those called by the most classes.
+     *
+     * @return ?array{class: string, methods: int, entries: array<string, array{routes: int, callers: int}>}
+     */
+    private function large(string $class): ?array
+    {
+        $methods = $this->methods($class);
+        if (\count($methods) < self::LARGE) {
+            return null;
+        }
+        $cone = new MethodCone($this->graph);
+        $entries = [];
+        foreach ($methods as $method) {
+            // Not its singleton's accessor nor its constructor: the class's plumbing.
+            $name = substr($method, (int) strrpos($method, ':') + 1);
+            if (MethodCone::isAccessor($method) || strcasecmp($name, '__construct') === 0 || strcasecmp($name, $this->query->label($class)) === 0) {
+                continue;
+            }
+            $routes = 0;
+            foreach ($this->graph->incident($method) as $item) {
+                if (!$item['forward'] && $item['edge']->relation === Relation::HandledBy && self::isRoute($item['other'])) {
+                    ++$routes;
+                }
+            }
+            $callers = $cone->callers($method);
+            if ($routes > 0 || $callers > 0) {
+                $entries[$method] = ['routes' => $routes, 'callers' => $callers];
+            }
+        }
+        uasort($entries, static fn (array $a, array $b): int => [$b['routes'], $b['callers']] <=> [$a['routes'], $a['callers']]);
+
+        return ['class' => $class, 'methods' => \count($methods), 'entries' => \array_slice($entries, 0, self::ENTRIES, true)];
     }
 
     private static function rank(Hint $hint, bool $isCaller): int

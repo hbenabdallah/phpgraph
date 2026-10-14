@@ -68,6 +68,27 @@ final class OutlineReport
                 $outline->sourcesRead ? ' and the sources' : ' (sources not found: no signatures nor hints)',
             ),
         ];
+        // A class of many methods mixes features: the outline of one of them follows only what it runs.
+        if ($section === null && $outline->large !== null) {
+            $large = $outline->large;
+            $class = $this->query->label($large['class']);
+            $example = array_key_first($large['entries']);
+            $lines[] = \sprintf(
+                '%s declares %d methods, several features mixed: outline one of them for what it runs only, e.g. outline "%s".%s',
+                $class,
+                $large['methods'],
+                $example === null ? $class . '::<method>' : $class . '::' . substr($example, (int) strrpos($example, ':') + 1),
+                $large['entries'] === [] ? '' : ' Its entry points: ' . implode(', ', array_map(
+                    static fn (string $method, array $entry): string => substr($method, (int) strrpos($method, ':') + 1) . '() ('
+                        . implode(', ', array_filter([
+                            $entry['routes'] > 0 ? \sprintf('%d route%s', $entry['routes'], $entry['routes'] > 1 ? 's' : '') : null,
+                            $entry['callers'] > 0 ? \sprintf('called by %d class%s', $entry['callers'], $entry['callers'] > 1 ? 'es' : '') : null,
+                        ])) . ')',
+                    array_keys($large['entries']),
+                    $large['entries'],
+                )) . '.',
+            );
+        }
 
         // At a glance: what an agent explaining the feature must not miss, before the details.
         $hints = $outline->hints;
@@ -594,7 +615,8 @@ final class OutlineReport
             'topTests' => $outline->topTests,
             'uncovered' => $outline->uncovered,
             'unused' => array_keys($outline->unused),
-        ] + ($outline->method === null ? [] : ['method' => $outline->method, 'depths' => $outline->depths, 'hubs' => $outline->hubs]), \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+        ] + ($outline->method === null ? [] : ['method' => $outline->method, 'depths' => $outline->depths, 'hubs' => $outline->hubs])
+            + ($outline->large === null ? [] : ['large' => $outline->large]), \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
     }
 
     /**

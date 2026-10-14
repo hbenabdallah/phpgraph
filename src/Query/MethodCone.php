@@ -120,7 +120,15 @@ final class MethodCone
      */
     public function isHub(string $method): bool
     {
-        return $this->callers($method) >= self::HUB || preg_match('/::(get)?instance$/i', $method) === 1;
+        return $this->callers($method) >= self::HUB || self::isAccessor($method);
+    }
+
+    /**
+     * A singleton's accessor, getInstance() or instance(): plumbing, nothing of a feature.
+     */
+    public static function isAccessor(string $method): bool
+    {
+        return preg_match('/::(get)?instance$/i', $method) === 1;
     }
 
     /**

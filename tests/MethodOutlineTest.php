@@ -81,6 +81,20 @@ final class MethodOutlineTest extends TestCase
         self::assertContains('purgeArchives($days)', $outline->facts['ReservationDAO']->signatures ?? []);
     }
 
+    public function testAClassOfManyMethodsPointsToTheOutlineOfOneOfThem(): void
+    {
+        $query = new GraphQuery(self::graph(), null, self::FIXTURE);
+        $outline = $query->outline('StockCTRL');
+
+        self::assertNotNull($outline);
+        self::assertSame(['class' => 'StockCTRL', 'methods' => 20, 'entries' => ['StockCTRL::moveStock' => ['routes' => 0, 'callers' => 1]]], $outline->large);
+        self::assertNull($query->outline('ReservationCTRL')?->large, 'a few methods: the class outline is the feature');
+        self::assertStringContainsString(
+            'StockCTRL declares 20 methods, several features mixed: outline one of them for what it runs only, e.g. outline "StockCTRL::moveStock". Its entry points: moveStock() (called by 1 class).',
+            (new TextPresenter($query))->outline('StockCTRL'),
+        );
+    }
+
     private function outline(): Outline
     {
         $outline = (new GraphQuery(self::graph(), null, self::FIXTURE))->outline('ReservationCTRL::saveNewReservation');

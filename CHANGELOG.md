@@ -3,6 +3,13 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## Unreleased
+
+### Added
+- `outline` of a class declaring 20 methods or more (a controller of fifty actions) opens with a line pointing to the
+  outline of one of its methods, and names its entry points: the routed ones first, then those called by the most
+  classes (not its singleton's accessor nor its constructor). JSON: `large`.
+
 ## 1.4.0 (2026-10-13)
 
 ### Added

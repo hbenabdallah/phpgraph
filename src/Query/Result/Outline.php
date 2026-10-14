@@ -33,6 +33,7 @@ final readonly class Outline
      * @param ?string                                                                                          $method   the method the topic names: the core is what it runs (MethodCone)
      * @param array<string, int>                                                                               $depths   with a method, the methods it runs => calls away from it
      * @param array<string, int>                                                                               $hubs     with a method, the hubs it reaches, not followed => application classes calling them
+     * @param ?array{class: string, methods: int, entries: array<string, array{routes: int, callers: int}>} $large the class named, when it declares many methods: its entry points, to outline one by one
      */
     public function __construct(
         public string $topic,
@@ -57,6 +58,7 @@ final readonly class Outline
         public ?string $method = null,
         public array $depths = [],
         public array $hubs = [],
+        public ?array $large = null,
     ) {
     }
 }
