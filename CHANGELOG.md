@@ -3,6 +3,15 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## 1.4.2 (2026-10-14)
+
+### Fixed
+- `impact_of`, and the routes and flow of `outline`: an action whose method is inherited from a base controller is
+  reached by that method only, no longer by every method of the controller it names (the `references` edge of
+  `via: controller` names whose action it is, it carries no change). On a legacy project, 13 actions of 2,515.
+- `outline` of a method called only from its own class (a private helper, a DAO's inner step) no longer calls it an
+  entry point: it names its callers, `X::m() is called only from its own class: a(), b()`.
+
 ## 1.4.1 (2026-10-14)
 
 ### Added
