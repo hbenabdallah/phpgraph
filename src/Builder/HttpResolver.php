@@ -19,6 +19,10 @@ use PhpGraph\Graph\Relation;
  *
  * A call is INFERRED when it goes through an HTTP client and its path is written in full; AMBIGUOUS when part of
  * the path is computed, when several routes match, or when only an absolute URL says it is an HTTP call.
+ *
+ * The path of a call is relative to the base URL its client is given (`Http::baseUrl()`, in the chain or in the
+ * method returning the client). A route restricted to a host (`Route::domain()`) is reached only by calls to that
+ * host: a call to another host is not linked, one whose host is unknown is AMBIGUOUS.
  */
 final class HttpResolver
 {
@@ -32,6 +36,9 @@ final class HttpResolver
     /** @var array<string, array{list<string>, list<string>, string}> route id => [methods, path segments, service] */
     private array $routes = [];
 
+    /** @var array<string, ?string> route id => the host it is restricted to */
+    private array $hosts = [];
+
     /** @var list<array{string, ?string, list<string>, bool, bool}> calls reaching no route: source, method, path segments, sure, in tests */
     private array $unmatched = [];
 
@@ -40,6 +47,8 @@ final class HttpResolver
         private readonly NameCanonicalizer $names,
         private readonly TypeResolver $types,
         private readonly ?ContainerServices $container = null,
+        /** @var array<string, string> method id => the base URL of the HTTP client it returns */
+        private readonly array $baseUrls = [],
     ) {
     }
 
@@ -57,6 +66,7 @@ final class HttpResolver
             if (!$this->graph->hasNode($id)) {
                 $this->graph->addNode(new Node($id, $route->label(), NodeKind::Route, $route->file, $route->line, $service === '' ? null : $service));
                 $this->routes[$id] = [$route->methods, $this->segments($route->path), $service];
+                $this->hosts[$id] = $route->host;
             }
 
             $class = $this->controllerClass($route, $service);
@@ -88,22 +98,25 @@ final class HttpResolver
                 continue;
             }
 
-            $matches = $this->matches($request);
+            [$path, $host, $literal] = $this->target($request);
+            $matches = $this->matches($request->httpMethod, $path, $host);
             $sameMethodless = [];
             // The path of a route, but not its method: the call means it, and would fail as written.
             if ($matches === [] && $request->httpMethod !== null) {
-                $sameMethodless = $this->matches($request, false);
+                $sameMethodless = $this->matches(null, $path, $host);
                 foreach (\array_slice($sameMethodless, 0, self::MAX_MATCHES) as $route) {
                     $this->graph->addEdge(new Edge($this->names->canonical($request->source), $route, Relation::Requests, Confidence::Ambiguous));
                 }
                 if ($sameMethodless !== [] && !$inTests) {
-                    $mismatches[] = \sprintf('%s %s, declared for %s', $request->httpMethod, $request->path, $this->graph->node($sameMethodless[0])->label ?? '?');
+                    $mismatches[] = \sprintf('%s %s, declared for %s', $request->httpMethod, $path, $this->graph->node($sameMethodless[0])->label ?? '?');
                 }
             }
-            $confidence = \count($matches) === 1 && $throughClient && $request->literal ? Confidence::Inferred : Confidence::Ambiguous;
+            // A route restricted to a host, called without one known: maybe another host.
+            $hostSure = $matches === [] || $this->hosts[$matches[0]] === null || ($host !== null && !str_contains($host, '*'));
+            $confidence = \count($matches) === 1 && $throughClient && $literal && $hostSure ? Confidence::Inferred : Confidence::Ambiguous;
             $source = $this->names->canonical($request->source);
             if ($matches === [] && $sameMethodless === []) {
-                $this->unmatched[] = [$source, $request->httpMethod, $this->segments($request->path), $throughClient && $request->literal, $inTests];
+                $this->unmatched[] = [$source, $request->httpMethod, $this->segments($path), $throughClient && $literal, $inTests];
             }
             foreach (\array_slice($matches, 0, self::MAX_MATCHES) as $route) {
                 $this->graph->addEdge(new Edge($source, $route, Relation::Requests, $confidence));
@@ -199,16 +212,51 @@ final class HttpResolver
     }
 
     /**
-     * Routes whose method and path match: `{id}` in a route and `*` in a call match any segment.
+     * The path a call reaches, from the root of its host, the host when known, and whether the path is written in
+     * full: relative to the base URL its client is given, unless the call names an absolute URL.
+     *
+     * @return array{string, ?string, bool}
+     */
+    private function target(PendingRequest $request): array
+    {
+        $base = $request->base;
+        if ($base === null && $request->receiver?->member !== null && !$request->receiver->isProperty && $request->receiver->receiver !== null) {
+            // The client a method of the project returns: `$this->client()->get('/labels')`.
+            $class = $this->types->resolve($request->receiver->receiver);
+            $method = $class === null ? null : $this->types->findMethod($class, strtolower($request->receiver->member));
+            $base = $method === null ? null : $this->baseUrls[$method] ?? null;
+        }
+        if ($request->absolute || $base === null) {
+            return [$request->path, $request->host, $request->literal];
+        }
+        if (preg_match('#^[a-z][a-z0-9+.-]*://([^/:?\#]*)[^/?\#]*([^?\#]*)#i', $base, $match) === 1) {
+            return [RouteFact::normalizePath($match[2] . '/' . $request->path), strtolower($match[1]), $request->literal && !str_contains($match[2], '*')];
+        }
+        // A base computed at runtime (`config('services.billing.url')`): its host and path are unknown.
+        if (str_starts_with($base, '*')) {
+            return [$request->path, null, false];
+        }
+
+        return [RouteFact::normalizePath($base . '/' . $request->path), null, $request->literal];
+    }
+
+    /**
+     * Routes whose method, path and host match: `{id}` in a route and `*` in a call match any segment; a route
+     * restricted to a host is not reached by a call to another one.
+     *
+     * @param ?string $method null for any
      *
      * @return list<string> route ids
      */
-    private function matches(PendingRequest $request, bool $sameMethod = true): array
+    private function matches(?string $method, string $path, ?string $host): array
     {
-        $segments = $this->segments($request->path);
+        $segments = $this->segments($path);
         $matches = [];
         foreach ($this->routes as $id => [$methods, $routeSegments]) {
-            if ($sameMethod && $request->httpMethod !== null && $methods !== [] && !\in_array($request->httpMethod, $methods, true)) {
+            if ($method !== null && $methods !== [] && !\in_array($method, $methods, true)) {
+                continue;
+            }
+            if (!self::hostMatches($this->hosts[$id] ?? null, $host)) {
                 continue;
             }
             if (\count($routeSegments) !== \count($segments)) {
@@ -231,6 +279,29 @@ final class HttpResolver
     private function placeholders(string $route): int
     {
         return \count(array_filter($this->routes[$route][1], static fn (string $segment): bool => str_contains($segment, '{')));
+    }
+
+    /**
+     * A route for any host, a call to an unknown host, or the same host: `{account}.example.com` and `*` match any
+     * label.
+     */
+    private static function hostMatches(?string $route, ?string $call): bool
+    {
+        if ($route === null || $call === null || $route === '*' || $call === '*') {
+            return true;
+        }
+        $labels = explode('.', $route);
+        $callLabels = explode('.', $call);
+        if (\count($labels) !== \count($callLabels)) {
+            return false;
+        }
+        foreach ($labels as $index => $label) {
+            if (!self::segmentMatches($label, $callLabels[$index])) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public static function segmentMatches(string $route, string $call): bool

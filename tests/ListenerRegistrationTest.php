@@ -44,6 +44,23 @@ final class ListenerRegistrationTest extends TestCase
         self::assertTrue($this->hasEdge($graph, 'App\OrderShipped', 'App\Audit::record', Relation::HandledBy, Confidence::Inferred));
     }
 
+    public function testLaravelSubscribers(): void
+    {
+        $graph = $this->buildProject([
+            'app/Subscribers.php' => 'namespace App; use Illuminate\Events\Dispatcher; class DocumentReady {} class ArrayReady {} class Login {} class Logout {}'
+                . ' class DocumentSubscriber { public function onReady(DocumentReady $event): void {} public function onArrayReady(ArrayReady $event): void {}'
+                . ' public function subscribe(Dispatcher $events): void { $events->listen(DocumentReady::class, $this->onReady(...)); $events->listen(ArrayReady::class, [$this, "onArrayReady"]); } }'
+                . ' class UserSubscriber { public function onLogin(Login $event): void {} public function onLogout(Logout $event): void {}'
+                . ' public function subscribe(Dispatcher $events): array { return [Login::class => "onLogin", Logout::class => "onLogout"]; } }'
+                . ' class LegacySubscriber { public function onLogout($event): void {} public function subscribe($events): void { $events->listen(Logout::class, [self::class, "onLogout"]); } }',
+        ])->graph;
+
+        self::assertTrue($this->hasEdge($graph, 'App\DocumentReady', 'App\DocumentSubscriber::onReady', Relation::HandledBy, Confidence::Inferred), 'a first-class callable');
+        self::assertTrue($this->hasEdge($graph, 'App\ArrayReady', 'App\DocumentSubscriber::onArrayReady', Relation::HandledBy, Confidence::Inferred), 'an array callable');
+        self::assertTrue($this->hasEdge($graph, 'App\Login', 'App\UserSubscriber::onLogin', Relation::HandledBy, Confidence::Extracted), 'the map subscribe() returns');
+        self::assertTrue($this->hasEdge($graph, 'App\Logout', 'App\LegacySubscriber::onLogout', Relation::HandledBy), 'an untyped dispatcher in subscribe()');
+    }
+
     public function testWordPressHooks(): void
     {
         $result = $this->buildProject([

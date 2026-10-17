@@ -18,6 +18,8 @@ final readonly class RouteFact
      * @param list<string> $references other classes the declaration names (an API Platform resource, its input, output...)
      * @param bool         $byFramework handled by the framework itself when no controller is named (API Platform with Doctrine)
      * @param ?string      $loader     the route loader adding its prefix to the path (`api_platform`), null for none
+     * @param ?string      $host       the host it is restricted to, `{account}.example.com` (Laravel Route::domain()),
+     *                                 null for any
      */
     public function __construct(
         public array $methods,
@@ -30,6 +32,7 @@ final readonly class RouteFact
         public array $references = [],
         public bool $byFramework = false,
         public ?string $loader = null,
+        public ?string $host = null,
     ) {
     }
 
@@ -80,6 +83,7 @@ final readonly class RouteFact
             $this->references,
             $this->byFramework,
             $this->loader,
+            $this->host,
         );
     }
 

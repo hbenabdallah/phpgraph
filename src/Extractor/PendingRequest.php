@@ -15,6 +15,9 @@ final readonly class PendingRequest
      * @param string    $path        path pattern without scheme nor host: `/orders/*`
      * @param bool      $literal     the whole path is written in the code
      * @param bool      $absolute    the URL starts with a scheme: an HTTP call whatever the receiver
+     * @param ?string   $host        the host of an absolute URL, `*` where computed
+     * @param ?string   $base        the base URL the call chain sets, `Http::baseUrl('https://api.example.com/v2')`:
+     *                               the path is relative to it
      */
     public function __construct(
         public string $source,
@@ -24,6 +27,8 @@ final readonly class PendingRequest
         public string $path,
         public bool $literal,
         public bool $absolute,
+        public ?string $host = null,
+        public ?string $base = null,
     ) {
     }
 }

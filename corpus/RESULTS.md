@@ -6,15 +6,15 @@ phpgraph could not type, the main target of type inference work. Arrows compare 
 
 | Project | Files | Failed | Duplicates | Classes | Methods | Edges | Vendor files read | Seconds | Memory MB |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4179 | 110 | 0.55 | 28 |
-| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140422 | 614 | 9.92 | 656 |
-| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 217519 | 717 | 14.35 | 698 |
-| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 186668 | 607 | 14.90 | 628 |
+| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4181 | 110 | 0.55 | 28 |
+| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140426 | 614 | 13.57 | 656 |
+| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 217500 | 717 | 14.92 | 700 |
+| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 186668 | 607 | 14.40 | 628 |
 | ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6801 | 64 | 0.73 | 36 |
-| bookstack | 1513 | 0 | 0 | 698 | 4076 | 22826 | 380 | 4.00 | 148 |
-| wordpress | 1899 | 0 | 50 | 840 | 7580 | 42372 | 0 | 6.91 | 165 |
-| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 110 | 0.51 | 38 |
-| art-gallery | 266 | 0 | 0 | 140 | 148 | 1692 | 94 | 0.69 | 46 |
+| bookstack | 1513 | 0 | 0 | 698 | 4076 | 22826 | 380 | 3.90 | 148 |
+| wordpress | 1899 | 0 | 50 | 840 | 7580 | 42369 | 0 | 6.72 | 165 |
+| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 110 | 0.70 | 38 |
+| art-gallery | 266 | 0 | 0 | 140 | 148 | 1692 | 94 | 0.76 | 46 |
 | ticket-booking | 366 | 0 | 0 | 291 | 737 | 5021 | 217 | 0.76 | 32 |
 | stayhub | 260 | 0 | 0 | 112 | 323 | 2029 | 152 | 1.47 | 52 |
 
@@ -101,7 +101,7 @@ Routes and the controllers handling them; HTTP calls of application code reachin
 | akeneo-pim | 0 | 464 | 386 | 2 | 0 | 3 | 0 | 0 | 0 |
 | prestashop | 0 | 774 | 773 | 1 | 0 | 0 | 0 | 0 | 0 |
 | ecotone-quickstart | 47 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| bookstack | 0 | 340 | 340 | 0 | 0 | 0 | 0 | 0 | 0 |
+| bookstack | 0 | 342 | 340 | 2 | 0 | 0 | 0 | 0 | 0 |
 | wordpress | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | laravel-rabbitmq-microservices | 3 | 10 | 8 | 0 | 0 | 0 | 0 | 0 | 0 |
 | art-gallery | 5 | 39 | 35 | 0 | 0 | 1 | 0 | 0 | 1 |
@@ -152,12 +152,12 @@ Handlers and sends linked to their message class, by confidence; then what could
 | Project | Handlers EXTRACTED | INFERRED | AMBIGUOUS | Sends INFERRED | AMBIGUOUS | Untyped sends | Sent, no handler | Handled, never sent | Contracts between services |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | php-ddd-example | 13 | 1 | 0 | 7 | 0 | 7 | 1 | 7 | 0 |
-| sylius | 139 | 1 | 1 | 61 | 7 | 4 | 13 | 85 | 0 |
-| akeneo-pim | 184 | 54 | 5 | 192 | 0 | 5 | 35 | 95 | 0 |
+| sylius | 139 | 2 | 1 | 61 | 7 | 4 | 13 | 86 | 0 |
+| akeneo-pim | 184 | 54 | 5 | 184 | 0 | 5 | 35 | 100 | 0 |
 | prestashop | 547 | 493 | 25 | 240 | 0 | 9 | 4 | 93 | 0 |
 | ecotone-quickstart | 193 | 0 | 0 | 201 | 0 | 1 | 2 | 62 | 150 |
 | bookstack | 0 | 1 | 0 | 1 | 2 | 0 | 0 | 0 | 0 |
-| wordpress | 0 | 1195 | 0 | 3235 | 27 | 330 | 2192 | 184 | 0 |
+| wordpress | 0 | 1195 | 0 | 3232 | 27 | 330 | 2192 | 184 | 0 |
 | laravel-rabbitmq-microservices | 0 | 9 | 0 | 4 | 0 | 0 | 0 | 1 | 4 |
 | art-gallery | 0 | 0 | 0 | 0 | 0 | 16 | 0 | 0 | 0 |
 | ticket-booking | 22 | 0 | 0 | 22 | 0 | 0 | 3 | 2 | 12 |

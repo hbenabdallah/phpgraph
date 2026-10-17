@@ -9,11 +9,11 @@
         "classLike": 295,
         "methods": 770,
         "external": 123,
-        "edges": 4179,
+        "edges": 4181,
         "vendorFilesRead": 110,
         "edgesByConfidence": {
             "EXTRACTED": 3212,
-            "INFERRED": 959,
+            "INFERRED": 961,
             "AMBIGUOUS": 8
         },
         "calls": {
@@ -121,12 +121,12 @@
         "classLike": 4449,
         "methods": 23781,
         "external": 904,
-        "edges": 140422,
+        "edges": 140426,
         "vendorFilesRead": 614,
         "edgesByConfidence": {
             "EXTRACTED": 107737,
-            "INFERRED": 32340,
-            "AMBIGUOUS": 345
+            "INFERRED": 32343,
+            "AMBIGUOUS": 346
         },
         "calls": {
             "total": 102601,
@@ -155,7 +155,7 @@
         "bus": {
             "handlers": {
                 "EXTRACTED": 139,
-                "INFERRED": 1,
+                "INFERRED": 2,
                 "AMBIGUOUS": 1
             },
             "sends": {
@@ -176,7 +176,7 @@
                 "channel:sylius.carts.pre_remove",
                 "channel:sylius.menu.admin.main"
             ],
-            "messagesNeverSentCount": 85,
+            "messagesNeverSentCount": 86,
             "messagesNeverSent": [
                 "Sylius\\Bundle\\AdminBundle\\Command\\CreateAdminUser",
                 "Sylius\\Bundle\\ApiBundle\\Command\\Account\\ChangePaymentMethod",
@@ -239,7 +239,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 9.92,
+        "seconds": 13.57,
         "peakMemoryMb": 656
     },
     {
@@ -252,11 +252,11 @@
         "classLike": 8447,
         "methods": 38595,
         "external": 888,
-        "edges": 217519,
+        "edges": 217500,
         "vendorFilesRead": 717,
         "edgesByConfidence": {
             "EXTRACTED": 155411,
-            "INFERRED": 60457,
+            "INFERRED": 60438,
             "AMBIGUOUS": 1651
         },
         "calls": {
@@ -290,7 +290,7 @@
                 "AMBIGUOUS": 5
             },
             "sends": {
-                "INFERRED": 192
+                "INFERRED": 184
             },
             "untypedSends": 5,
             "messagesWithoutHandlerCount": 35,
@@ -306,7 +306,7 @@
                 "Akeneo\\Tool\\Bundle\\MeasureBundle\\Event\\MeasurementFamilyCreated",
                 "Akeneo\\Tool\\Bundle\\MeasureBundle\\Event\\MeasurementFamilyDeleted"
             ],
-            "messagesNeverSentCount": 95,
+            "messagesNeverSentCount": 100,
             "messagesNeverSent": [
                 "Akeneo\\Catalogs\\ServiceAPI\\Command\\CreateCatalogCommand",
                 "Akeneo\\Catalogs\\ServiceAPI\\Command\\DeleteCatalogCommand",
@@ -369,8 +369,8 @@
             "contextPairs": 13,
             "layerFirst": false
         },
-        "seconds": 14.35,
-        "peakMemoryMb": 698
+        "seconds": 14.92,
+        "peakMemoryMb": 700
     },
     {
         "name": "prestashop",
@@ -493,7 +493,7 @@
             "contextPairs": 293,
             "layerFirst": true
         },
-        "seconds": 14.9,
+        "seconds": 14.4,
         "peakMemoryMb": 628
     },
     {
@@ -613,7 +613,7 @@
         "filesParsed": 1513,
         "filesFailed": 0,
         "duplicates": 0,
-        "nodes": 6965,
+        "nodes": 6967,
         "classLike": 698,
         "methods": 4076,
         "external": 325,
@@ -664,12 +664,12 @@
             "contracts": 0
         },
         "http": {
-            "routes": 340,
+            "routes": 342,
             "routesWithHandler": 340,
             "requests": 0,
             "requestsToProject": 0,
             "requestsToServices": 0,
-            "routesToDependencies": 0,
+            "routesToDependencies": 2,
             "methodMismatchCount": 0,
             "methodMismatches": [],
             "routesToMissingControllers": 0,
@@ -702,7 +702,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 4,
+        "seconds": 3.9,
         "peakMemoryMb": 148
     },
     {
@@ -715,11 +715,11 @@
         "classLike": 840,
         "methods": 7580,
         "external": 117,
-        "edges": 42372,
+        "edges": 42369,
         "vendorFilesRead": 0,
         "edgesByConfidence": {
             "EXTRACTED": 19124,
-            "INFERRED": 21878,
+            "INFERRED": 21875,
             "AMBIGUOUS": 1370
         },
         "calls": {
@@ -751,7 +751,7 @@
                 "INFERRED": 1195
             },
             "sends": {
-                "INFERRED": 3235,
+                "INFERRED": 3232,
                 "AMBIGUOUS": 27
             },
             "untypedSends": 330,
@@ -822,7 +822,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 6.91,
+        "seconds": 6.72,
         "peakMemoryMb": 165
     },
     {
@@ -921,7 +921,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.51,
+        "seconds": 0.7,
         "peakMemoryMb": 38
     },
     {
@@ -1016,7 +1016,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.69,
+        "seconds": 0.76,
         "peakMemoryMb": 46
     },
     {

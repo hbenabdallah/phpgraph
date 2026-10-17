@@ -275,6 +275,38 @@ final class HttpTest extends TestCase
         self::assertTrue($this->hasEdge($graph, 'App\Client::order', 'route:routes/api.php#POST /api/orders', Relation::Requests, Confidence::Inferred));
     }
 
+    public function testLaravelViewAndRedirectRoutes(): void
+    {
+        $result = $this->buildProject([
+            'routes/web.php' => 'use Illuminate\Support\Facades\Route; Route::view("/about", "about"); Route::redirect("/here", "/there");',
+        ]);
+
+        self::assertSame(['ANY /here', 'GET /about'], $this->routes($result->graph));
+        self::assertSame(2, $result->http->routesToDependencies, 'Laravel handles them itself');
+    }
+
+    public function testACallToAnotherHostDoesNotReachARouteOfADomain(): void
+    {
+        $result = $this->buildProject([
+            'app/RedirectController.php' => 'namespace App; class RedirectController { public function redirect(): void {} public function show(): void {} }',
+            'routes/web.php' => 'use Illuminate\Support\Facades\Route; Route::domain("app.example.com")->group(function () { Route::get("/{path?}", [App\RedirectController::class, "redirect"]); });'
+                . ' Route::group(["domain" => "{account}.example.com"], function () { Route::get("/labels/{id}", [App\RedirectController::class, "show"]); });',
+            'app/ExternalApi.php' => 'namespace App; use Illuminate\Http\Client\PendingRequest; use Illuminate\Support\Facades\Http; class ExternalApi { private string $base = "https://api.vendor.example/v2";'
+                . ' public function request(): PendingRequest { return Http::baseUrl($this->base); }'
+                . ' public function labels(): void { $this->request()->get("/labels"); }'
+                . ' public function label(): void { Http::baseUrl("https://api.vendor.example")->get("/labels/1"); }'
+                . ' public function mine(): void { Http::get("https://shop.example.com/labels/1"); }'
+                . ' public function anywhere(): void { Http::baseUrl(config("services.labels"))->get("/labels/1"); } }',
+        ]);
+        $graph = $result->graph;
+
+        self::assertFalse($this->hasEdge($graph, 'App\ExternalApi::labels', 'route:routes/web.php#GET /{path?}', Relation::Requests), 'another host, and /v2/labels');
+        self::assertFalse($this->hasEdge($graph, 'App\ExternalApi::label', 'route:routes/web.php#GET /labels/{id}', Relation::Requests), 'another host');
+        self::assertTrue($this->hasEdge($graph, 'App\ExternalApi::mine', 'route:routes/web.php#GET /labels/{id}', Relation::Requests, Confidence::Inferred), 'the host of the domain');
+        self::assertTrue($this->hasEdge($graph, 'App\ExternalApi::anywhere', 'route:routes/web.php#GET /labels/{id}', Relation::Requests, Confidence::Ambiguous), 'a host computed at runtime');
+        self::assertSame(0, $result->http->methodMismatchCount);
+    }
+
     public function testCallsThatAreNotHttpAreIgnored(): void
     {
         $graph = $this->buildProject([

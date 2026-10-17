@@ -74,13 +74,16 @@ final class BusResolver
      */
     public function resolve(array $handlers, array $dispatches): BusStats
     {
-        // Methods sending to a bus: a call to one of them is a send too, `$this->dispatch(new PlaceOrder())` in a
-        // controller whose dispatch() forwards to the command bus.
+        // Methods sending to a bus what they are given: a call to one of them is a send too, `$this->dispatch(new
+        // PlaceOrder())` in a controller whose dispatch() forwards to the command bus, `dispatch(string $event, ...)`
+        // naming the event. Not a method sending a message of its own: Invoice::send($config) dispatching
+        // SendInvoiceJob($this, $config), a handler called directly that dispatches its own event.
         $resolved = [];
         $forwarders = [];
         foreach ($dispatches as $index => [$dispatch]) {
             $resolved[$index] = $this->sendConfidence($dispatch);
-            if ($resolved[$index] === Confidence::Inferred) {
+            $ownJob = $dispatch->staticClass !== null && $this->isSelfDispatching($this->names->canonical($dispatch->staticClass));
+            if ($resolved[$index] === Confidence::Inferred && $dispatch->passesParameter && !$ownJob) {
                 $forwarders[$this->names->canonical($dispatch->source)] = true;
             }
         }

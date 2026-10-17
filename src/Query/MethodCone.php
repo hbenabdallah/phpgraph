@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpGraph\Query;
 
 use PhpGraph\Builder\TestFiles;
+use PhpGraph\Graph\Confidence;
 use PhpGraph\Graph\Graph;
 use PhpGraph\Graph\NodeKind;
 use PhpGraph\Graph\Relation;
@@ -13,7 +14,8 @@ use PhpGraph\Graph\Relation;
  * What a method runs: the methods it calls, transitively and nearest first, a few calls deep. A method called by many
  * classes is a hub (a singleton's getInstance(), a context, a bean's set()): listed with its callers counted, not
  * followed, and its class joins only through another of its methods; so is a singleton's getInstance(). An interface or abstract method leads to its
- * implementations when few, and an instantiated class to its constructor.
+ * implementations when few, and an instantiated class to its constructor. A call guessed from a unique method name
+ * (AMBIGUOUS, an untyped receiver) is followed too, and what only such calls reach is told apart: it may be wrong.
  */
 final class MethodCone
 {
@@ -40,25 +42,30 @@ final class MethodCone
     }
 
     /**
-     * @return array{methods: array<string, int>, calls: array<string, list<string>>, hubs: array<string, int>, classes: list<string>}
-     *                                                                                                                                   the methods run, with their depth; who calls whom among them; the hubs called, with their callers; the classes, nearest first
+     * @return array{methods: array<string, int>, calls: array<string, list<string>>, hubs: array<string, int>, classes: list<string>, guesses: array<string, list<string>>, guessed: list<string>}
+     *                                                                                                                                   the methods run, with their depth; who calls whom among them; the hubs called, with their callers; the classes, nearest first;
+     *                                                                                                                                   the calls guessed (caller => callees); the methods only guesses reach
      */
     public function of(string $start): array
     {
         $methods = [$start => 0];
         $calls = [];
         $hubs = [];
+        $guesses = [];
         $classes = [$this->classOf($start) => true];
         for ($frontier = [$start], $depth = 1; $frontier !== [] && $depth <= self::DEPTH; ++$depth) {
             $next = [];
             foreach ($frontier as $method) {
-                foreach ($this->steps($method) as $callee) {
+                foreach ($this->steps($method) as $callee => $guess) {
                     $class = $this->classOf($callee);
                     if ($this->isHub($callee)) {
                         $hubs[$callee] = $this->callers($callee);
                         continue;
                     }
                     $calls[$method][] = $callee;
+                    if ($guess) {
+                        $guesses[$method][] = $callee;
+                    }
                     if (isset($methods[$callee])) {
                         continue;
                     }
@@ -75,13 +82,33 @@ final class MethodCone
         foreach ($calls as $method => $callees) {
             $calls[$method] = array_values(array_unique(array_filter($callees, static fn (string $callee): bool => isset($methods[$callee]))));
         }
+        foreach ($guesses as $method => $callees) {
+            $guesses[$method] = array_values(array_unique(array_filter($callees, static fn (string $callee): bool => isset($methods[$callee]))));
+        }
         arsort($hubs);
+
+        // The methods reached by calls read in the code, the rest only through a guess.
+        $sure = [$start => true];
+        for ($frontier = [$start]; $frontier !== [];) {
+            $next = [];
+            foreach ($frontier as $method) {
+                foreach ($calls[$method] ?? [] as $callee) {
+                    if (!isset($sure[$callee]) && !\in_array($callee, $guesses[$method] ?? [], true)) {
+                        $sure[$callee] = true;
+                        $next[] = $callee;
+                    }
+                }
+            }
+            $frontier = $next;
+        }
 
         return [
             'methods' => $methods,
             'calls' => array_filter($calls),
             'hubs' => $hubs,
             'classes' => array_map('strval', array_keys($classes)),
+            'guesses' => array_filter($guesses),
+            'guessed' => array_map('strval', array_keys(array_diff_key($methods, $sure))),
         ];
     }
 
@@ -89,16 +116,23 @@ final class MethodCone
      * The methods a method calls in the application, the constructors of the classes it instantiates, and the
      * implementations of an interface or abstract method (when it declares nothing to run itself), when few.
      *
-     * @return list<string>
+     * @return array<string, bool> callee => whether the call is a guess (AMBIGUOUS)
      */
     private function steps(string $method): array
     {
         $steps = [];
+        $guesses = [];
+        $sure = [];
         $implementations = [];
         foreach ($this->graph->incident($method) as $item) {
             $edge = $item['edge'];
             if ($item['forward'] && $edge->relation === Relation::Calls && !str_starts_with($edge->via(), 'closure of ')) {
                 $steps[] = $item['other'];
+                if ($edge->confidence === Confidence::Ambiguous) {
+                    $guesses[$item['other']] = true;
+                } else {
+                    $sure[$item['other']] = true;
+                }
             } elseif ($item['forward'] && $edge->relation === Relation::Instantiates) {
                 $constructor = $this->constructor($item['other']);
                 if ($constructor !== null) {
@@ -112,7 +146,13 @@ final class MethodCone
             array_push($steps, ...$implementations);
         }
 
-        return array_values(array_unique(array_filter($steps, fn (string $id): bool => $this->isApplication($id))));
+        $found = [];
+        foreach (array_filter($steps, fn (string $id): bool => $this->isApplication($id)) as $step) {
+            // Called both ways: the call read in the code is enough.
+            $found[$step] = isset($guesses[$step]) && !isset($sure[$step]);
+        }
+
+        return $found;
     }
 
     /**

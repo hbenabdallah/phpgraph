@@ -20,6 +20,8 @@ use PhpGraph\Query\Result\ImpactedClass;
  * Walks method by method, so a class is reached only through the methods that really use the change; a class that
  * depends on the changed one as a whole (subclass, property type) has all its methods followed.
  *
+ * - A handler is reached by what sends its message (`dispatches`, then `handled_by`): the use case dispatching
+ *   PlaceOrder depends on PlaceOrderHandler.
  * - A method is also reached through the interface or parent method it implements: the callers of
  *   `OrderRepository::save` may run `DbalOrderRepository::save` (INFERRED, the call is resolved at runtime).
  * - A method reading a property the changed method writes depends on it (`reads_state_of`): its callers are listed as
@@ -849,6 +851,14 @@ final class ImpactAnalysis
             } elseif (!$item['forward'] && $relation === Relation::HandledBy && $this->graph->node($item['other'])?->kind === NodeKind::Route) {
                 // The routes a changed controller serves: the entry points affected. Listed, nothing depends on them.
                 $dependents[] = [$item['other'], $item['edge'], $item['edge']->confidence, false, null];
+            } elseif (!$item['forward'] && $relation === Relation::HandledBy) {
+                // A changed handler: what sends its message (or to its channel) runs it. Not the message itself, nor
+                // what only builds it.
+                foreach ($this->graph->incident($item['other']) as $send) {
+                    if (!$send['forward'] && $send['edge']->relation === Relation::Dispatches) {
+                        $dependents[] = [$send['other'], $send['edge'], $this->weakest($item['edge']->confidence, $send['edge']->confidence), true, null];
+                    }
+                }
             }
         }
         // The routes naming the class of a changed method: an API Platform operation naming its use case.

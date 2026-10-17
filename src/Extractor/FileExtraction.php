@@ -69,6 +69,8 @@ final readonly class FileExtraction
      * @param array<string, array<string, array{string, int}>> $templateBinders callable id => how a call binds the
      *                                             templates of the callable (DocTypeResolver::TEMPLATE_BINDERS)
      * @param array<string, string> $casts "Class::attribute" => the class an Eloquent cast gives the attribute
+     * @param array<string, string> $baseUrls method id => the base URL of the HTTP client it returns, `*` where
+     *                                             computed: `return Http::baseUrl($this->apiUrl);`
      */
     public function __construct(
         public array $nodes,
@@ -107,6 +109,7 @@ final readonly class FileExtraction
         public array $callableParameters = [],
         public array $templateBinders = [],
         public array $casts = [],
+        public array $baseUrls = [],
     ) {
     }
 }

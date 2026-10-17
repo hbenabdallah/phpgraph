@@ -42,6 +42,9 @@ final class RouteExtractor
     /** @var list<string> path prefixes of the enclosing Laravel route groups */
     private array $prefixes = [];
 
+    /** @var list<?string> hosts of the enclosing Laravel route groups, `Route::domain('admin.example.com')` */
+    private array $hosts = [];
+
     /**
      * @param list<string> $prefixes
      */
@@ -134,14 +137,16 @@ final class RouteExtractor
         return $this->loaderPrefixes;
     }
 
-    public function pushPrefix(string $prefix): void
+    public function pushPrefix(string $prefix, ?string $host = null): void
     {
         $this->prefixes[] = $prefix;
+        $this->hosts[] = $host;
     }
 
     public function popPrefix(): void
     {
         array_pop($this->prefixes);
+        array_pop($this->hosts);
     }
 
     /**
@@ -162,7 +167,7 @@ final class RouteExtractor
 
     /**
      * Laravel: Route::get('/orders', [OrderController::class, 'index']), Route::match(['GET', 'POST'], ...),
-     * Route::resource('photos', PhotoController::class).
+     * Route::resource('photos', PhotoController::class), Route::view('/about', 'about').
      *
      * @param array<AstNode> $args
      * @param \Closure(Name): ?string $resolve
@@ -200,6 +205,9 @@ final class RouteExtractor
         [$methods, $pathArg, $handlerArg] = match ($verb) {
             'match' => [$this->literals($values[0]->value ?? null), $values[1] ?? null, $values[2] ?? null],
             'any' => [[], $values[0] ?? null, $values[1] ?? null],
+            // Handled by the framework: Route::view('/about', 'about'), Route::redirect('/here', '/there').
+            'view' => [['GET'], $values[0] ?? null, null],
+            'redirect', 'permanentredirect' => [[], $values[0] ?? null, null],
             default => \in_array($verb, self::HTTP_VERBS, true) ? [[strtoupper($verb)], $values[0] ?? null, $values[1] ?? null] : [null, null, null],
         };
         $path = $this->literal($pathArg?->value);
@@ -208,7 +216,7 @@ final class RouteExtractor
         }
 
         [$controller, $action] = $this->laravelHandler($handlerArg?->value, $resolve);
-        $this->addLaravelRoute(array_map('strtoupper', $methods), $path, $controller, $action, $line);
+        $this->addLaravelRoute(array_map('strtoupper', $methods), $path, $controller, $action, $line, \in_array($verb, ['view', 'redirect', 'permanentredirect'], true));
     }
 
     public function onRequest(PendingRequest $request): void
@@ -240,12 +248,22 @@ final class RouteExtractor
     /**
      * The path pattern of a URL expression, `*` for what is computed: "$base/orders/$id" gives `/orders/*`.
      *
-     * @return array{path: string, literal: bool, absolute: bool}|null null when it does not look like a URL or a path
+     * @return array{path: string, literal: bool, absolute: bool, host: ?string}|null null when it does not look like a URL or a path
      */
     public static function urlPattern(Expr $url): ?array
     {
-        $pattern = self::pattern($url);
+        return self::urlOf(self::pattern($url));
+    }
+
+    /**
+     * The path pattern of a URL written as a pattern, `*` for what is computed.
+     *
+     * @return array{path: string, literal: bool, absolute: bool, host: ?string}|null
+     */
+    public static function urlOf(string $pattern): ?array
+    {
         $absolute = preg_match('#^[a-z][a-z0-9+.-]*://#i', $pattern) === 1;
+        $host = $absolute && preg_match('#^[a-z][a-z0-9+.-]*://([^/:?\#]*)#i', $pattern, $match) === 1 ? strtolower($match[1]) : null;
         $path = $absolute ? (preg_replace('#^[a-z][a-z0-9+.-]*://[^/]*#i', '', $pattern) ?? '') : $pattern;
         // A base URL held in a variable: "$base/orders" is `*/orders`.
         if (str_starts_with($path, '*/')) {
@@ -256,7 +274,7 @@ final class RouteExtractor
             return null;
         }
 
-        return ['path' => RouteFact::normalizePath($path), 'literal' => !str_contains($path, '*'), 'absolute' => $absolute];
+        return ['path' => RouteFact::normalizePath($path), 'literal' => !str_contains($path, '*'), 'absolute' => $absolute, 'host' => $host];
     }
 
     /**
@@ -278,9 +296,11 @@ final class RouteExtractor
     /**
      * @param list<string> $methods
      */
-    private function addLaravelRoute(array $methods, string $path, ?string $controller, ?string $action, int $line): void
+    private function addLaravelRoute(array $methods, string $path, ?string $controller, ?string $action, int $line, bool $byFramework = false): void
     {
-        $this->routes[] = new RouteFact($methods, RouteFact::normalizePath(implode('/', $this->prefixes) . '/' . $path), $controller, $action, $this->file, $line);
+        // The innermost group naming a host.
+        $host = array_reduce($this->hosts, static fn (?string $outer, ?string $inner): ?string => $inner ?? $outer);
+        $this->routes[] = new RouteFact($methods, RouteFact::normalizePath(implode('/', $this->prefixes) . '/' . $path), $controller, $action, $this->file, $line, byFramework: $byFramework, host: $host);
     }
 
     /**

@@ -3,6 +3,29 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## Unreleased
+
+### Fixed
+- `impact_of` of a message handler reaches what sends its message: changing `ImportJob::handle()` or
+  `PlaceOrderHandler::__invoke()` affects the code dispatching them, and the routes above it. Not the message class,
+  nor the code only building it.
+- `outline` of a method keeps a guess a guess: a call linked by a method name declared once (AMBIGUOUS, an untyped
+  receiver) is listed at a glance as such, marked `guessed:` in the flow, and a class reached only through guesses is
+  marked `guessed` in the core. JSON: `guesses`, `guessed`.
+- HTTP calls are relative to the base URL of their client (Laravel's `Http::baseUrl()`, in the chain or in the method
+  returning the client, from a string or a property holding one): a call to `https://api.vendor.example/v2` +
+  `/labels` is a call to `/v2/labels` on that host. A route of a `Route::domain()` group is no longer reached by a call
+  to another host, and is reached AMBIGUOUS by a call whose host is unknown.
+- A wrapper of the bus is a method passing one of its parameters on to a send (`dispatch(object $command)`,
+  `dispatch(string $event, ...)` naming the event); a method sending a message of its own is not (`Invoice::send()`
+  dispatching `SendInvoiceJob($this, $config)`, a handler called directly that dispatches its event): its callers no
+  longer send what they pass it. Corpus: 19 such false `dispatches` gone on Akeneo, 3 on WordPress, none lost.
+- Laravel subscribers: `$events->listen(Event::class, $this->onEvent(...))` or `[$this, 'onEvent']` on the events
+  dispatcher (untyped in `subscribe($events)` too), and the event => method map `subscribe()` may return, link the
+  event to its method. First-class callables are read wherever a listener is registered.
+- A listener of a union of events, `handle(Accepted|Rejected|Sent $event)`, handles each of them (Sylius: 3 events of `CatalogPromotionStateChangedListener`).
+- `Route::view()` and `Route::redirect()` are routes, handled by the framework.
+
 ## 1.4.2 (2026-10-14)
 
 ### Fixed

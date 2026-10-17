@@ -174,6 +174,8 @@ final class GraphBuilder
         $constants = [];
         $routes = [];
         $requests = [];
+        /** @var array<string, string> $baseUrls */
+        $baseUrls = [];
         $containerDefinitions = [];
         $containerTags = [];
         $containerArguments = [];
@@ -296,7 +298,12 @@ final class GraphBuilder
                     $request->path,
                     $request->literal,
                     $request->absolute,
+                    $request->host,
+                    $request->base,
                 ), $isTest];
+            }
+            foreach ($extraction->baseUrls as $method => $url) {
+                $baseUrls[$id($method)] ??= $url;
             }
             foreach ($extraction->constants as $constant => $value) {
                 $constants[$this->qualifiedMember($constant, $id)] ??= $value;
@@ -323,6 +330,7 @@ final class GraphBuilder
                     $dispatch->message?->map($id),
                     $dispatch->hasArgument,
                     $key($dispatch->routingKey),
+                    $dispatch->passesParameter,
                 ), $isTest];
             }
         }
@@ -432,7 +440,7 @@ final class GraphBuilder
             }
         }
         $routes = $this->withLoaderPrefixes($routes, $routePrefixes);
-        $httpResolver = new HttpResolver($graph, $names, $types, $container);
+        $httpResolver = new HttpResolver($graph, $names, $types, $container, $baseUrls);
         $http = $httpResolver->resolve($routes, $requests);
         $apiSchemas = (new ApiSchemas($graph))->resolve($root, $schemaFiles, $httpResolver->routes(), $serviceMap, $httpResolver->unmatchedRequests());
         $actionStats = (new ActionRoutes($graph, $names, $types, $serviceMap))->resolve($root, $actions, $excludePatterns);

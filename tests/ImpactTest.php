@@ -181,6 +181,24 @@ final class ImpactTest extends TestCase
         self::assertTrue($this->hasEdge($graph, 'file:config/services.php', 'App\Wiring::wire', Relation::Calls), 'a static call outside any method: the file calls it');
     }
 
+    public function testAChangedHandlerReachesWhatSendsItsMessageAndItsRoutes(): void
+    {
+        $graph = $this->buildProject([
+            'src/PlaceOrder.php' => 'namespace App; final class PlaceOrder {}',
+            'src/PlaceOrderHandler.php' => 'namespace App; use Symfony\Component\Messenger\Attribute\AsMessageHandler; #[AsMessageHandler] final class PlaceOrderHandler { public function __invoke(PlaceOrder $command): void {} }',
+            'src/OrderController.php' => 'namespace App; use Symfony\Component\Routing\Attribute\Route; final class OrderController { public function __construct(private \Symfony\Component\Messenger\MessageBusInterface $bus) {}'
+                . ' #[Route("/orders", methods: ["POST"])] public function place(): void { $this->bus->dispatch(new PlaceOrder()); } }',
+            'src/OrderFactory.php' => 'namespace App; final class OrderFactory { public function make(): PlaceOrder { return new PlaceOrder(); } }',
+        ])->graph;
+        $impact = $this->impact($graph, 'App\PlaceOrderHandler::__invoke');
+
+        self::assertArrayHasKey('App\OrderController', $impact, 'it sends the message the handler handles');
+        self::assertSame(Confidence::Inferred, $impact['App\OrderController']->confidence);
+        self::assertArrayHasKey('route:src/OrderController.php#POST /orders', $impact);
+        self::assertArrayNotHasKey('App\PlaceOrder', $impact, 'the message does not depend on its handler');
+        self::assertArrayNotHasKey('App\OrderFactory', $impact, 'building the message sends nothing');
+    }
+
     public function testTheCompactReport(): void
     {
         $presenter = new TextPresenter(new GraphQuery($this->buildProject([

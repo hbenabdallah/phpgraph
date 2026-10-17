@@ -551,7 +551,7 @@ final class TextPresenter
                 '- %d routes (attributes, API Platform resources, Laravel route files, Symfony YAML and PHP routing files): %d handled by a controller of the project%s%s.',
                 $http->routes,
                 $http->routesWithHandler,
-                $http->routesToDependencies > 0 ? \sprintf(', %d by a controller of a dependency (or API Platform itself)', $http->routesToDependencies) : '',
+                $http->routesToDependencies > 0 ? \sprintf(', %d by a controller of a dependency (or the framework itself: API Platform, Laravel view and redirect routes)', $http->routesToDependencies) : '',
                 $unresolved > 0 ? \sprintf(', %d without one: no controller (a route only the front end uses), a closure, or a controller service no configuration of the project declares (generated at runtime by a bundle)', $unresolved) : '',
             );
             if ($http->routesToMissingControllers > 0) {

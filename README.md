@@ -167,7 +167,7 @@ Every relation carries a confidence level:
 | | Handlers and listeners | Messages sent | HTTP |
 |---|---|---|---|
 | **Symfony** | `#[AsMessageHandler]`, `#[AsEventListener]`, tags `messenger.message_handler` and `kernel.event_listener` (YAML, XML, PHP, `_instanceof`), `getSubscribedEvents()`, `addListener()` | `MessageBusInterface`, `EventDispatcherInterface`, named events | `#[Route]` (paths in class constants too), YAML and PHP routing files, controllers named by service id; API Platform `#[ApiResource]` and operation attributes, handled by their provider, processor or controller |
-| **Laravel** | `$listen`, `Event::listen()`, jobs (`ShouldQueue`, `Dispatchable`) | `event()`, `dispatch()`, facades, `Job::dispatch()` | `Route::get/post/…`, `match`, `resource`, groups with `prefix`, `routes/api.php`; `Http::` client |
+| **Laravel** | `$listen`, `Event::listen()`, subscribers (`$events->listen()` in `subscribe()`, or the map it returns), listeners of a union of events (`handle(Accepted\|Rejected $event)`), jobs (`ShouldQueue`, `Dispatchable`) | `event()`, `dispatch()`, facades, `Job::dispatch()` | `Route::get/post/…`, `match`, `resource`, `view`, `redirect`, groups with `prefix` and `domain`, `routes/api.php`; `Http::` client, relative to its `baseUrl()` |
 | **Ecotone** | `#[CommandHandler]`, `#[EventHandler]`, `#[QueryHandler]`, routing keys | `CommandBus`, `EventBus`, `DistributedBus`, `sendWithRouting()` | |
 | **PrestaShop** | `#[AsCommandHandler]`, `#[AsQueryHandler]` | `CommandBusInterface::handle()` | YAML routing |
 | **WordPress** | `add_action()`, `add_filter()` | `do_action()`, `apply_filters()` | |

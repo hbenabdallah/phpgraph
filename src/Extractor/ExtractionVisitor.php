@@ -89,6 +89,12 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<string, string> */
     private array $parameterTypes = [];
 
+    /** @var array<string, string> method id => the base URL of the client it returns, `Http::baseUrl(...)` */
+    private array $baseUrls = [];
+
+    /** @var array<string, string> property of the current class => the string it holds by default */
+    private array $stringProperties = [];
+
     /** @var list<array{id: string, tag: ?string, service: ?string, locator?: bool}> */
     private array $serviceArguments = [];
 
@@ -267,6 +273,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->callableParameters,
             $this->templateBinders,
             $this->casts,
+            $this->baseUrls,
         );
     }
 
@@ -319,6 +326,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         if ($node instanceof Stmt\Property) {
             foreach ($this->typeNames($node->type) as $type) {
                 $this->reference($this->owner(), $type);
+            }
+            foreach ($node->props as $property) {
+                if ($property->default instanceof AstNode\Scalar\String_) {
+                    $this->stringProperties[$property->name->toString()] = $property->default->value;
+                }
             }
 
             return null;
@@ -394,6 +406,13 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         if ($node instanceof Stmt\Return_ && $node->expr !== null && $this->closureNodes !== []) {
             $this->closureReturned[end($this->closureNodes)][] = $this->typeOf($node->expr);
         }
+        // A method returning a client with its base URL set: the calls made on what it returns are relative to it.
+        if ($node instanceof Stmt\Return_ && $node->expr !== null && $this->closureNodes === [] && $this->currentCallable !== null) {
+            $base = $this->baseUrl($node->expr);
+            if ($base !== null) {
+                $this->baseUrls[$this->currentCallable] = $base;
+            }
+        }
 
         if ($node instanceof Expr\Closure || $node instanceof Expr\ArrowFunction) {
             $this->onClosureReturn($node);
@@ -411,6 +430,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->currentParent = null;
             $this->propertyTypes = [];
             $this->classAttributes = [];
+            $this->stringProperties = [];
         }
 
         if ($node instanceof Stmt\ClassMethod || $node instanceof Stmt\Function_) {
@@ -657,7 +677,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             if ($firstParameter !== null) {
                 $this->parameterTypes[$id] = $firstParameter;
             }
-            if ($node instanceof Stmt\ClassMethod && $this->currentClass !== null && strtolower($node->name->toString()) === 'getsubscribedevents') {
+            // Symfony's getSubscribedEvents(), Laravel's subscribe(Dispatcher $events) returning event => method.
+            $subscriber = strtolower($node->name->toString()) === 'subscribe' && \count($node->params) === 1
+                && preg_match('/(^|\\\\)Dispatcher$/', $firstParameter ?? 'Dispatcher') === 1;
+            if ($node instanceof Stmt\ClassMethod && $this->currentClass !== null && (strtolower($node->name->toString()) === 'getsubscribedevents' || $subscriber)) {
                 $this->onSubscribedEvents($node);
             }
             $returnType = $this->declaredReturnType($node);
@@ -693,6 +716,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                     $this->attributes($node->attrGroups),
                     $this->classAttributes,
                     array_values(array_map(fn (AstNode\Param $param): ?string => $this->singleType($param->type), $node->params)),
+                    array_values(array_filter(explode('|', $this->nativeUnion($node->params[0]->type ?? null) ?? ''))),
                 );
             }
         }
@@ -1076,6 +1100,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                         $first === null ? null : $this->typeOf($first->value),
                         true,
                         $this->stringValue($candidate->value),
+                        $this->passesParameter($args),
                     ));
 
                     return;
@@ -1100,7 +1125,25 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $message,
             $first !== null || $key !== null,
             $key,
+            $this->passesParameter($args),
         ));
+    }
+
+    /**
+     * One of the first arguments of a send (its message, its name, its routing key) is a parameter of the caller.
+     *
+     * @param array<AstNode> $args
+     */
+    private function passesParameter(array $args): bool
+    {
+        foreach ([0, 1, 2] as $position) {
+            $argument = $this->argumentNode($args, $position);
+            if ($argument !== null && $this->untouchedParameter($argument->value) !== null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -1441,7 +1484,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $node instanceof Expr\FuncCall => \in_array($name, ['add_action', 'add_filter'], true),
             $node instanceof Expr\StaticCall => $name === 'listen' && $node->class instanceof Name
                 && \in_array($this->resolveName($node->class), ['Event', 'Illuminate\\Support\\Facades\\Event'], true),
-            default => $name === 'addlistener',
+            // Laravel's `$events->listen()` on the events dispatcher, in a subscriber's subscribe($events) when untyped.
+            default => $name === 'addlistener' || ($name === 'listen' && $this->isEventsDispatcher($node->var)),
         };
         $event = $this->argumentNode($node->args, 0);
         $listener = $this->argumentNode($node->args, 1);
@@ -1457,14 +1501,32 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
     }
 
+    private function isEventsDispatcher(Expr $receiver): bool
+    {
+        $class = $this->typeOf($receiver)?->className;
+        if ($class !== null) {
+            return preg_match('/(^|\\\\)Dispatcher$/', $class) === 1;
+        }
+
+        return $receiver instanceof Expr\Variable && $this->currentCallable !== null && str_ends_with(strtolower($this->currentCallable), '::subscribe');
+    }
+
     /**
      * What a callable names: [$this, 'm'], [__CLASS__, 'm'], [Listener::class, 'm'], 'Listener::m', 'a_function',
-     * Listener::class or new Listener() (its handle() or __invoke()), [$typed, 'm']. Closures name nothing.
+     * Listener::class or new Listener() (its handle() or __invoke()), [$typed, 'm'], $this->m(...), Listener::m(...).
+     * Closures name nothing.
      *
      * @return array{?string, ?string} the class (or function) and the method id, null for handle()/__invoke()
      */
     private function callable(Expr $callable): array
     {
+        if (($callable instanceof Expr\MethodCall || $callable instanceof Expr\StaticCall) && $callable->isFirstClassCallable() && $callable->name instanceof Identifier) {
+            $class = $callable instanceof Expr\MethodCall
+                ? $this->typeOf($callable->var)?->className
+                : ($callable->class instanceof Name ? $this->resolveName($callable->class) : null);
+
+            return $class === null ? [null, null] : [$class, $class . '::' . $callable->name->toString()];
+        }
         if ($callable instanceof Expr\Array_ && \count($callable->items) === 2) {
             $target = $callable->items[0]->value;
             $method = $callable->items[1]->value;
@@ -1672,11 +1734,15 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         $name = strtolower($node->name->toString());
         if ($name === 'group') {
             $prefix = '';
+            $host = null;
             $first = $this->argumentNode($node->args, 0);
             if ($first !== null && $first->value instanceof Expr\Array_) {
                 foreach ($first->value->items as $item) {
                     if ($item->key instanceof AstNode\Scalar\String_ && $item->key->value === 'prefix' && $item->value instanceof AstNode\Scalar\String_) {
                         $prefix = $item->value->value;
+                    }
+                    if ($item->key instanceof AstNode\Scalar\String_ && $item->key->value === 'domain') {
+                        $host = $item->value instanceof AstNode\Scalar\String_ ? strtolower($item->value->value) : '*';
                     }
                 }
             }
@@ -1685,9 +1751,13 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                 if ($call->name instanceof Identifier && strtolower($call->name->toString()) === 'prefix' && $argument?->value instanceof AstNode\Scalar\String_) {
                     $prefix = $argument->value->value . '/' . $prefix;
                 }
+                // Route::domain('admin.example.com'): a host computed at runtime (config) is unknown, `*`.
+                if ($call->name instanceof Identifier && strtolower($call->name->toString()) === 'domain' && $argument !== null) {
+                    $host = $argument->value instanceof AstNode\Scalar\String_ ? strtolower($argument->value->value) : '*';
+                }
             }
             $this->routeGroups[] = spl_object_id($node);
-            $this->http->pushPrefix(trim($prefix, '/'));
+            $this->http->pushPrefix(trim($prefix, '/'), $host);
 
             return;
         }
@@ -1719,7 +1789,36 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $url['path'],
             $url['literal'],
             $url['absolute'],
+            $url['host'],
+            $node instanceof Expr\MethodCall ? $this->baseUrl($node->var) : null,
         ));
+    }
+
+    /**
+     * The base URL a call chain sets, Laravel's `Http::baseUrl('https://api.example.com/v2')->...`: a string, a
+     * property of `$this` holding one by default, a concatenation of both; `*` where computed (`config(...)`).
+     */
+    private function baseUrl(Expr $chain): ?string
+    {
+        for (; $chain instanceof Expr\MethodCall || $chain instanceof Expr\StaticCall; $chain = $chain instanceof Expr\MethodCall ? $chain->var : null) {
+            $argument = $this->argumentNode($chain->args, 0);
+            if ($chain->name instanceof Identifier && strtolower($chain->name->toString()) === 'baseurl' && $argument !== null) {
+                return $this->urlValue($argument->value);
+            }
+        }
+
+        return null;
+    }
+
+    private function urlValue(Expr $expr): string
+    {
+        return match (true) {
+            $expr instanceof AstNode\Scalar\String_ => $expr->value,
+            $expr instanceof Expr\BinaryOp\Concat => $this->urlValue($expr->left) . $this->urlValue($expr->right),
+            $expr instanceof Expr\PropertyFetch && $expr->var instanceof Expr\Variable && $expr->var->name === 'this' && $expr->name instanceof Identifier
+                => $this->stringProperties[$expr->name->toString()] ?? '*',
+            default => '*',
+        };
     }
 
     private function isLaravelRouteChain(Expr\StaticCall|Expr\MethodCall $node): bool

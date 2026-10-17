@@ -111,6 +111,16 @@ final class OutlineReport
         if ($gaps && $outline->uncovered !== []) {
             $glance[] = '  No test touches: ' . implode(', ', array_map(fn (string $class): string => $this->query->label($class), $outline->uncovered)) . '.';
         }
+        // A guess may be wrong: an untyped receiver whose method name is declared once in the project.
+        if ($section === null && $outline->guesses !== []) {
+            $guesses = self::limited($all, $outline->guesses, self::LIST);
+            $glance[] = \sprintf(
+                '  Guessed calls (AMBIGUOUS: untyped receiver, linked by a method name declared once; check them in the code)%s: %s%s.',
+                $outline->guessed === [] ? '' : ', what only they reach is marked "guessed"',
+                implode('; ', array_map(fn (string $caller, array $callees): string => $this->query->label($caller) . ' → ' . $this->methodList($callees, 0), array_keys($guesses), $guesses)),
+                $more($outline->guesses, $guesses),
+            );
+        }
         if ($glance !== []) {
             $lines[] = '';
             $lines[] = $section === null ? 'At a glance:' : 'Gaps:';
@@ -246,7 +256,16 @@ final class OutlineReport
                 $lines[] = $outline->method === null ? '  Inside the core:' : '  Calls, nearest first:';
                 $inside = self::limited($all, $outline->inside, $outline->method === null ? self::INSIDE : self::HINTS);
                 foreach ($inside as $method => $callees) {
-                    $lines[] = \sprintf('    %s → %s', $this->query->label($method), $this->methodList($callees, $full ? 0 : 4));
+                    $guessed = $outline->guesses[$method] ?? [];
+                    $sure = array_values(array_diff($callees, $guessed));
+                    $lines[] = \sprintf(
+                        '    %s → %s',
+                        $this->query->label($method),
+                        implode('; ', array_filter([
+                            $sure === [] ? '' : $this->methodList($sure, $full ? 0 : 4),
+                            $guessed === [] ? '' : 'guessed: ' . $this->methodList($guessed, $full ? 0 : 4),
+                        ])),
+                    );
                 }
                 if (!$all && \count($outline->inside) > \count($inside)) {
                     $lines[] = \sprintf('    +%d more: section flow', \count($outline->inside) - \count($inside));
@@ -399,14 +418,14 @@ final class OutlineReport
         $node = $this->query->graph()->node($class);
         $label = $this->query->label($class);
         if ($facts === null) {
-            return [\sprintf('    %s (%s)', $label, $node->kind->value ?? 'class')];
+            return [\sprintf('    %s (%s%s)', $label, $node->kind->value ?? 'class', $this->isGuessed($class) ? '; guessed' : '')];
         }
         $kind = trim(implode(' ', $facts->modifiers) . ' ' . $facts->kind);
         $implemented = array_filter($this->query->graph()->incident($class), fn (array $item): bool => $item['forward'] && $item['edge']->relation === Relation::Implements && isset($this->outline->facts[$item['other']]));
         if ($implemented !== []) {
             $kind .= ', implements ' . implode(', ', array_map(fn (array $item): string => $this->query->label($item['other']), $implemented));
         }
-        $lines = [\sprintf('    %s (%s)%s', $label, $kind, $facts->summary === null ? '' : ' — ' . $facts->summary)];
+        $lines = [\sprintf('    %s (%s%s)%s', $label, $kind, $this->isGuessed($class) ? '; guessed' : '', $facts->summary === null ? '' : ' — ' . $facts->summary)];
         $details = [];
         if ($facts->cases !== []) {
             $details[] = 'cases ' . implode(', ', array_map(static fn (string $case, string $value): string => $value === '' ? $case : $case . ' = ' . $value, array_keys($facts->cases), $facts->cases));
@@ -425,6 +444,16 @@ final class OutlineReport
         }
 
         return $lines;
+    }
+
+    /**
+     * A class of a method's outline whose methods are all reached through guessed calls only.
+     */
+    private function isGuessed(string $class): bool
+    {
+        $methods = array_filter(array_keys($this->outline->depths), static fn (string $method): bool => explode('::', $method)[0] === $class);
+
+        return $methods !== [] && array_diff($methods, $this->outline->guessed) === [];
     }
 
     /**
@@ -630,7 +659,7 @@ final class OutlineReport
             'topTests' => $outline->topTests,
             'uncovered' => $outline->uncovered,
             'unused' => array_keys($outline->unused),
-        ] + ($outline->method === null ? [] : ['method' => $outline->method, 'depths' => $outline->depths, 'hubs' => $outline->hubs])
+        ] + ($outline->method === null ? [] : ['method' => $outline->method, 'depths' => $outline->depths, 'hubs' => $outline->hubs, 'guesses' => $outline->guesses, 'guessed' => $outline->guessed])
             + ($outline->large === null ? [] : ['large' => $outline->large]), \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
     }
 

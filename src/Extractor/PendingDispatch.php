@@ -21,6 +21,8 @@ final readonly class PendingDispatch
      * @param bool      $hasArgument    whether the call has a first argument at all
      * @param ?string   $routingKey     channel named by the call (`sendWithRouting('ticket.create', ...)`), or a class
      *                                  constant holding it: `const:Class::NAME`
+     * @param bool      $passesParameter one of its first arguments is a parameter of the caller, untouched: the
+     *                                  caller forwards what it is given, `dispatch(object $command)`
      */
     public function __construct(
         public string $source,
@@ -32,6 +34,7 @@ final readonly class PendingDispatch
         public ?TypeExpr $message,
         public bool $hasArgument,
         public ?string $routingKey = null,
+        public bool $passesParameter = false,
     ) {
     }
 }

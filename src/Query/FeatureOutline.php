@@ -439,6 +439,9 @@ final class FeatureOutline
             $start,
             $cone['methods'],
             $cone['hubs'],
+            null,
+            $cone['guesses'],
+            $cone['guessed'],
         );
     }
 

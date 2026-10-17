@@ -66,15 +66,18 @@ final class BusExtractor
      * @param list<array{name: string, handles: ?string, method: ?string, key: ?string, path: ?string, methods: list<string>}> $methodAttributes resolved attribute names
      * @param list<array{name: string, handles: ?string, method: ?string, key: ?string, path: ?string, methods: list<string>}> $classAttributes
      * @param list<?string>                                                 $parameterTypes   single class type of each parameter
+     * @param list<string>                                                  $firstUnion       the classes of a union first parameter,
+     *                                                                                        `Accepted|Rejected $event`: each is handled
      */
-    public function onMethod(string $class, string $methodId, string $methodName, array $methodAttributes, array $classAttributes, array $parameterTypes): void
+    public function onMethod(string $class, string $methodId, string $methodName, array $methodAttributes, array $classAttributes, array $parameterTypes, array $firstUnion = []): void
     {
         $lowerName = strtolower($methodName);
+        $messages = isset($parameterTypes[0]) ? [$parameterTypes[0]] : $firstUnion;
 
         foreach ($methodAttributes as $attribute) {
             if ($this->isHandlerAttribute($attribute['name'])) {
                 $key = preg_match(self::ROUTED_ATTRIBUTE, $this->shortName($attribute['name'])) === 1 ? $attribute['key'] : null;
-                $this->addHandler($class, $methodId, $attribute['handles'] ?? $parameterTypes[0] ?? null, HandlerFact::ATTRIBUTE, $key);
+                $this->addHandlers($class, $methodId, $attribute['handles'] === null ? $messages : [$attribute['handles']], HandlerFact::ATTRIBUTE, $key);
 
                 return;
             }
@@ -84,7 +87,7 @@ final class BusExtractor
             $handlerMethod = strtolower($attribute['method'] ?? '');
             $isHandlerMethod = $handlerMethod === '' ? \in_array($lowerName, self::HANDLER_METHODS, true) : $handlerMethod === $lowerName;
             if ($isHandlerMethod && $this->isHandlerAttribute($attribute['name'])) {
-                $this->addHandler($class, $methodId, $attribute['handles'] ?? $parameterTypes[0] ?? null, HandlerFact::ATTRIBUTE);
+                $this->addHandlers($class, $methodId, $attribute['handles'] === null ? $messages : [$attribute['handles']], HandlerFact::ATTRIBUTE);
 
                 return;
             }
@@ -94,8 +97,8 @@ final class BusExtractor
             return;
         }
 
-        if (($parameterTypes[0] ?? null) !== null) {
-            $this->addHandler($class, $methodId, $parameterTypes[0], HandlerFact::SHAPE);
+        if ($messages !== []) {
+            $this->addHandlers($class, $methodId, $messages, HandlerFact::SHAPE);
 
             return;
         }
@@ -192,6 +195,17 @@ final class BusExtractor
     {
         if ($message !== null || $routingKey !== null) {
             $this->handlers[] = new HandlerFact($class, $methodId, $message, $evidence, $routingKey);
+        }
+    }
+
+    /**
+     * @param list<string> $messages none for a handler of a routing key only
+     */
+    private function addHandlers(string $class, string $methodId, array $messages, string $evidence, ?string $routingKey = null): void
+    {
+        foreach ($messages === [] ? [null] : $messages as $index => $message) {
+            // The channel once, with the first message.
+            $this->addHandler($class, $methodId, $message, $evidence, $index === 0 ? $routingKey : null);
         }
     }
 }

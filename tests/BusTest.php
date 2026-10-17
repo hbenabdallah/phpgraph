@@ -109,6 +109,11 @@ final class BusTest extends TestCase
             'namespace App; class PlaceOrder {} interface CommandBus {} /** @var CommandBus $bus */ $bus = make(); $bus->send(new PlaceOrder());',
             'file:a.php', 'App\PlaceOrder', Relation::Dispatches, Confidence::Inferred,
         ];
+        yield 'Laravel listener of a union of events, each member' => [
+            'namespace App; class Accepted {} class Rejected {} class UpdateStatus { public function handle(Accepted|Rejected $event): void {} }'
+            . ' class Publish { public function __construct(private \Symfony\Component\Messenger\MessageBusInterface $bus) {} public function run(): void { $this->bus->dispatch(new Rejected()); } }',
+            'App\Rejected', 'App\UpdateStatus::handle', Relation::HandledBy, Confidence::Inferred,
+        ];
         yield 'Laravel job handled by its own handle method' => [
             'namespace Illuminate\Foundation\Bus { trait Dispatchable {} } namespace App { class ProcessPodcast { use \Illuminate\Foundation\Bus\Dispatchable; public function handle(): void {} } class Uploader { public function upload(): void { ProcessPodcast::dispatch(); } } }',
             'App\ProcessPodcast', 'App\ProcessPodcast::handle', Relation::HandledBy, Confidence::Inferred,
@@ -143,6 +148,12 @@ final class BusTest extends TestCase
         yield 'send of an abstract message type, that only says something is sent' => [
             'namespace App; interface Command {} class PlaceOrder implements Command {} class Bus { public function __construct(private \Symfony\Component\Messenger\MessageBusInterface $bus) {} public function dispatch(Command $command): void { $this->bus->dispatch($command); } }',
             'App\Bus::dispatch', 'App\Command', Relation::Dispatches,
+        ];
+        yield 'a method sending a job of its own does not send its parameter' => [
+            'namespace Illuminate\Foundation\Bus { trait Dispatchable {} } namespace App { class SendInvoiceConfig {} class SendInvoiceJob { use \Illuminate\Foundation\Bus\Dispatchable; public function __construct(public Invoice $invoice, public SendInvoiceConfig $config) {} }'
+            . ' class Invoice { public function send(SendInvoiceConfig $config): void { SendInvoiceJob::dispatch($this, $config); } }'
+            . ' class InvoiceController { public function send(Invoice $invoice): void { $invoice->send(new SendInvoiceConfig()); } } }',
+            'App\InvoiceController::send', 'App\SendInvoiceConfig', Relation::Dispatches,
         ];
         yield 'handler method with two parameters and no attribute' => [
             'namespace App; class Request {} class AuthMiddleware { public function handle(Request $request, \Closure $next): void {} }',

@@ -9,6 +9,7 @@ use PhpGraph\Graph\Graph;
 use PhpGraph\Presentation\TextPresenter;
 use PhpGraph\Query\GraphQuery;
 use PhpGraph\Query\Result\Outline;
+use PhpGraph\Tests\Support\TemporaryProject;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -16,6 +17,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class MethodOutlineTest extends TestCase
 {
+    use TemporaryProject;
+
     private const FIXTURE = __DIR__ . '/Fixtures/method-outline';
 
     private static ?Graph $graph = null;
@@ -28,6 +31,23 @@ final class MethodOutlineTest extends TestCase
         self::assertSame(['ReservationCTRL', 'ReservationDAO', 'DefaultActionCTRL'], $outline->core);
         self::assertSame(['Context::getDBconnection' => 21, 'SocieteDAO::getInstance' => 1], $outline->hubs, 'called by 20 classes and more, or a singleton\'s accessor: counted, not followed');
         self::assertSame(['ReservationCTRL::saveNewReservation' => 0, 'ReservationDAO::saveReservation' => 1, 'DefaultActionCTRL::addToForwardResponse' => 1, 'ReservationDAO::checkQuantity' => 2], $outline->depths);
+    }
+
+    public function testACallGuessedFromAMethodNameStaysAGuess(): void
+    {
+        $this->buildProject([
+            'src/GenerateFromUrl.php' => 'namespace App; class GenerateFromUrl { public function __construct(private Palette $palette) {} public function handle($brand): void { $brand->collect("colors"); $this->palette->build(); } }',
+            'src/Palette.php' => 'namespace App; class Palette { public function build(): void {} }',
+            'src/Unrelated.php' => 'namespace App; class Unrelated { public function collect(): array { return []; } }',
+        ]);
+        $graph = (new GraphBuilder())->build($this->root)->graph;
+        $text = (new TextPresenter(new GraphQuery($graph, null, $this->root)))->outline('App\GenerateFromUrl::handle');
+
+        self::assertStringContainsString('Guessed calls (AMBIGUOUS', $text);
+        self::assertStringContainsString('GenerateFromUrl::handle() → Unrelated::collect()', $text);
+        self::assertStringContainsString('Unrelated (class; guessed)', $text);
+        self::assertStringContainsString('Palette (class)', $text, 'a typed call is no guess');
+        self::assertStringContainsString('GenerateFromUrl::handle() → Palette::build(); guessed: Unrelated::collect()', $text);
     }
 
     public function testAParentClassShowsOnlyTheInheritedMethodsTheMethodCalls(): void
