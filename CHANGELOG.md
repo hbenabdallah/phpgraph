@@ -3,7 +3,7 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
-## Unreleased
+## 1.4.3 (2026-10-17)
 
 ### Fixed
 - `impact_of` of a message handler reaches what sends its message: changing `ImportJob::handle()` or
