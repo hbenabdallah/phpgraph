@@ -3,6 +3,19 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## 1.5.1 (2026-10-21)
+
+### Security
+- The Docker image and the executables run PHP 8.5.12, which fixes CVE-2026-109618 (GHSA-w8hw-w9fx-j79w, remote code
+  execution after an out-of-memory error); 1.5.0 and earlier shipped PHP 8.5.11. phpgraph runs PHP on the command line
+  and answers MCP over stdio, not the HTTP request parsing the advisory demonstrates the attack through, and removes the
+  memory limit by default, the mitigation the advisory recommends: the risk is low, the runtimes are updated all the
+  same. Installed with Composer or as a PHAR, phpgraph runs on your own PHP: update it to 8.2.35, 8.3.36, 8.4.27 or
+  8.5.12.
+- Building the image or an executable fails when its PHP is older than the minimum the build sets (`PHP_MINIMUM` in
+  the `Dockerfile` and in `tools/build-binary.sh`, raised with each PHP security release): an outdated base image or a
+  cached download can no longer ship.
+
 ## 1.5.0 (2026-10-21)
 
 ### Added

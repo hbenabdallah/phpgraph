@@ -14,6 +14,10 @@ set -euo pipefail
 SPC_VERSION=2.8.5
 # Opcache is left out: in the static runtime it crashes (segmentation fault, tested with static-php-cli 2.8).
 PHP_VERSION=8.5
+# The oldest PHP release a binary may ship: raise it with each PHP security release. Changing this script also renews
+# the downloads the CI caches (binaries.yml keys them on its hash), so the new release is fetched from php.net.
+# 8.5.12: CVE-2026-109618, remote code execution after an out-of-memory error (GHSA-w8hw-w9fx-j79w).
+PHP_MINIMUM=8.5.12
 # tokenizer and ctype for the parser, mbstring, dom and xml for the configuration files, phar to run the archive,
 # zlib and iconv for the dependencies; outside Windows, pcntl and posix for the console (signals, the current user).
 EXTENSIONS=ctype,dom,iconv,mbstring,phar,tokenizer,xml,zlib
@@ -80,6 +84,14 @@ retry() {
 retry "$spc" doctor --auto-fix
 retry "$spc" download --with-php="$PHP_VERSION" --for-extensions="$EXTENSIONS" --prefer-pre-built
 "$spc" build "$EXTENSIONS" --build-micro
+
+# The runtime built must not be older than PHP_MINIMUM: a cached or mirrored download could be.
+built=$(grep -ao 'X-Powered-By: PHP/[0-9.]*' "$micro" | head -1 | sed 's#.*PHP/##')
+if [ -z "$built" ] || [ "$(printf '%s\n%s\n' "$PHP_MINIMUM" "$built" | sort -V | head -1)" != "$PHP_MINIMUM" ]; then
+    echo "The runtime built is PHP ${built:-unknown}, older than $PHP_MINIMUM: refusing to ship it." >&2
+    exit 1
+fi
+echo "Runtime: PHP $built"
 
 # A PHAR appended to the micro runtime runs as the main script.
 cat "$micro" "$PHAR" > "$output"
