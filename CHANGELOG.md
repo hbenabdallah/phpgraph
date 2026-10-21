@@ -3,7 +3,7 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
-## Unreleased
+## 1.5.0 (2026-10-21)
 
 ### Added
 - Local variables follow the branches: after `if`/`elseif`/`else`, `switch`, `match`, `try`/`catch`, a ternary, `??`
@@ -15,13 +15,11 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
   declaring the method, instead of being dropped (native) or reduced to their first class (documented).
 - Fixtures with inline expectations, `tests/Fixtures/expectations/*.php`: `// @phpgraph-expect calls App\Foo::bar
   INFERRED` on the line of each call; a missing or an unexpected call fails, `@phpgraph-todo` marks a known gap.
-
 - A call narrows its arguments as its callable's docblock asserts, in the project or its dependencies:
   `@phpstan-assert`, `@psalm-assert`, `-if-true`, `-if-false`, a template bound by a `class-string` argument
   (`is_wp_error($result)`, `Assert::isInstanceOf($order, Order::class)`, `$this->assertInstanceOf(Order::class, $order)`).
 - Library providers (`src/Builder/Libraries`): a PSR-11 container's `get(Mailer::class)` is a Mailer. Eloquent's
   attributes moved there from `TypeResolver`, unchanged.
-
 - `phpgraph check` checks the project's own rules, `rules` in `phpgraph.yaml`, with the same baseline: who may depend
   on what (`dependency: Doctrine\`, `allow-from`, `deny-from`), what the classes a pattern selects must be (final,
   abstract, readonly, named, implementing, extending, using a trait, only some public methods), and that a message
@@ -46,12 +44,12 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 - A parameter without a native type is typed by a `@param` naming a single class (`@param WP_Error|null $error`); it
   was only with arguments or as a union.
 
-Corpus, call sites (INFERRED / AMBIGUOUS / unknown receiver): Sylius +299 / 0 / −2,407, Akeneo +1,119 / −75 / −1,050,
-PrestaShop +640 / −79 / −650, WordPress +1,092 / −454 / −631, BookStack +59 / −28 / −75; assertions and providers
-account for Sylius +78, Akeneo +313, PrestaShop +125, WordPress +58 of the INFERRED. No call site lost an
-INFERRED edge except to a more precise one (an `instanceof` narrowing `ValueInterface::getData()` to
-`OptionValue::getData()`), to AMBIGUOUS where another branch leaves the receiver unknown, or where the edge was wrong
-(the last assignment of an `if` read in its `else`).
+Corpus, call sites compared one by one with 1.4.3 (INFERRED / AMBIGUOUS / unknown receiver): Sylius +299 / −2 /
+−2,408, Akeneo +1,183 / −85 / −1,110, PrestaShop +642 / −79 / −652, WordPress +1,097 / −455 / −635, BookStack
++86 / −50 / −99. No call site lost an INFERRED edge except to a more precise one (an `instanceof` narrowing
+`ValueInterface::getData()` to `OptionValue::getData()`), to AMBIGUOUS where another branch leaves the receiver
+unknown, or where the edge was wrong (the last assignment of an `if` read in its `else`). Builds take 5 to 16 % longer
+(Sylius, Akeneo) and 3 to 5 % more memory.
 
 ## 1.4.3 (2026-10-17)
 

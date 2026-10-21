@@ -45,7 +45,7 @@ Format 2: `{"version": 2, "meta": {...}, "nodes": [...], "edges": [...]}`.
 
 - A node: `id`, `label`, `kind`, `file` (relative path or null), `line` (or null), `service` in a multi-service
   repository, and `modifiers` when it has some: `final`, `abstract`, `readonly` on a class; `protected` or `private`
-  (public otherwise), `static`, `abstract`, `final` on a method (unreleased).
+  (public otherwise), `static`, `abstract`, `final` on a method (since 1.5.0).
 - Node kinds: `file`, `class`, `interface`, `trait`, `enum`, `method`, `function`, `external`, `channel`, `route`,
   `operation` (since 1.2.0).
 - Node ids: `App\Domain\Order` for a class, `App\Domain\Order::place` for a method, `file:src/Order.php` for a file,
@@ -68,7 +68,7 @@ rebuilds a graph built by another version of phpgraph.
 
 - `phpgraph.yaml` at the project root: the keys `services` (a list of service directories) and `actions` (routing
   files of the project's own making: `file`, `element`, `code`, `controller`, `method`, `controller_file`,
-  `controller_class`, `target`, `forward`, `cited_in`), and `rules` (unreleased: `dependencies` with `name`,
+  `controller_class`, `target`, `forward`, `cited_in`), and `rules` (since 1.5.0: `dependencies` with `name`,
   `dependency`, `allow-from`, `deny-from`, `reason`; `structure` with `name`, `on`, `not-on`, `target`,
   `must-be-final`, `must-be-abstract`, `must-be-readonly`, `must-be-named`, `must-implement`, `must-extend`,
   `must-use-trait`, `only-public-methods`, `reason`; `handlers` with `name`, `own-context`, `shared`, `reason`).
