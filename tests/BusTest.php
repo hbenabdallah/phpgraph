@@ -68,6 +68,14 @@ final class BusTest extends TestCase
             'namespace App; class OrderShipped {} class Notifier { public function handle(OrderShipped $event): void {} } class Shipper { public function __construct(private \Symfony\Component\Messenger\MessageBusInterface $bus) {} public function ship(): void { $this->bus->dispatch(new OrderShipped()); } }',
             'App\OrderShipped', 'App\Notifier::handle', Relation::HandledBy, Confidence::Inferred,
         ];
+        yield 'send: each message of a union, one per branch' => [
+            'namespace App; class AddCurrency {} class AddUnofficialCurrency {} class Currencies { public function __construct(private \Symfony\Component\Messenger\MessageBusInterface $bus) {} public function create(bool $unofficial): void { if ($unofficial) { $command = new AddUnofficialCurrency(); } else { $command = new AddCurrency(); } $this->bus->dispatch($command); } }',
+            'App\Currencies::create', 'App\AddUnofficialCurrency', Relation::Dispatches, Confidence::Inferred,
+        ];
+        yield 'send: a message of a union a branch leaves unknown is a guess' => [
+            'namespace App; class AddCurrency {} class Currencies { public function __construct(private \Symfony\Component\Messenger\MessageBusInterface $bus) {} public function create($command): void { if (!$command) { $command = new AddCurrency(); } $this->bus->dispatch($command); } }',
+            'App\Currencies::create', 'App\AddCurrency', Relation::Dispatches, Confidence::Ambiguous,
+        ];
         yield 'name: XHandler with an untyped parameter handles X' => [
             'namespace App; class Pay {} class PayHandler { public function __invoke($command): void {} }',
             'App\Pay', 'App\PayHandler::__invoke', Relation::HandledBy, Confidence::Ambiguous,

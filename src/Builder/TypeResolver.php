@@ -88,6 +88,32 @@ final class TypeResolver
     }
 
     /**
+     * The classes a type may be: each member of a union, the class itself otherwise; and whether every member is
+     * known (no branch left it unknown).
+     *
+     * @return array{list<string>, bool}
+     */
+    public function classesOf(TypeExpr $type): array
+    {
+        $left = false;
+        $resolved = $this->resolveGeneric($type, $left);
+        if ($resolved === null) {
+            return [[], false];
+        }
+        $classes = [];
+        $complete = true;
+        foreach (GenericType::members($resolved) as $member) {
+            $base = GenericType::base($member);
+            if (GenericType::isClass($base)) {
+                $classes[] = $base;
+            }
+            $complete = $complete && $member !== GenericType::UNKNOWN;
+        }
+
+        return [array_values(array_unique($classes)), $complete];
+    }
+
+    /**
      * The classes a method may be called on: the members of a union declaring it, each declaration once (members
      * inheriting the same method give one). Complete when every member of the receiver is known; a branch leaving it
      * of unknown type makes it partial.

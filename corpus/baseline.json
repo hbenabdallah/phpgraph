@@ -9,27 +9,27 @@
         "classLike": 295,
         "methods": 770,
         "external": 123,
-        "edges": 4181,
+        "edges": 4182,
         "vendorFilesRead": 110,
         "edgesByConfidence": {
             "EXTRACTED": 3212,
-            "INFERRED": 961,
-            "AMBIGUOUS": 8
+            "INFERRED": 964,
+            "AMBIGUOUS": 6
         },
         "calls": {
             "total": 1346,
-            "inferred": 915,
-            "ambiguous": 8,
+            "inferred": 918,
+            "ambiguous": 6,
             "outsideProject": 408,
-            "unknownReceiver": 15,
+            "unknownReceiver": 14,
             "chainOutsideProject": 1
         },
         "applicationCalls": {
             "total": 666,
-            "inferred": 446,
-            "ambiguous": 3,
+            "inferred": 449,
+            "ambiguous": 1,
             "outsideProject": 210,
-            "unknownReceiver": 7,
+            "unknownReceiver": 6,
             "chainOutsideProject": 1
         },
         "testCalls": {
@@ -108,8 +108,8 @@
             "contextPairs": 14,
             "layerFirst": false
         },
-        "seconds": 0.55,
-        "peakMemoryMb": 28
+        "seconds": 0.77,
+        "peakMemoryMb": 30
     },
     {
         "name": "sylius",
@@ -121,36 +121,36 @@
         "classLike": 4449,
         "methods": 23781,
         "external": 904,
-        "edges": 140426,
-        "vendorFilesRead": 614,
+        "edges": 140717,
+        "vendorFilesRead": 636,
         "edgesByConfidence": {
             "EXTRACTED": 107737,
-            "INFERRED": 32343,
-            "AMBIGUOUS": 346
+            "INFERRED": 32636,
+            "AMBIGUOUS": 344
         },
         "calls": {
             "total": 102601,
-            "inferred": 23065,
-            "ambiguous": 34,
-            "outsideProject": 56038,
-            "unknownReceiver": 23464,
-            "chainOutsideProject": 22872
+            "inferred": 23364,
+            "ambiguous": 32,
+            "outsideProject": 58149,
+            "unknownReceiver": 21056,
+            "chainOutsideProject": 20689
         },
         "applicationCalls": {
             "total": 19687,
-            "inferred": 4600,
-            "ambiguous": 5,
-            "outsideProject": 14473,
-            "unknownReceiver": 609,
-            "chainOutsideProject": 308
+            "inferred": 4840,
+            "ambiguous": 4,
+            "outsideProject": 14509,
+            "unknownReceiver": 334,
+            "chainOutsideProject": 181
         },
         "testCalls": {
             "total": 82914,
-            "inferred": 18465,
-            "ambiguous": 29,
-            "outsideProject": 41565,
-            "unknownReceiver": 22855,
-            "chainOutsideProject": 22564
+            "inferred": 18524,
+            "ambiguous": 28,
+            "outsideProject": 43640,
+            "unknownReceiver": 20722,
+            "chainOutsideProject": 20508
         },
         "bus": {
             "handlers": {
@@ -162,7 +162,7 @@
                 "INFERRED": 61,
                 "AMBIGUOUS": 7
             },
-            "untypedSends": 4,
+            "untypedSends": 3,
             "messagesWithoutHandlerCount": 13,
             "messagesWithoutHandler": [
                 "Sylius\\Bundle\\UserBundle\\Event\\UserEvent",
@@ -239,8 +239,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 13.57,
-        "peakMemoryMb": 656
+        "seconds": 17.33,
+        "peakMemoryMb": 690
     },
     {
         "name": "akeneo-pim",
@@ -252,36 +252,36 @@
         "classLike": 8447,
         "methods": 38595,
         "external": 888,
-        "edges": 217500,
-        "vendorFilesRead": 717,
+        "edges": 218447,
+        "vendorFilesRead": 749,
         "edgesByConfidence": {
             "EXTRACTED": 155411,
-            "INFERRED": 60438,
-            "AMBIGUOUS": 1651
+            "INFERRED": 61455,
+            "AMBIGUOUS": 1581
         },
         "calls": {
             "total": 159034,
-            "inferred": 61455,
-            "ambiguous": 1697,
-            "outsideProject": 60650,
-            "unknownReceiver": 35232,
-            "chainOutsideProject": 11239
+            "inferred": 62638,
+            "ambiguous": 1612,
+            "outsideProject": 60662,
+            "unknownReceiver": 34122,
+            "chainOutsideProject": 11034
         },
         "applicationCalls": {
             "total": 33853,
-            "inferred": 17539,
-            "ambiguous": 220,
-            "outsideProject": 12858,
-            "unknownReceiver": 3236,
-            "chainOutsideProject": 1008
+            "inferred": 18540,
+            "ambiguous": 157,
+            "outsideProject": 12760,
+            "unknownReceiver": 2396,
+            "chainOutsideProject": 854
         },
         "testCalls": {
             "total": 125181,
-            "inferred": 43916,
-            "ambiguous": 1477,
-            "outsideProject": 47792,
-            "unknownReceiver": 31996,
-            "chainOutsideProject": 10231
+            "inferred": 44098,
+            "ambiguous": 1455,
+            "outsideProject": 47902,
+            "unknownReceiver": 31726,
+            "chainOutsideProject": 10180
         },
         "bus": {
             "handlers": {
@@ -292,7 +292,7 @@
             "sends": {
                 "INFERRED": 184
             },
-            "untypedSends": 5,
+            "untypedSends": 3,
             "messagesWithoutHandlerCount": 35,
             "messagesWithoutHandler": [
                 "Akeneo\\Category\\Api\\Event\\CategoryCreatedEvent",
@@ -365,12 +365,12 @@
         },
         "services": 0,
         "architecture": {
-            "layerViolations": 33,
+            "layerViolations": 32,
             "contextPairs": 13,
             "layerFirst": false
         },
-        "seconds": 14.92,
-        "peakMemoryMb": 700
+        "seconds": 21.73,
+        "peakMemoryMb": 726
     },
     {
         "name": "prestashop",
@@ -382,36 +382,36 @@
         "classLike": 7291,
         "methods": 32895,
         "external": 1094,
-        "edges": 186668,
-        "vendorFilesRead": 607,
+        "edges": 187189,
+        "vendorFilesRead": 638,
         "edgesByConfidence": {
             "EXTRACTED": 126837,
-            "INFERRED": 58449,
-            "AMBIGUOUS": 1382
+            "INFERRED": 59037,
+            "AMBIGUOUS": 1315
         },
         "calls": {
             "total": 116906,
-            "inferred": 64097,
-            "ambiguous": 1180,
-            "outsideProject": 47283,
-            "unknownReceiver": 4346,
-            "chainOutsideProject": 2307
+            "inferred": 64739,
+            "ambiguous": 1101,
+            "outsideProject": 47372,
+            "unknownReceiver": 3694,
+            "chainOutsideProject": 2141
         },
         "applicationCalls": {
             "total": 75968,
-            "inferred": 44353,
-            "ambiguous": 1025,
-            "outsideProject": 27604,
-            "unknownReceiver": 2986,
-            "chainOutsideProject": 1823
+            "inferred": 44815,
+            "ambiguous": 964,
+            "outsideProject": 27641,
+            "unknownReceiver": 2548,
+            "chainOutsideProject": 1746
         },
         "testCalls": {
             "total": 40938,
-            "inferred": 19744,
-            "ambiguous": 155,
-            "outsideProject": 19679,
-            "unknownReceiver": 1360,
-            "chainOutsideProject": 484
+            "inferred": 19924,
+            "ambiguous": 137,
+            "outsideProject": 19731,
+            "unknownReceiver": 1146,
+            "chainOutsideProject": 395
         },
         "bus": {
             "handlers": {
@@ -422,7 +422,7 @@
             "sends": {
                 "INFERRED": 240
             },
-            "untypedSends": 9,
+            "untypedSends": 8,
             "messagesWithoutHandlerCount": 4,
             "messagesWithoutHandler": [
                 "PrestaShopBundle\\Event\\FilterSearchCriteriaEvent",
@@ -430,7 +430,7 @@
                 "PrestaShopBundle\\Service\\Hook\\RenderingHookEvent",
                 "channel:module.reset"
             ],
-            "messagesNeverSentCount": 93,
+            "messagesNeverSentCount": 90,
             "messagesNeverSent": [
                 "PrestaShop\\PrestaShop\\Core\\Domain\\Address\\Command\\SetRequiredFieldsForAddressCommand",
                 "PrestaShop\\PrestaShop\\Core\\Domain\\Alias\\Query\\GetAliasForEditing",
@@ -493,8 +493,8 @@
             "contextPairs": 293,
             "layerFirst": true
         },
-        "seconds": 14.4,
-        "peakMemoryMb": 628
+        "seconds": 21.37,
+        "peakMemoryMb": 654
     },
     {
         "name": "ecotone-quickstart",
@@ -517,16 +517,16 @@
             "total": 1363,
             "inferred": 299,
             "ambiguous": 2,
-            "outsideProject": 1009,
-            "unknownReceiver": 53,
+            "outsideProject": 1010,
+            "unknownReceiver": 52,
             "chainOutsideProject": 51
         },
         "applicationCalls": {
             "total": 948,
             "inferred": 238,
             "ambiguous": 2,
-            "outsideProject": 655,
-            "unknownReceiver": 53,
+            "outsideProject": 656,
+            "unknownReceiver": 52,
             "chainOutsideProject": 51
         },
         "testCalls": {
@@ -604,8 +604,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.73,
-        "peakMemoryMb": 36
+        "seconds": 0.94,
+        "peakMemoryMb": 38
     },
     {
         "name": "bookstack",
@@ -617,36 +617,36 @@
         "classLike": 698,
         "methods": 4076,
         "external": 325,
-        "edges": 22826,
-        "vendorFilesRead": 380,
+        "edges": 22862,
+        "vendorFilesRead": 390,
         "edgesByConfidence": {
             "EXTRACTED": 14007,
-            "INFERRED": 8536,
-            "AMBIGUOUS": 283
+            "INFERRED": 8607,
+            "AMBIGUOUS": 248
         },
         "calls": {
             "total": 25501,
-            "inferred": 9315,
-            "ambiguous": 375,
-            "outsideProject": 13836,
-            "unknownReceiver": 1975,
-            "chainOutsideProject": 715
+            "inferred": 9401,
+            "ambiguous": 325,
+            "outsideProject": 13899,
+            "unknownReceiver": 1876,
+            "chainOutsideProject": 654
         },
         "applicationCalls": {
             "total": 7468,
-            "inferred": 3407,
-            "ambiguous": 146,
-            "outsideProject": 3634,
-            "unknownReceiver": 281,
-            "chainOutsideProject": 141
+            "inferred": 3470,
+            "ambiguous": 115,
+            "outsideProject": 3678,
+            "unknownReceiver": 205,
+            "chainOutsideProject": 97
         },
         "testCalls": {
             "total": 18033,
-            "inferred": 5908,
-            "ambiguous": 229,
-            "outsideProject": 10202,
-            "unknownReceiver": 1694,
-            "chainOutsideProject": 574
+            "inferred": 5931,
+            "ambiguous": 210,
+            "outsideProject": 10221,
+            "unknownReceiver": 1671,
+            "chainOutsideProject": 557
         },
         "bus": {
             "handlers": {
@@ -702,8 +702,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 3.9,
-        "peakMemoryMb": 148
+        "seconds": 5.81,
+        "peakMemoryMb": 156
     },
     {
         "name": "wordpress",
@@ -715,27 +715,27 @@
         "classLike": 840,
         "methods": 7580,
         "external": 117,
-        "edges": 42369,
+        "edges": 42688,
         "vendorFilesRead": 0,
         "edgesByConfidence": {
             "EXTRACTED": 19124,
-            "INFERRED": 21875,
-            "AMBIGUOUS": 1370
+            "INFERRED": 22454,
+            "AMBIGUOUS": 1110
         },
         "calls": {
-            "total": 26448,
-            "inferred": 21896,
-            "ambiguous": 2113,
-            "outsideProject": 754,
-            "unknownReceiver": 1685,
+            "total": 26450,
+            "inferred": 22993,
+            "ambiguous": 1658,
+            "outsideProject": 749,
+            "unknownReceiver": 1050,
             "chainOutsideProject": 63
         },
         "applicationCalls": {
-            "total": 26448,
-            "inferred": 21896,
-            "ambiguous": 2113,
-            "outsideProject": 754,
-            "unknownReceiver": 1685,
+            "total": 26450,
+            "inferred": 22993,
+            "ambiguous": 1658,
+            "outsideProject": 749,
+            "unknownReceiver": 1050,
             "chainOutsideProject": 63
         },
         "testCalls": {
@@ -754,8 +754,8 @@
                 "INFERRED": 3232,
                 "AMBIGUOUS": 27
             },
-            "untypedSends": 330,
-            "messagesWithoutHandlerCount": 2192,
+            "untypedSends": 194,
+            "messagesWithoutHandlerCount": 2193,
             "messagesWithoutHandler": [
                 "Core_Upgrader",
                 "IXR_Error",
@@ -822,8 +822,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 6.72,
-        "peakMemoryMb": 165
+        "seconds": 11.52,
+        "peakMemoryMb": 181
     },
     {
         "name": "laravel-rabbitmq-microservices",
@@ -846,16 +846,16 @@
             "total": 146,
             "inferred": 2,
             "ambiguous": 5,
-            "outsideProject": 127,
-            "unknownReceiver": 12,
+            "outsideProject": 129,
+            "unknownReceiver": 10,
             "chainOutsideProject": 2
         },
         "applicationCalls": {
             "total": 136,
             "inferred": 2,
             "ambiguous": 5,
-            "outsideProject": 121,
-            "unknownReceiver": 8,
+            "outsideProject": 123,
+            "unknownReceiver": 6,
             "chainOutsideProject": 2
         },
         "testCalls": {
@@ -921,8 +921,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.7,
-        "peakMemoryMb": 38
+        "seconds": 0.97,
+        "peakMemoryMb": 42
     },
     {
         "name": "art-gallery",
@@ -1016,8 +1016,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.76,
-        "peakMemoryMb": 46
+        "seconds": 0.93,
+        "peakMemoryMb": 48
     },
     {
         "name": "ticket-booking",
@@ -1029,36 +1029,36 @@
         "classLike": 291,
         "methods": 737,
         "external": 361,
-        "edges": 5021,
-        "vendorFilesRead": 217,
+        "edges": 5040,
+        "vendorFilesRead": 219,
         "edgesByConfidence": {
             "EXTRACTED": 4309,
-            "INFERRED": 689,
-            "AMBIGUOUS": 23
+            "INFERRED": 712,
+            "AMBIGUOUS": 19
         },
         "calls": {
             "total": 1674,
-            "inferred": 566,
-            "ambiguous": 16,
-            "outsideProject": 970,
-            "unknownReceiver": 122,
-            "chainOutsideProject": 59
+            "inferred": 593,
+            "ambiguous": 12,
+            "outsideProject": 986,
+            "unknownReceiver": 83,
+            "chainOutsideProject": 47
         },
         "applicationCalls": {
             "total": 1646,
-            "inferred": 563,
-            "ambiguous": 16,
-            "outsideProject": 946,
-            "unknownReceiver": 121,
-            "chainOutsideProject": 58
+            "inferred": 590,
+            "ambiguous": 12,
+            "outsideProject": 961,
+            "unknownReceiver": 83,
+            "chainOutsideProject": 47
         },
         "testCalls": {
             "total": 28,
             "inferred": 3,
             "ambiguous": 0,
-            "outsideProject": 24,
-            "unknownReceiver": 1,
-            "chainOutsideProject": 1
+            "outsideProject": 25,
+            "unknownReceiver": 0,
+            "chainOutsideProject": 0
         },
         "bus": {
             "handlers": {
@@ -1120,8 +1120,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.76,
-        "peakMemoryMb": 32
+        "seconds": 1.42,
+        "peakMemoryMb": 34
     },
     {
         "name": "stayhub",
@@ -1133,27 +1133,27 @@
         "classLike": 112,
         "methods": 323,
         "external": 49,
-        "edges": 2029,
+        "edges": 2031,
         "vendorFilesRead": 152,
         "edgesByConfidence": {
             "EXTRACTED": 1745,
-            "INFERRED": 282,
-            "AMBIGUOUS": 2
+            "INFERRED": 286,
+            "AMBIGUOUS": 0
         },
         "calls": {
             "total": 1324,
-            "inferred": 278,
-            "ambiguous": 4,
+            "inferred": 284,
+            "ambiguous": 0,
             "outsideProject": 1028,
-            "unknownReceiver": 14,
+            "unknownReceiver": 12,
             "chainOutsideProject": 5
         },
         "applicationCalls": {
             "total": 981,
-            "inferred": 278,
-            "ambiguous": 4,
+            "inferred": 284,
+            "ambiguous": 0,
             "outsideProject": 692,
-            "unknownReceiver": 7,
+            "unknownReceiver": 5,
             "chainOutsideProject": 5
         },
         "testCalls": {
@@ -1221,7 +1221,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 1.47,
-        "peakMemoryMb": 52
+        "seconds": 2.41,
+        "peakMemoryMb": 56
     }
 ]

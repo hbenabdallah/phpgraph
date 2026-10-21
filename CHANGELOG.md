@@ -11,6 +11,8 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
   `instanceof`, `is_a()`, `assert()`, `&&`/`||` and `match (true)` narrow it where they hold; a negated test followed
   by `return`, `throw` or `continue` narrows the code after it. A call on it is linked to the method of each class it
   may hold, INFERRED when every branch typed it, AMBIGUOUS when one left it of unknown type.
+- A send whose message branches build one way or another (`$command = $unofficial ? new AddUnofficialCurrencyCommand()
+  : new AddCurrencyCommand()`) dispatches each of them; AMBIGUOUS when a branch leaves the message unknown.
 - Native and documented intersections (`Countable&Named`, `@var OrderInterface&MockObject`) are called on each member
   declaring the method, instead of being dropped (native) or reduced to their first class (documented).
 - Fixtures with inline expectations, `tests/Fixtures/expectations/*.php`: `// @phpgraph-expect calls App\Foo::bar
@@ -40,6 +42,7 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
   INFERRED; it was left unresolved. A chain goes on with the union of what they return.
 
 ### Fixed
+- A method passing its parameter on to a bus is plumbing even when nothing calls it: its send is not counted untyped.
 - An inline `@var` naming a union or an intersection without any single class typed nothing.
 - A parameter without a native type is typed by a `@param` naming a single class (`@param WP_Error|null $error`); it
   was only with arguments or as a union.
