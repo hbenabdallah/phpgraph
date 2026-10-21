@@ -696,18 +696,31 @@ final class GraphBuilder
         $name = strtolower($call->method);
 
         $leftProject = false;
-        $class = $call->receiver === null ? null : $types->resolveReceiver($call->receiver, $call->method, $leftProject);
+        [$classes, $complete] = $call->receiver === null ? [[], false] : $types->receivers($call->receiver, $call->method, $leftProject);
 
-        if ($class !== null) {
-            $found = $types->findMethod($class, $name);
-
+        // Each class the receiver may be gets an edge to its method: INFERRED when every branch typed the receiver,
+        // AMBIGUOUS when one of them left it unknown (the call may go elsewhere too).
+        $found = [];
+        $declared = false;
+        foreach ($classes as $class) {
+            $method = $types->findMethod($class, $name);
+            $declared = $declared || $method !== null;
             // A method found in a dependency is outside the project, like before: no node, no call edge.
-            if ($found !== null && $graph->hasNode($found)) {
-                $results[] = [new Edge($call->source, $found, Relation::Calls, Confidence::Inferred, (string) $call->line, self::named($call)), 'inferred', $call->method];
-            } else {
-                $edge = $call->referenceOnMiss ? new Edge($call->source, $class, Relation::References, Confidence::Extracted) : null;
-                $results[] = [$edge, 'outsideProject', $call->method];
+            if ($method !== null && $graph->hasNode($method) && !\in_array($method, $found, true)) {
+                $found[] = $method;
             }
+        }
+        if ($found !== []) {
+            foreach ($found as $index => $method) {
+                $outcome = $index > 0 ? '' : ($complete ? 'inferred' : 'ambiguous');
+                $results[] = [new Edge($call->source, $method, Relation::Calls, $complete ? Confidence::Inferred : Confidence::Ambiguous, (string) $call->line, self::named($call)), $outcome, $call->method];
+            }
+
+            return;
+        }
+        if ($classes !== [] && ($complete || $declared)) {
+            $edge = $call->referenceOnMiss ? new Edge($call->source, $classes[0], Relation::References, Confidence::Extracted) : null;
+            $results[] = [$edge, 'outsideProject', $call->method];
 
             return;
         }

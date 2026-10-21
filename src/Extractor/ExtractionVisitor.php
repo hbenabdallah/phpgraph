@@ -48,8 +48,20 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<string, string> */
     private array $propertyTypes = [];
 
-    /** @var array<string, TypeExpr> */
+    /**
+     * The types of the variables at the point being read: branches each get their own copy, merged where they meet.
+     * A variable assigned an expression of unknown type holds TypeExpr::unknown(); one holding no object (`null`, a
+     * scalar) or never assigned is absent.
+     *
+     * @var array<string, TypeExpr>
+     */
     private array $localTypes = [];
+
+    /** @var list<list<array<string, TypeExpr>>> the variables at each `break` and `continue` of the loops and switches being read, innermost last */
+    private array $jumps = [];
+
+    /** @var array<int, ?TypeExpr> ternary, `??` or match => what its value may be, read in its branches; null for no object */
+    private array $values = [];
 
     /**
      * Variables typed by an inline `@var`, which assignments in the same statement do not override.
@@ -219,6 +231,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
      */
     private const ARGUMENT_KEY = 200;
 
+    /**
+     * The longest key of a type merged from branches a variable keeps.
+     */
+    private const MERGED_KEY = 4000;
+
     public function __construct(private readonly string $path)
     {
         $this->fileId = 'file:' . $path;
@@ -349,8 +366,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                 $this->reference($this->owner(), $this->resolveName($type));
             }
             if ($node->var !== null && \is_string($node->var->name)) {
-                $class = \count($node->types) === 1 ? $this->resolveName($node->types[0]) : null;
-                $this->assignLocal($node->var->name, $class === null ? null : TypeExpr::named($class));
+                $classes = array_values(array_filter(array_map(fn (Name $type): ?string => $this->resolveName($type), $node->types)));
+                $this->assignLocal($node->var->name, $classes === [] ? null : TypeExpr::union(array_map(TypeExpr::named(...), $classes)));
             }
 
             return null;
@@ -363,6 +380,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         if ($node instanceof Stmt\Foreach_) {
+            $before = $this->localTypes;
             $this->forgetAssigned($node->keyVar);
             $this->forgetAssigned($node->valueVar);
             // `foreach ($this->rules as $rule)` over a collection typed in a docblock: `$rule` is a Rule.
@@ -370,14 +388,19 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             if ($element !== null && $node->valueVar instanceof Expr\Variable && \is_string($node->valueVar->name)) {
                 $this->assignLocal($node->valueVar->name, \is_string($element) ? TypeExpr::named($element) : $element);
             }
+            $this->loop($node, $before, 'expr', 'keyVar', 'valueVar', 'stmts');
 
-            return null;
+            return NodeTraverser::DONT_TRAVERSE_CHILDREN;
         }
 
         if ($node instanceof Expr\Closure || $node instanceof Expr\ArrowFunction) {
             $this->enterClosure($node);
 
             return null;
+        }
+
+        if ($this->onFlow($node)) {
+            return NodeTraverser::DONT_TRAVERSE_CHILDREN;
         }
 
         $this->onExpression($node);
@@ -395,12 +418,21 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         if ($node instanceof Expr\Assign || $node instanceof Expr\AssignRef) {
             if ($node->var instanceof Expr\Variable && \is_string($node->var->name)) {
                 $this->reassigned[$node->var->name] = true;
-                $this->assignLocal($node->var->name, $this->typeOf($node->expr));
+                $this->assignObject($node->var->name, $this->objectType($node->expr));
             } else {
                 $this->forgetAssigned($node->var);
             }
+        } elseif ($node instanceof Expr\AssignOp\Coalesce && $node->var instanceof Expr\Variable && \is_string($node->var->name)) {
+            // `$x ??= new Order()`: what it held, or the order.
+            $this->reassigned[$node->var->name] = true;
+            $this->assignObject($node->var->name, $this->objectUnion([$this->objectType($node->var), $this->objectType($node->expr)]));
         } elseif ($node instanceof Expr\AssignOp) {
             $this->forgetAssigned($node->var);
+        }
+
+        if ($node instanceof Expr\FuncCall && $node->name instanceof Name && strtolower($node->name->getLast()) === 'assert'
+            && ($node->args[0] ?? null) instanceof AstNode\Arg) {
+            $this->assume($node->args[0]->value, true);
         }
 
         if ($node instanceof Stmt\Return_ && $node->expr !== null && $this->closureNodes !== []) {
@@ -634,7 +666,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             }
         }
         $generics = $node->getAttribute(DocTypeResolver::GENERICS);
-        $this->typeParameters($node->params, self::stringMap($generics));
+        $this->typeParameters($node->params, self::stringMap($generics), $this->documentedParameters);
 
         foreach ($this->typeNames($node->returnType) as $type) {
             $this->reference($id, $type);
@@ -748,14 +780,16 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
     /**
      * @param array<AstNode\Param>  $params
-     * @param array<string, string> $generics parameter => its GenericType documented (`@param Collection<int, Item>`)
+     * @param array<string, string> $generics   parameter => its GenericType documented (`@param Collection<int, Item>`)
+     * @param array<string, string> $documented parameter => its class documented (`@param WP_Error|null $error`), for
+     *                                          a parameter without a native type
      */
-    private function typeParameters(array $params, array $generics = []): void
+    private function typeParameters(array $params, array $generics = [], array $documented = []): void
     {
         foreach ($params as $param) {
             if ($param->var instanceof Expr\Variable && \is_string($param->var->name)) {
-                $type = $this->singleType($param->type);
-                $generic = $this->usableGeneric($generics[$param->var->name] ?? $this->nativeUnion($param->type));
+                $type = $this->singleType($param->type) ?? ($param->type === null && ($documented[$param->var->name] ?? '') !== '' ? $documented[$param->var->name] : null);
+                $generic = $this->usableGeneric($generics[$param->var->name] ?? $this->nativeUnion($param->type, true));
                 $this->assignLocal($param->var->name, match (true) {
                     $generic !== null => TypeExpr::generic($generic),
                     $type !== null => TypeExpr::named($type),
@@ -880,12 +914,13 @@ final class ExtractionVisitor extends NodeVisitorAbstract
      */
     private function pinInlineVarTypes(Stmt $node): void
     {
-        $types = $node->getAttribute(DocTypeResolver::VAR_TYPES);
-        if (!\is_array($types) || $node instanceof Stmt\Property || $node instanceof Stmt\ClassMethod) {
+        if ($node instanceof Stmt\Property || $node instanceof Stmt\ClassMethod) {
             return;
         }
 
-        foreach ($types as $name => $type) {
+        // A union or an intersection (`@var OrderInterface&MockObject`) has no single class: only its GenericType.
+        $types = $node->getAttribute(DocTypeResolver::VAR_TYPES);
+        foreach (\is_array($types) ? $types : [] as $name => $type) {
             if ($name === '' && $node instanceof Stmt\Expression && $node->expr instanceof Expr\Assign
                 && $node->expr->var instanceof Expr\Variable && \is_string($node->expr->var->name)
             ) {
@@ -915,7 +950,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     }
 
     /**
-     * Last assignment read wins: there is no branch analysis. An assignment of unknown type forgets the variable.
+     * The last assignment read wins on the path being read; branches are merged where they meet (onFlow). An assignment
+     * of unknown type makes the variable unknown.
      */
     private function assignLocal(string $name, ?TypeExpr $type): void
     {
@@ -923,10 +959,18 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             return;
         }
 
-        if ($type === null) {
+        $this->localTypes[$name] = $type ?? TypeExpr::unknown();
+    }
+
+    /**
+     * @param ?TypeExpr $type null for no object: the variable is then absent, a branch assigning it adds nothing
+     */
+    private function assignObject(string $name, ?TypeExpr $type): void
+    {
+        if ($type !== null) {
+            $this->assignLocal($name, $type->isUnknown() ? null : $type);
+        } elseif (!isset($this->pinned[$name])) {
             unset($this->localTypes[$name]);
-        } else {
-            $this->localTypes[$name] = $type;
         }
     }
 
@@ -939,6 +983,480 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             foreach ($target->items as $item) {
                 $this->forgetAssigned($item?->value);
             }
+        }
+    }
+
+    /**
+     * Reads a node whose parts may not all run: each branch starts from the variables before it, narrowed by what its
+     * condition tests (`instanceof`, `is_a()`), and the branches reaching the end are merged. A branch ending in
+     * `return`, `throw`, `exit`, `break` or `continue` does not reach it (the last two reach the end of their loop or
+     * switch). Loops are read once: their body may not run. The parts are read in the order of the traversal, so that
+     * everything else the visitor records stays the same.
+     *
+     * @return bool whether the node was read, its children with it
+     */
+    private function onFlow(AstNode $node): bool
+    {
+        if ($node instanceof Stmt\Break_ || $node instanceof Stmt\Continue_) {
+            $index = \count($this->jumps) - ($node->num instanceof AstNode\Scalar\Int_ ? max(1, $node->num->value) : 1);
+            if ($index >= 0) {
+                $this->jumps[$index][] = $this->localTypes;
+            }
+
+            return false;
+        }
+        if ($node instanceof Stmt\Global_ || $node instanceof Stmt\Static_) {
+            foreach ($node instanceof Stmt\Global_ ? $node->vars : array_map(static fn (AstNode\StaticVar $var): Expr\Variable => $var->var, $node->vars) as $variable) {
+                if ($variable instanceof Expr\Variable && \is_string($variable->name)) {
+                    $this->assignLocal($variable->name, null);
+                }
+            }
+
+            return false;
+        }
+
+        match (true) {
+            $node instanceof Stmt\If_ => $this->onIf($node),
+            $node instanceof Stmt\Switch_ => $this->onSwitch($node),
+            $node instanceof Stmt\TryCatch => $this->onTry($node),
+            $node instanceof Stmt\While_ => $this->loop($node, null, 'cond', 'stmts'),
+            $node instanceof Stmt\For_ => $this->loop($node, null, 'init', 'cond', 'loop', 'stmts'),
+            $node instanceof Stmt\Do_ => $this->loop($node, null, 'stmts', 'cond'),
+            $node instanceof Expr\Ternary => $this->onTernary($node),
+            $node instanceof Expr\BinaryOp\Coalesce => $this->onCoalesce($node),
+            $node instanceof Expr\BinaryOp\BooleanAnd, $node instanceof Expr\BinaryOp\LogicalAnd => $this->onShortCircuit($node, true),
+            $node instanceof Expr\BinaryOp\BooleanOr, $node instanceof Expr\BinaryOp\LogicalOr => $this->onShortCircuit($node, false),
+            $node instanceof Expr\Match_ => $this->onMatch($node),
+            default => null,
+        };
+
+        return $node instanceof Stmt\If_ || $node instanceof Stmt\Switch_ || $node instanceof Stmt\TryCatch
+            || $node instanceof Stmt\While_ || $node instanceof Stmt\For_ || $node instanceof Stmt\Do_
+            || $node instanceof Expr\Ternary || $node instanceof Expr\BinaryOp\Coalesce || $node instanceof Expr\Match_
+            || $node instanceof Expr\BinaryOp\BooleanAnd || $node instanceof Expr\BinaryOp\LogicalAnd
+            || $node instanceof Expr\BinaryOp\BooleanOr || $node instanceof Expr\BinaryOp\LogicalOr;
+    }
+
+    private function onIf(Stmt\If_ $node): void
+    {
+        $this->read($node, 'cond');
+        $ends = [];
+        $otherwise = $this->localTypes;
+        $this->assume($node->cond, true);
+        $this->read($node, 'stmts');
+        if (!self::exits($node->stmts)) {
+            $ends[] = $this->localTypes;
+        }
+        $this->localTypes = $otherwise;
+        $this->assume($node->cond, false);
+        foreach ($node->elseifs as $elseIf) {
+            $this->within($elseIf, function () use ($elseIf, &$ends): void {
+                $this->read($elseIf, 'cond');
+                $otherwise = $this->localTypes;
+                $this->assume($elseIf->cond, true);
+                $this->read($elseIf, 'stmts');
+                if (!self::exits($elseIf->stmts)) {
+                    $ends[] = $this->localTypes;
+                }
+                $this->localTypes = $otherwise;
+                $this->assume($elseIf->cond, false);
+            });
+        }
+        $else = $node->else;
+        if ($else === null) {
+            $ends[] = $this->localTypes;
+        } else {
+            $this->within($else, function () use ($else, &$ends): void {
+                $this->read($else, 'stmts');
+                if (!self::exits($else->stmts)) {
+                    $ends[] = $this->localTypes;
+                }
+            });
+        }
+        // Every branch exits: what follows does not run, the variables matter little.
+        $this->localTypes = $ends === [] ? $this->localTypes : $this->merge($ends);
+    }
+
+    private function onSwitch(Stmt\Switch_ $node): void
+    {
+        $this->read($node, 'cond');
+        $before = $this->localTypes;
+        $this->jumps[] = [];
+        $falling = null;
+        $default = false;
+        foreach ($node->cases as $case) {
+            $this->localTypes = $falling === null ? $before : $this->merge([$before, $falling]);
+            $this->within($case, function () use ($case): void {
+                $this->read($case, 'cond', 'stmts');
+            });
+            $falling = self::exits($case->stmts) ? null : $this->localTypes;
+            $default = $default || $case->cond === null;
+        }
+        $ends = array_pop($this->jumps) ?? [];
+        if ($falling !== null) {
+            $ends[] = $falling;
+        }
+        if (!$default) {
+            $ends[] = $before;
+        }
+        $this->localTypes = $ends === [] ? $before : $this->merge($ends);
+    }
+
+    /**
+     * A catch may start anywhere in the try: from the variables before it or after it.
+     */
+    private function onTry(Stmt\TryCatch $node): void
+    {
+        $before = $this->localTypes;
+        $this->read($node, 'stmts');
+        $ends = self::exits($node->stmts) ? [] : [$this->localTypes];
+        $start = $this->merge([$before, $this->localTypes]);
+        foreach ($node->catches as $catch) {
+            $this->localTypes = $start;
+            $this->within($catch, function () use ($catch, &$ends): void {
+                $this->read($catch, 'types', 'var', 'stmts');
+                if (!self::exits($catch->stmts)) {
+                    $ends[] = $this->localTypes;
+                }
+            });
+        }
+        $this->localTypes = $ends === [] ? $start : $this->merge($ends);
+        $finally = $node->finally;
+        if ($finally !== null) {
+            $this->within($finally, function () use ($finally): void {
+                $this->read($finally, 'stmts');
+            });
+        }
+    }
+
+    /**
+     * A loop, read once: after it, the variables before it, at its end, or at a `break` or `continue` in it. A `do`
+     * body runs at least once.
+     *
+     * @param ?array<string, TypeExpr> $before the variables before the loop, when they are not those of now
+     */
+    private function loop(Stmt\Foreach_|Stmt\While_|Stmt\For_|Stmt\Do_ $node, ?array $before, string ...$parts): void
+    {
+        $before ??= $this->localTypes;
+        $this->jumps[] = [];
+        $this->read($node, ...$parts);
+        $ends = [$this->localTypes, ...array_pop($this->jumps) ?? []];
+        if (!$node instanceof Stmt\Do_) {
+            $ends[] = $before;
+        }
+        $this->localTypes = $this->merge($ends);
+    }
+
+    private function onTernary(Expr\Ternary $node): void
+    {
+        $this->read($node, 'cond');
+        $before = $this->localTypes;
+        $this->assume($node->cond, true);
+        if ($node->if !== null) {
+            $this->read($node, 'if');
+        }
+        $then = $this->objectType($node->if ?? $node->cond);
+        $ends = [$this->localTypes];
+        $this->localTypes = $before;
+        $this->assume($node->cond, false);
+        $this->read($node, 'else');
+        $ends[] = $this->localTypes;
+        $this->values[spl_object_id($node)] = $this->objectUnion([$then, $this->objectType($node->else)]);
+        $this->localTypes = $this->merge($ends);
+    }
+
+    private function onCoalesce(Expr\BinaryOp\Coalesce $node): void
+    {
+        $this->read($node, 'left');
+        $before = $this->localTypes;
+        $left = $this->objectType($node->left);
+        $this->read($node, 'right');
+        $this->values[spl_object_id($node)] = $this->objectUnion([$left, $this->objectType($node->right)]);
+        $this->localTypes = $this->merge([$before, $this->localTypes]);
+    }
+
+    /**
+     * `&&` reads its right side when the left one holds, `||` when it does not.
+     */
+    private function onShortCircuit(Expr\BinaryOp $node, bool $and): void
+    {
+        $this->read($node, 'left');
+        $before = $this->localTypes;
+        $this->assume($node->left, $and);
+        $this->read($node, 'right');
+        $after = $this->localTypes;
+        $this->localTypes = $before;
+        $this->assume($node->left, !$and);
+        $this->localTypes = $this->merge([$this->localTypes, $after]);
+    }
+
+    /**
+     * `match (true)` narrows each arm by its conditions, and the arms after it by their negation.
+     */
+    private function onMatch(Expr\Match_ $node): void
+    {
+        $this->read($node, 'cond');
+        $tests = $node->cond instanceof Expr\ConstFetch && strtolower($node->cond->name->toString()) === 'true';
+        $otherwise = $this->localTypes;
+        $ends = [];
+        $values = [];
+        foreach ($node->arms as $arm) {
+            $this->localTypes = $otherwise;
+            $this->within($arm, function () use ($arm, $tests, &$ends, &$values, &$otherwise): void {
+                $this->read($arm, 'conds');
+                $conditions = $tests ? $arm->conds ?? [] : [];
+                $otherwise = $this->localTypes;
+                if ($conditions !== []) {
+                    $this->apply(array_reduce(
+                        \array_slice($conditions, 1),
+                        fn (array $either, Expr $condition): array => self::either($either, $this->assertions($condition, true)),
+                        $this->assertions($conditions[0], true),
+                    ));
+                }
+                $this->read($arm, 'body');
+                $values[] = $this->objectType($arm->body);
+                $ends[] = $this->localTypes;
+                $current = $this->localTypes;
+                $this->localTypes = $otherwise;
+                foreach ($conditions as $condition) {
+                    $this->assume($condition, false);
+                }
+                $otherwise = $this->localTypes;
+                $this->localTypes = $current;
+            });
+        }
+        $this->values[spl_object_id($node)] = $this->objectUnion($values);
+        $this->localTypes = $ends === [] ? $otherwise : $this->merge($ends);
+    }
+
+    /**
+     * Reads parts of a node as the traversal would have: each child, then its children.
+     */
+    private function read(AstNode $node, string ...$parts): void
+    {
+        foreach ($parts as $part) {
+            $child = $node->{$part};
+            $children = array_values(array_filter(\is_array($child) ? $child : [$child], static fn (mixed $item): bool => $item instanceof AstNode));
+            if ($children !== []) {
+                (new NodeTraverser($this))->traverse($children);
+            }
+        }
+    }
+
+    /**
+     * Reads a part of a flow node (an `else`, a `case`, a `catch`) as the traversal would have, entering and leaving it.
+     *
+     * @param \Closure(): void $read
+     */
+    private function within(AstNode $node, \Closure $read): void
+    {
+        $this->enterNode($node);
+        $read();
+        $this->leaveNode($node);
+    }
+
+    /**
+     * @param array<AstNode> $statements
+     */
+    private static function exits(array $statements): bool
+    {
+        $last = end($statements);
+
+        return match (true) {
+            $last instanceof Stmt\Return_, $last instanceof Stmt\Break_, $last instanceof Stmt\Continue_, $last instanceof Stmt\Goto_ => true,
+            $last instanceof Stmt\Expression => $last->expr instanceof Expr\Throw_ || $last->expr instanceof Expr\Exit_,
+            $last instanceof Stmt\Block => self::exits($last->stmts),
+            $last instanceof Stmt\If_ => $last->else !== null && self::exits($last->stmts) && self::exits($last->else->stmts)
+                && array_filter($last->elseifs, static fn (Stmt\ElseIf_ $elseIf): bool => !self::exits($elseIf->stmts)) === [],
+            default => false,
+        };
+    }
+
+    /**
+     * The variables of the branches reaching the same point: a variable some of them assign holds what any of them
+     * assigns (those leaving it absent add nothing).
+     *
+     * @param non-empty-list<array<string, TypeExpr>> $states
+     *
+     * @return array<string, TypeExpr>
+     */
+    private function merge(array $states): array
+    {
+        if (\count($states) === 1) {
+            return $states[0];
+        }
+        $merged = [];
+        foreach (array_keys(array_merge(...$states)) as $name) {
+            $types = [];
+            foreach ($states as $state) {
+                if (isset($state[$name])) {
+                    $types[$state[$name]->key()] = $state[$name];
+                }
+            }
+            $merged[$name] = \count($types) === 1 ? reset($types) : self::bounded(TypeExpr::union(array_values($types)));
+        }
+
+        return $merged;
+    }
+
+    /**
+     * A merged type too long to keep (variables narrowed and merged again and again): unknown, as a type the
+     * extractor does not follow.
+     */
+    private static function bounded(TypeExpr $type): TypeExpr
+    {
+        return \strlen($type->key()) > self::MERGED_KEY ? TypeExpr::unknown() : $type;
+    }
+
+    /**
+     * What a value may be as an object: null for none (`null`, a scalar, an array, a throw), unknown when nothing is
+     * known of it.
+     */
+    private function objectType(Expr $expr): ?TypeExpr
+    {
+        if ($expr instanceof Expr\Variable && \is_string($expr->name) && $expr->name !== 'this') {
+            return $this->localTypes[$expr->name] ?? null;
+        }
+        if ($expr instanceof Expr\Ternary || $expr instanceof Expr\BinaryOp\Coalesce || $expr instanceof Expr\Match_) {
+            return $this->valueOf($expr);
+        }
+        $none = ($expr instanceof Expr\ConstFetch && \in_array(strtolower($expr->name->toString()), ['null', 'true', 'false'], true))
+            || $expr instanceof AstNode\Scalar || $expr instanceof Expr\Array_ || $expr instanceof Expr\Throw_
+            || ($expr instanceof Expr\Cast && !$expr instanceof Expr\Cast\Object_)
+            || $expr instanceof Expr\BinaryOp
+            || $expr instanceof Expr\BooleanNot || $expr instanceof Expr\Isset_ || $expr instanceof Expr\Empty_ || $expr instanceof Expr\Instanceof_;
+
+        return $none ? null : $this->typeOf($expr) ?? TypeExpr::unknown();
+    }
+
+    /**
+     * The value of a ternary, a `??` or a match: read in its branches, or now, when it is asked for before.
+     */
+    private function valueOf(Expr\Ternary|Expr\BinaryOp\Coalesce|Expr\Match_ $expr): ?TypeExpr
+    {
+        $id = spl_object_id($expr);
+        if (\array_key_exists($id, $this->values)) {
+            return $this->values[$id];
+        }
+
+        return $this->objectUnion(match (true) {
+            $expr instanceof Expr\Ternary => [$this->objectType($expr->if ?? $expr->cond), $this->objectType($expr->else)],
+            $expr instanceof Expr\BinaryOp\Coalesce => [$this->objectType($expr->left), $this->objectType($expr->right)],
+            default => array_values(array_map(fn (AstNode\MatchArm $arm): ?TypeExpr => $this->objectType($arm->body), $expr->arms)),
+        });
+    }
+
+    /**
+     * @param list<?TypeExpr> $types null for no object
+     */
+    private function objectUnion(array $types): ?TypeExpr
+    {
+        $types = array_values(array_filter($types, static fn (?TypeExpr $type): bool => $type !== null));
+
+        return $types === [] ? null : self::bounded(TypeExpr::union($types));
+    }
+
+    private function assume(Expr $condition, bool $holds): void
+    {
+        $this->apply($this->assertions($condition, $holds));
+    }
+
+    /**
+     * What a condition tells of the variables it tests when it holds, or when it does not: variable => the classes
+     * it is an instance of, or is not (excluding).
+     *
+     * @return array<string, array{list<string>, bool}>
+     */
+    private function assertions(Expr $condition, bool $holds): array
+    {
+        if ($condition instanceof Expr\BooleanNot) {
+            return $this->assertions($condition->expr, !$holds);
+        }
+        $tested = null;
+        if ($condition instanceof Expr\Instanceof_ && $condition->class instanceof Name) {
+            $tested = [$condition->expr, $this->resolveName($condition->class)];
+        } elseif ($condition instanceof Expr\FuncCall && $condition->name instanceof Name
+            && \in_array(strtolower($condition->name->getLast()), ['is_a', 'is_subclass_of'], true)
+            && ($condition->args[0] ?? null) instanceof AstNode\Arg && ($condition->args[1] ?? null) instanceof AstNode\Arg) {
+            $tested = [$condition->args[0]->value, $this->classConstant($condition->args[1]->value)];
+        }
+        if ($tested !== null) {
+            [$subject, $class] = $tested;
+            if ($subject instanceof Expr\Assign) {
+                $subject = $subject->var;
+            }
+
+            return $class !== null && $subject instanceof Expr\Variable && \is_string($subject->name) && $subject->name !== 'this'
+                ? [$subject->name => [[$class], !$holds]]
+                : [];
+        }
+
+        $and = $condition instanceof Expr\BinaryOp\BooleanAnd || $condition instanceof Expr\BinaryOp\LogicalAnd;
+        $or = $condition instanceof Expr\BinaryOp\BooleanOr || $condition instanceof Expr\BinaryOp\LogicalOr;
+        if (!$and && !$or) {
+            return [];
+        }
+        \assert($condition instanceof Expr\BinaryOp);
+        $left = $this->assertions($condition->left, $holds);
+        $right = $this->assertions($condition->right, $holds);
+        if ($and === $holds) {
+            // Both sides hold (or both fail): a variable excluded from classes on both sides is none of them.
+            foreach ($right as $variable => [$classes, $excluding]) {
+                $left[$variable] = $excluding && ($left[$variable][1] ?? false)
+                    ? [array_values(array_unique([...$left[$variable][0], ...$classes])), true]
+                    : [$classes, $excluding];
+            }
+
+            return $left;
+        }
+
+        return self::either($left, $right);
+    }
+
+    /**
+     * One of two sets of assertions holds: a variable both say is an instance of classes is an instance of one of them.
+     *
+     * @param array<string, array{list<string>, bool}> $left
+     * @param array<string, array{list<string>, bool}> $right
+     *
+     * @return array<string, array{list<string>, bool}>
+     */
+    private static function either(array $left, array $right): array
+    {
+        $either = [];
+        foreach ($left as $variable => [$classes, $excluding]) {
+            if (!$excluding && isset($right[$variable]) && !$right[$variable][1]) {
+                $either[$variable] = [array_values(array_unique([...$classes, ...$right[$variable][0]])), false];
+            }
+        }
+
+        return $either;
+    }
+
+    /**
+     * @param array<string, array{list<string>, bool}> $assertions
+     */
+    private function apply(array $assertions): void
+    {
+        foreach ($assertions as $variable => [$classes, $excluding]) {
+            $current = $this->localTypes[$variable] ?? null;
+            $known = $current !== null && !$current->isUnknown();
+            if ($excluding) {
+                // Only a union, or a type the builder may find to be one, loses members.
+                $single = $known && $current->receiver === null && $current->members === [] && $current->test === null
+                    && $current->functions === [] && ($current->generic === null || !GenericType::isUnion($current->generic));
+                if ($known && !$single) {
+                    $this->localTypes[$variable] = TypeExpr::narrowed($current, $classes, true);
+                }
+                continue;
+            }
+            $same = $known && \count($classes) === 1 && $current->className !== null && $current->receiver === null
+                && strtolower($current->className) === strtolower($classes[0]);
+            $this->localTypes[$variable] = match (true) {
+                !$known => TypeExpr::union(array_map(TypeExpr::named(...), $classes)),
+                $same => $current,
+                default => TypeExpr::narrowed($current, $classes),
+            };
         }
     }
 
@@ -2079,7 +2597,15 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                 return $this->currentClass === null ? null : TypeExpr::named($this->currentClass);
             }
 
-            return $this->localTypes[$expr->name] ?? null;
+            $type = $this->localTypes[$expr->name] ?? null;
+
+            return $type === null || $type->isUnknown() ? null : $type;
+        }
+
+        if ($expr instanceof Expr\Ternary || $expr instanceof Expr\BinaryOp\Coalesce || $expr instanceof Expr\Match_) {
+            $type = $this->valueOf($expr);
+
+            return $type === null || $type->isUnknown() ? null : $type;
         }
 
         if (($expr instanceof Expr\PropertyFetch || $expr instanceof Expr\NullsafePropertyFetch) && $expr->name instanceof Identifier) {
@@ -2387,7 +2913,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     {
         $documented = $node->getAttribute(DocTypeResolver::RETURN_GENERIC);
         if (!\is_string($documented)) {
-            return $this->nativeUnion($node->returnType);
+            return $this->nativeUnion($node->returnType, true);
         }
 
         return GenericType::isUnion($documented) && $this->singleType($node->returnType) !== null ? null : $documented;
@@ -2395,16 +2921,18 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
     /**
      * A union of classes declared in the code, `JsonResponse|AuthenticatedIdentity`, as a GenericType: a call on it
-     * picks the member declaring its method. Scalars are left out; null for one class or none.
+     * goes to the members declaring its method. Scalars are left out; null for one class or none. With
+     * $intersections, an intersection (`Countable&Named`, `(A&B)|C`) is read as a union of its classes too: an object
+     * of all of them has the method any of them declares.
      */
-    private function nativeUnion(?AstNode $type): ?string
+    private function nativeUnion(?AstNode $type, bool $intersections = false): ?string
     {
-        if ($type instanceof NullableType || !$type instanceof UnionType) {
+        if (!$type instanceof UnionType && !($intersections && $type instanceof IntersectionType)) {
             return null;
         }
         $names = [];
         foreach ($type->types as $inner) {
-            if ($inner instanceof IntersectionType) {
+            if ($inner instanceof IntersectionType && !$intersections) {
                 return null;
             }
             array_push($names, ...$this->typeNames($inner));

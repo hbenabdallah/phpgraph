@@ -3,6 +3,34 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## Unreleased
+
+### Added
+- Local variables follow the branches: after `if`/`elseif`/`else`, `switch`, `match`, `try`/`catch`, a ternary, `??`
+  or a loop, a variable holds what any branch reaching that point assigned, instead of the last assignment read.
+  `instanceof`, `is_a()`, `assert()`, `&&`/`||` and `match (true)` narrow it where they hold; a negated test followed
+  by `return`, `throw` or `continue` narrows the code after it. A call on it is linked to the method of each class it
+  may hold, INFERRED when every branch typed it, AMBIGUOUS when one left it of unknown type.
+- Native and documented intersections (`Countable&Named`, `@var OrderInterface&MockObject`) are called on each member
+  declaring the method, instead of being dropped (native) or reduced to their first class (documented).
+- Fixtures with inline expectations, `tests/Fixtures/expectations/*.php`: `// @phpgraph-expect calls App\Foo::bar
+  INFERRED` on the line of each call; a missing or an unexpected call fails, `@phpgraph-todo` marks a known gap.
+
+### Changed
+- A call on a union whose members declare different methods (`Cat|Dog` calling `sleep()`) is linked to each of them,
+  INFERRED; it was left unresolved. A chain goes on with the union of what they return.
+
+### Fixed
+- An inline `@var` naming a union or an intersection without any single class typed nothing.
+- A parameter without a native type is typed by a `@param` naming a single class (`@param WP_Error|null $error`); it
+  was only with arguments or as a union.
+
+Corpus, call sites (INFERRED / AMBIGUOUS / unknown receiver): Sylius +221 / +1 / −2,302, Akeneo +806 / −37 / −858,
+PrestaShop +515 / −48 / −526, WordPress +1,034 / −411 / −616, BookStack +58 / −27 / −70. No call site lost an
+INFERRED edge except to a more precise one (an `instanceof` narrowing `ValueInterface::getData()` to
+`OptionValue::getData()`), to AMBIGUOUS where another branch leaves the receiver unknown, or where the edge was wrong
+(the last assignment of an `if` read in its `else`).
+
 ## 1.4.3 (2026-10-17)
 
 ### Fixed

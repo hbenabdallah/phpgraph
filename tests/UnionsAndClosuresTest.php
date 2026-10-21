@@ -10,7 +10,7 @@ use PhpGraph\Tests\Support\TemporaryProject;
 use PHPUnit\Framework\TestCase;
 
 /**
- * A union is called on the member declaring the method; a closure passed to a method gets the parameters the method
+ * A union is called on the members declaring the method; a closure passed to a method gets the parameters the method
  * documents it passes (`callable($this): mixed`); a trait used with `@use Trait<Arg>` binds its templates.
  */
 final class UnionsAndClosuresTest extends TestCase
@@ -40,8 +40,10 @@ final class UnionsAndClosuresTest extends TestCase
 
         self::assertTrue($this->hasEdge($graph, 'App\Shelter::noise', 'App\Dog::bark', Relation::Calls, Confidence::Inferred));
         self::assertTrue($this->hasEdge($graph, 'App\Shelter::feed', 'App\Animal::eat', Relation::Calls, Confidence::Inferred), 'both members inherit the same method');
-        self::assertFalse($this->hasEdge($graph, 'App\Shelter::rest', 'App\Cat::sleep', Relation::Calls), 'each member declares its own: no guess');
-        self::assertSame(1, $result->calls->unknownReceiver);
+        self::assertTrue($this->hasEdge($graph, 'App\Shelter::rest', 'App\Cat::sleep', Relation::Calls, Confidence::Inferred), 'each member declares its own: each is linked');
+        self::assertTrue($this->hasEdge($graph, 'App\Shelter::rest', 'App\Dog::sleep', Relation::Calls, Confidence::Inferred));
+        self::assertSame(0, $result->calls->unknownReceiver);
+        self::assertSame(6, $result->calls->inferred, 'a call site counted once, whatever its edges');
     }
 
     public function testANativeUnionOfAReturnOrAParameter(): void

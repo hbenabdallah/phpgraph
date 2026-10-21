@@ -217,8 +217,8 @@ final class ExtractionTest extends TestCase
      */
     public static function untypedCalls(): iterable
     {
-        yield 'union return type' => [
-            ['a.php' => 'namespace App; class Customer { public function name(): string { return ""; } } class Company { public function name(): string { return ""; } } class Order { public function owner(): Customer|Company { return new Customer(); } } class Mailer { public function send(Order $o): void { $o->owner()->name(); } }'],
+        yield 'local of unknown type in one branch' => [
+            ['a.php' => 'namespace App; class Customer { public function name(): string { return ""; } } class Mailer { public function send($any, bool $new): void { $c = $any->load(); if ($new) { $c = new Customer(); } $c->name(); } }'],
             'App\Mailer::send', 'App\Customer::name',
         ];
         yield 'local reassigned from an untyped value' => [

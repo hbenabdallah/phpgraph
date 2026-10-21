@@ -157,7 +157,7 @@ Chaque relation porte un niveau de confiance :
 |---|---|
 | `EXTRACTED` | Lu dans le code d'un fichier, ou dans la configuration (attribut, tag de service, fichier de routes). |
 | `INFERRED` | Résolu entre fichiers à partir des types déclarés : paramètres, propriétés, `$this`, héritage, types de retour, forme du code. |
-| `AMBIGUOUS` | Une supposition, par exemple la seule méthode du projet portant ce nom, appelée sur un récepteur de type inconnu. |
+| `AMBIGUOUS` | Une supposition, par exemple la seule méthode du projet portant ce nom, appelée sur un récepteur de type inconnu ; ou la méthode d'une classe qu'une variable peut contenir, quand une autre branche la laisse de type inconnu. |
 
 <details>
 <summary><b>Frameworks et conventions reconnus</b></summary>

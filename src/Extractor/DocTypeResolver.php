@@ -434,11 +434,13 @@ final class DocTypeResolver extends NodeVisitorAbstract
         if ($parts === []) {
             return null;
         }
-        // An intersection, `NodeDefinition&ParentNodeDefinitionInterface`: its first class.
-        $text = trim($this->split($parts[0], '&')[0]);
-        if ($text !== trim($parts[0])) {
-            return $this->generic($text, $methodTemplates, $bound);
+        // An intersection, `NodeDefinition&ParentNodeDefinitionInterface`: as a union, a call goes to the classes
+        // declaring its method.
+        $intersection = $this->split($parts[0], '&');
+        if (\count($intersection) > 1) {
+            return $this->union($intersection, $methodTemplates);
         }
+        $text = trim($parts[0]);
 
         if (str_ends_with($text, '[]')) {
             $element = $this->generic(substr($text, 0, -2), $methodTemplates, $bound);
