@@ -3,6 +3,13 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## 1.5.2 (2026-10-21)
+
+### Fixed
+- The Windows executable, missing from 1.5.1: the check of its PHP version compared versions with `sort -V`, and on
+  Windows the `sort` found first is System32's, which knows no `-V` and ends its lines with CRLF (it refused PHP 8.5.12
+  as older than 8.5.12). Versions are compared in bash now. Its runtime is PHP 8.5.12, as on the other platforms.
+
 ## 1.5.1 (2026-10-21)
 
 ### Security

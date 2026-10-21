@@ -86,8 +86,20 @@ retry "$spc" download --with-php="$PHP_VERSION" --for-extensions="$EXTENSIONS" -
 "$spc" build "$EXTENSIONS" --build-micro
 
 # The runtime built must not be older than PHP_MINIMUM: a cached or mirrored download could be.
+# Compared in bash: on Windows, `sort` is System32's (first in the PATH, see above), which knows no -V.
+at_least() {
+    local IFS=.
+    local -a version=($1) minimum=($2)
+    local i
+    for i in 0 1 2; do
+        if ((${version[i]:-0} != ${minimum[i]:-0})); then
+            ((${version[i]:-0} > ${minimum[i]:-0}))
+            return
+        fi
+    done
+}
 built=$(grep -ao 'X-Powered-By: PHP/[0-9.]*' "$micro" | head -1 | sed 's#.*PHP/##')
-if [ -z "$built" ] || [ "$(printf '%s\n%s\n' "$PHP_MINIMUM" "$built" | sort -V | head -1)" != "$PHP_MINIMUM" ]; then
+if [ -z "$built" ] || ! at_least "$built" "$PHP_MINIMUM"; then
     echo "The runtime built is PHP ${built:-unknown}, older than $PHP_MINIMUM: refusing to ship it." >&2
     exit 1
 fi
