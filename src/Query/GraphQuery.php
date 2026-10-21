@@ -12,6 +12,7 @@ use PhpGraph\Graph\Node;
 use PhpGraph\Graph\NodeKind;
 use PhpGraph\Graph\Relation;
 use PhpGraph\Project\ProjectSummary;
+use PhpGraph\Project\Rules\RuleSet;
 use PhpGraph\Query\Result\Architecture;
 use PhpGraph\Query\Result\Connection;
 use PhpGraph\Query\Result\Impact;
@@ -22,6 +23,7 @@ use PhpGraph\Query\Result\Path;
 use PhpGraph\Query\Result\PathMode;
 use PhpGraph\Query\Result\RankedNode;
 use PhpGraph\Query\Result\RouteEntry;
+use PhpGraph\Query\Result\RuleViolation;
 use PhpGraph\Query\Result\Subgraph;
 
 /**
@@ -282,6 +284,16 @@ final class GraphQuery
     public function architecture(): Architecture
     {
         return $this->architecture ??= (new LayerRules($this->graph))->check();
+    }
+
+    /**
+     * The breaches of the project's own rules (phpgraph.yaml `rules`).
+     *
+     * @return list<RuleViolation>
+     */
+    public function ruleViolations(RuleSet $rules): array
+    {
+        return (new ProjectRules($this->graph))->check($rules);
     }
 
     public function impactOf(Node $changed, int $maxDepth = 3, int $limit = 200): Impact

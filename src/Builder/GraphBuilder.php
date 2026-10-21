@@ -119,7 +119,7 @@ final class GraphBuilder
             $service = $serviceMap->serviceOf((string) $path);
             foreach ($extraction->nodes as $node) {
                 if ($service !== '' && $node->kind !== NodeKind::File) {
-                    $node = new Node(NameCanonicalizer::qualify($node->id, $service), $node->label, $node->kind, $node->file, $node->line, $service);
+                    $node = new Node(NameCanonicalizer::qualify($node->id, $service), $node->label, $node->kind, $node->file, $node->line, $service, $node->modifiers);
                 }
                 $existing = $graph->node($names->canonical($node->id));
                 if ($existing !== null && $node->kind !== NodeKind::Method) {
@@ -160,6 +160,8 @@ final class GraphBuilder
         $binders = [];
         /** @var array<string, string> $casts */
         $casts = [];
+        /** @var array<string, list<array{string, int, string}>> $assertions */
+        $assertions = [];
         /** @var array<string, array{method: string, types: list<string>|true|null}> $guards */
         $guards = [];
         /** @var array<string, list<array{string, int, list<?string>, list<?string>}>> $callArguments */
@@ -238,6 +240,9 @@ final class GraphBuilder
             }
             foreach ($extraction->templateBinders as $callable => $bindersOfCallable) {
                 $binders[$id($callable)] ??= $bindersOfCallable;
+            }
+            foreach ($extraction->assertions as $callable => $assertionsOfCallable) {
+                $assertions[$id($callable)] ??= array_map(static fn (array $assertion): array => [$assertion[0], $assertion[1], GenericType::mapNames($assertion[2], $id)], $assertionsOfCallable);
             }
             foreach ($extraction->mixins as $class => $classes) {
                 $mixins[$id($class)] ??= array_map($id, $classes);
@@ -353,7 +358,7 @@ final class GraphBuilder
         }
 
         $methodsByClass = $this->methodsByClass($graph);
-        $types = new TypeResolver($graph, $names, $methodsByClass, $returnTypes, $propertyTypes, $vendor, $returnElements, new Generics($templates, $parentArguments, $genericReturns, $genericProperties, $documentedMethods, $mixins, $conditionals, $callables, $binders, $casts));
+        $types = new TypeResolver($graph, $names, $methodsByClass, $returnTypes, $propertyTypes, $vendor, $returnElements, new Generics($templates, $parentArguments, $genericReturns, $genericProperties, $documentedMethods, $mixins, $conditionals, $callables, $binders, $casts, $assertions));
 
         // A method reading a property typed as an enum (`$violation->type`) uses that enum: what it outputs depends on it.
         foreach ($propertyReads as [$reader, $property]) {
@@ -696,18 +701,31 @@ final class GraphBuilder
         $name = strtolower($call->method);
 
         $leftProject = false;
-        $class = $call->receiver === null ? null : $types->resolveReceiver($call->receiver, $call->method, $leftProject);
+        [$classes, $complete] = $call->receiver === null ? [[], false] : $types->receivers($call->receiver, $call->method, $leftProject);
 
-        if ($class !== null) {
-            $found = $types->findMethod($class, $name);
-
+        // Each class the receiver may be gets an edge to its method: INFERRED when every branch typed the receiver,
+        // AMBIGUOUS when one of them left it unknown (the call may go elsewhere too).
+        $found = [];
+        $declared = false;
+        foreach ($classes as $class) {
+            $method = $types->findMethod($class, $name);
+            $declared = $declared || $method !== null;
             // A method found in a dependency is outside the project, like before: no node, no call edge.
-            if ($found !== null && $graph->hasNode($found)) {
-                $results[] = [new Edge($call->source, $found, Relation::Calls, Confidence::Inferred, (string) $call->line, self::named($call)), 'inferred', $call->method];
-            } else {
-                $edge = $call->referenceOnMiss ? new Edge($call->source, $class, Relation::References, Confidence::Extracted) : null;
-                $results[] = [$edge, 'outsideProject', $call->method];
+            if ($method !== null && $graph->hasNode($method) && !\in_array($method, $found, true)) {
+                $found[] = $method;
             }
+        }
+        if ($found !== []) {
+            foreach ($found as $index => $method) {
+                $outcome = $index > 0 ? '' : ($complete ? 'inferred' : 'ambiguous');
+                $results[] = [new Edge($call->source, $method, Relation::Calls, $complete ? Confidence::Inferred : Confidence::Ambiguous, (string) $call->line, self::named($call)), $outcome, $call->method];
+            }
+
+            return;
+        }
+        if ($classes !== [] && ($complete || $declared)) {
+            $edge = $call->referenceOnMiss ? new Edge($call->source, $classes[0], Relation::References, Confidence::Extracted) : null;
+            $results[] = [$edge, 'outsideProject', $call->method];
 
             return;
         }

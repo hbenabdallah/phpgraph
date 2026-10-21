@@ -27,7 +27,7 @@
 
 An AI agent dropped into an unfamiliar PHP project reads files one by one and greps for names. It misses what matters most in a real codebase: **who calls what, which handler receives a message, which controller serves a route, what breaks if a method changes, and which layer depends on which**.
 
-phpgraph parses the whole project once (with [`nikic/php-parser`](https://github.com/nikic/PHP-Parser)) and answers those questions from a graph:
+phpgraph parses the whole project once (with [`nikic/php-parser`](https://github.com/nikic/PHP-Parser), docblocks with [`phpstan/phpdoc-parser`](https://github.com/phpstan/phpdoc-parser)) and answers those questions from a graph:
 
 - **Deterministic facts, not guesses.** Every relation is `EXTRACTED` (read in the code), `INFERRED` (resolved from declared types) or `AMBIGUOUS` (a guess, labelled as such).
 - **It says what it does not know.** Unresolved calls, missing `vendor/`, messages without handlers: the gaps are reported, so the agent knows when to read the code itself.
@@ -158,8 +158,8 @@ Every relation carries a confidence level:
 | Level | Meaning |
 |---|---|
 | `EXTRACTED` | Read in the code of one file, or in the configuration (attribute, service tag, route file). |
-| `INFERRED` | Resolved across files from declared types: parameters, properties, `$this`, inheritance, return types, shape of the code. |
-| `AMBIGUOUS` | A guess, for example the only method of the project with that name, called on a receiver of unknown type. |
+| `INFERRED` | Resolved across files from declared types: parameters, properties, `$this`, inheritance, return types, `instanceof` tests, shape of the code. A variable that branches leave holding one of several classes links a call to the method of each. |
+| `AMBIGUOUS` | A guess, for example the only method of the project with that name, called on a receiver of unknown type; or the method of a class a variable may hold, when another branch leaves it of unknown type. |
 
 <details>
 <summary><b>Frameworks and conventions recognised</b></summary>
@@ -186,6 +186,30 @@ The layer of a class is read from its namespace: the first explicit segment (`Do
 phpgraph check --generate-baseline   # accept today's violations in phpgraph-baseline.json
 phpgraph check                       # fail on new ones only
 ```
+
+The project's own rules go in `phpgraph.yaml`, checked by the same command, with the same baseline. Patterns are globs on class names (`*` within a namespace segment, `**` across segments), and a namespace ending with `\` is everything in it:
+
+```yaml
+rules:
+  dependencies:                       # who may depend on what
+    - name: doctrine-in-infrastructure
+      dependency: 'Doctrine\'
+      allow-from: ['App\*\Infrastructure\']  # or deny-from, which wins
+      reason: Only infrastructure talks to the database.
+  structure:                          # what the classes a pattern selects must be
+    - on: 'App\**\Controller\*'
+      not-on: 'App\Legacy\**'
+      target: class                   # class, interface, trait or enum
+      must-be-final: true             # must-be-abstract, must-be-readonly: true or false
+      must-be-named: '*Controller'
+      must-implement: ['App\Shared\Http\Controller']   # must-extend, must-use-trait
+      only-public-methods: [__construct, __invoke]
+  handlers:                           # a message handler dispatches the messages of its own bounded context
+    own-context: true
+    shared: [Shared]                  # contexts any handler may use
+```
+
+Dependencies are the certain ones (EXTRACTED and INFERRED: types, attributes, `new`, calls, inheritance) of application code; inheritance is read from the graph, so the parents of a class of `vendor/` are not known. The bounded context of a handler and of a message is read from their namespaces, as for the layers.
 
 </details>
 
@@ -244,17 +268,17 @@ Rebuilds are incremental: a file's extraction is cached by content, and the MCP 
 
 ## Measured on real projects
 
-phpgraph is developed against a corpus of open-source projects pinned to a commit, and every change is judged on their numbers (`composer corpus:measure`). Application code only; *receiver typed* is the share of method calls whose receiver type phpgraph could determine.
+phpgraph is developed against a corpus of open-source projects pinned to a commit, and every change is judged on their numbers (`composer corpus:measure`). Application code only; *receiver typed* is the share of method calls whose receiver type phpgraph could determine. Builds measured by `corpus:measure`, one project at a time, in Docker (PHP 8.5, no opcache), version 1.5.0.
 
 | Project | Kind | PHP files | Build | Receiver typed |
 |---|---|---:|---:|---:|
-| [php-ddd-example](https://github.com/CodelyTV/php-ddd-example) | DDD, CQRS | 304 | 0.4 s | 98.9 % |
-| [Sylius](https://github.com/Sylius/Sylius) | Symfony e-commerce | 4,946 | 6.5 s | 96.9 % |
-| [Akeneo PIM](https://github.com/akeneo/pim-community-dev) | hexagonal, bounded contexts | 8,416 | 10.3 s | 90.4 % |
-| [PrestaShop](https://github.com/PrestaShop/PrestaShop) | CQRS and legacy | 7,850 | 10.0 s | 96.1 % |
-| [Ecotone quickstart](https://github.com/ecotoneframework/quickstart-examples) | 47 services, messaging | 583 | 0.6 s | 94.4 % |
-| [BookStack](https://github.com/BookStackApp/BookStack) | Laravel | 1,513 | 2.8 s | 96.2 % |
-| [WordPress](https://github.com/WordPress/WordPress) | no framework, hooks | 1,899 | 5.3 s | 93.6 % |
+| [php-ddd-example](https://github.com/CodelyTV/php-ddd-example) | DDD, CQRS | 304 | 0.8 s | 99.1 % |
+| [Sylius](https://github.com/Sylius/Sylius) | Symfony e-commerce | 4,946 | 13.9 s | 98.3 % |
+| [Akeneo PIM](https://github.com/akeneo/pim-community-dev) | hexagonal, bounded contexts | 8,416 | 21.9 s | 92.9 % |
+| [PrestaShop](https://github.com/PrestaShop/PrestaShop) | CQRS and legacy | 7,850 | 21.1 s | 96.6 % |
+| [Ecotone quickstart](https://github.com/ecotoneframework/quickstart-examples) | 47 services, messaging | 583 | 1.3 s | 94.5 % |
+| [BookStack](https://github.com/BookStackApp/BookStack) | Laravel | 1,513 | 5.6 s | 97.3 % |
+| [WordPress](https://github.com/WordPress/WordPress) | no framework, hooks | 1,899 | 10.9 s | 96.0 % |
 
 Four microservices projects complete the corpus: [two Laravel services over RabbitMQ](https://github.com/mostafaaminflakes/Using-RabbitMQ-in-Microservices), linked by 4 message contracts; [four Laravel services over HTTP](https://github.com/omarihab99/Art-Gallery), where phpgraph found a `POST` sent to a `GET`-only route; [Spiral's ticket booking](https://github.com/spiral/ticket-booking), services calling each other through gRPC services declared in `.proto` files; and [StayHub](https://github.com/ahmedibrahimyassindev/StayHub), seven Laravel services behind an API gateway described by an OpenAPI file. The last two measure API schemas as contracts: all 45 operations of StayHub's document and all 14 rpcs of ticket-booking are linked to what implements them. Zero parse failures on about 26,600 files. The details per project, including messages, routes and services, are in [`corpus/RESULTS.md`](https://github.com/hbenabdallah/phpgraph/blob/main/corpus/RESULTS.md).
 
@@ -296,13 +320,15 @@ Sylius (the corpus commit), October 2026, without any LLM: phpgraph 1.0.2, [code
 
 **Which agents does it work with?** Any MCP client over stdio: [Sherpa](https://github.com/hbenabdallah/sherpa), Claude Code, Codex, Cursor, Claude Desktop, and others. `mcp-config` prints the configuration for the common ones.
 
-**How large a project can it handle?** The largest project of the corpus, Akeneo, has 8,400 files: about 10 s and 500 MB for a full build, about 3 s for a rebuild after an edit.
+**How large a project can it handle?** The largest project of the corpus, Akeneo, has 8,400 files: about 22 s and 730 MB for a full build (in Docker, without opcache), about 3 s for a rebuild after an edit.
 
 ## Limitations
 
 - Only PHP is read: `overview` names the other languages of a mixed repository (their calls to the PHP part are not linked), and the MCP instructions say at once when a project has no PHP at all.
 - Calls to global functions are not edges of the graph, though what a function returns types the calls on it (`now()->addDay()`, `response()->json()`); dynamic calls (`$this->$name()`, `__call`) are resolved only through the methods a class documents (`@method`, `@mixin`).
-- Generics are read from docblocks (`@template`, `@extends Repository<Order>`, `@return Collection<int, Item>`, `ScalarNodeDefinition<$this>`), in the project and in `vendor/`: a template is bound by the type of the receiver and the parents passing it on, and a `foreach` walks the elements of any typed collection. A union (`Response|ResponseFactory`, documented or declared) is called on the member declaring the method, and only when one member does; a closure passed to a method gets the parameters the method documents it passes (`@param callable($this): mixed`, Laravel's `when(fn ($query) => ...)`); `@use HasFactory<HotelFactory>` on a trait use binds its templates. A template of a method is bound by the arguments of each call: the class an argument names (`getRepository(Order::class)` with `@param class-string<T>`), the type of a value (`@param T $value`), what a closure returns (`@param callable(): T`, its return statements or native type). `@phpstan-return` and `@psalm-return` are read before `@return`; a condition the arguments do not decide (`TAsync is false ? Response : PromiseInterface`) gives the union of its branches. Magic properties documented with `@property` and `@property-read` carry chains on; on an Eloquent model, so do the casts (`'paid_at' => 'datetime'` is a Carbon, an enum, the `TGet` of a cast class), the timestamps and the relations read as properties (`$page->book`, what `book()->getResults()` returns). A method declaring no return type returns what the method it overrides declares (`@inheritDoc`). Conditions on a type (`$id is array ? Collection : Model`) are not evaluated, and a facade method documented as `mixed` (`DB::transaction()`) stays unknown.
+- Docblocks are read by phpstan/phpdoc-parser: a type may be written over several lines, a tag may follow another on the same line of a one-line docblock, and the forms older code writes though PHPDoc does not allow them are read as they mean (`callable(Foo $x)` without a return type, `?A|B`, `@method static NAME(): Type`). Generics are read from docblocks (`@template`, `@extends Repository<Order>`, `@return Collection<int, Item>`, `ScalarNodeDefinition<$this>`), in the project and in `vendor/`: a template is bound by the type of the receiver and the parents passing it on, and a `foreach` walks the elements of any typed collection. A union (`Response|ResponseFactory`) or an intersection (`Countable&Named`), documented or declared, is called on every member declaring the method; a closure passed to a method gets the parameters the method documents it passes (`@param callable($this): mixed`, Laravel's `when(fn ($query) => ...)`); `@use HasFactory<HotelFactory>` on a trait use binds its templates. A template of a method is bound by the arguments of each call: the class an argument names (`getRepository(Order::class)` with `@param class-string<T>`), the type of a value (`@param T $value`), what a closure returns (`@param callable(): T`, its return statements or native type). `@phpstan-return` and `@psalm-return` are read before `@return`; a condition the arguments do not decide (`TAsync is false ? Response : PromiseInterface`) gives the union of its branches. Magic properties documented with `@property` and `@property-read` carry chains on; on an Eloquent model, so do the casts (`'paid_at' => 'datetime'` is a Carbon, an enum, the `TGet` of a cast class), the timestamps and the relations read as properties (`$page->book`, what `book()->getResults()` returns). A method declaring no return type returns what the method it overrides declares (`@inheritDoc`). Conditions on a type (`$id is array ? Collection : Model`) are not evaluated, and a facade method documented as `mixed` (`DB::transaction()`) stays unknown.
+- Local variables follow the branches of a function: where `if`/`elseif`/`else`, `switch`, `match`, `try`/`catch`, a ternary, `??` or a loop meet, a variable holds what any branch reaching that point assigned (one ending in `return`, `throw`, `exit`, `break` or `continue` does not reach it, `null` and scalars add nothing). `instanceof`, `is_a()`, `assert()`, `&&`/`||` and `match (true)` narrow a variable where they hold, a negated test followed by an exit (`if (!$x instanceof Foo) { return; }`) narrows the code after it. A call on such a variable is linked to the method of each class it may hold: INFERRED when every branch typed it, AMBIGUOUS when one left it of unknown type. A call narrows its arguments as its callable documents it, in the project or in `vendor/`: `@phpstan-assert`, `@psalm-assert` and their `-if-true`/`-if-false` forms, a template bound by a `class-string` argument included (WordPress's `is_wp_error()`, `Webmozart\Assert\Assert::isInstanceOf($x, Order::class)`, PHPUnit's `assertInstanceOf()`); only calls named like an assertion are looked up (`is…`, `assert…`, `ensure…`, `check…`, `expect…`, `validate…`, `verify…`, any static method of an `…Assert` or `…Assertion` class). Only variables are narrowed, not properties (`$this->x instanceof Foo`), and a loop body is read once (a type assigned at its end is not seen at its start).
+- What a library makes of a call its signatures do not say comes from its provider (`src/Builder/Libraries`): a PSR-11 container asked for a class gives an instance of it (`$container->get(Mailer::class)`), an Eloquent model's attributes have the types of their casts, timestamps and relations.
 - Chains stop at magic methods and at dependencies without a usable return type. PHP's own classes (`DateTime`, `ArrayObject`, `SplObjectStorage`, `PDO`...) are known from signatures generated once (`tools/internal-classes.php`); those of the `intl` and `mysqli` extensions are not.
 - Without an installed `vendor/`, call chains stop at the first dependency.
 - Services built at runtime (compiler passes, bundle extensions, ids computed from values only known at runtime), XML routes (but action files mapped in `phpgraph.yaml`), API Platform resources declared in XML or YAML, and API schemas other than OpenAPI and protobuf (GraphQL, AsyncAPI) are not read; an OpenAPI path rewritten by a gateway is not followed; injections that cannot be linked are listed by `overview`.

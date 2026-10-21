@@ -9,10 +9,46 @@ use PhpParser\Node as AstNode;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt;
 use PhpParser\NodeVisitorAbstract;
+use PHPStan\PhpDocParser\Ast\PhpDoc\AssertTagValueNode;
+use PHPStan\PhpDocParser\Ast\PhpDoc\ExtendsTagValueNode;
+use PHPStan\PhpDocParser\Ast\PhpDoc\GenericTagValueNode;
+use PHPStan\PhpDocParser\Ast\PhpDoc\ImplementsTagValueNode;
+use PHPStan\PhpDocParser\Ast\PhpDoc\InvalidTagValueNode;
+use PHPStan\PhpDocParser\Ast\PhpDoc\MethodTagValueNode;
+use PHPStan\PhpDocParser\Ast\PhpDoc\MixinTagValueNode;
+use PHPStan\PhpDocParser\Ast\PhpDoc\ParamTagValueNode;
+use PHPStan\PhpDocParser\Ast\PhpDoc\PhpDocNode;
+use PHPStan\PhpDocParser\Ast\PhpDoc\PhpDocTagNode;
+use PHPStan\PhpDocParser\Ast\PhpDoc\PropertyTagValueNode;
+use PHPStan\PhpDocParser\Ast\PhpDoc\ReturnTagValueNode;
+use PHPStan\PhpDocParser\Ast\PhpDoc\TemplateTagValueNode;
+use PHPStan\PhpDocParser\Ast\PhpDoc\UsesTagValueNode;
+use PHPStan\PhpDocParser\Ast\PhpDoc\VarTagValueNode;
+use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\CallableTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\CallableTypeParameterNode;
+use PHPStan\PhpDocParser\Ast\Type\ConditionalTypeForParameterNode;
+use PHPStan\PhpDocParser\Ast\Type\ConditionalTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\NullableTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\ThisTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\TypeNode;
+use PHPStan\PhpDocParser\Ast\Type\UnionTypeNode;
+use PHPStan\PhpDocParser\Lexer\Lexer;
+use PHPStan\PhpDocParser\Parser\ConstExprParser;
+use PHPStan\PhpDocParser\Parser\ParserException;
+use PHPStan\PhpDocParser\Parser\PhpDocParser;
+use PHPStan\PhpDocParser\Parser\TokenIterator;
+use PHPStan\PhpDocParser\Parser\TypeParser;
+use PHPStan\PhpDocParser\ParserConfig;
 
 /**
  * Reads the class types written in docblocks (`@return`, `@var`) and stores them, resolved against the `use`
- * statements in force, as node attributes. Runs right after NameResolver, which owns the name context.
+ * statements in force, as node attributes. Runs right after NameResolver, which owns the name context. Docblocks
+ * are read by phpstan/phpdoc-parser: types written over several lines, nested generics, shapes and conditions are
+ * its trees, which this class interprets.
  *
  * The plain attributes keep a single class: `Foo`, `?Foo`, `Foo|null`, `Foo|false`, `Collection<Foo>` (as
  * Collection), `self`, `static` or `$this` (as TypeExpr::STATIC). Unions, arrays, scalars and template parameters
@@ -108,14 +144,38 @@ final class DocTypeResolver extends NodeVisitorAbstract
     public const TEMPLATE_BINDERS = 'phpgraph.templateBinders';
 
     /**
+     * list<array{string, int, string}>: what a call tells of an argument, `@phpstan-assert`, `@psalm-assert` and their
+     * `-if-true` and `-if-false` forms: when it holds (`always`, once the call returns; `true` or `false`, what it
+     * returns), the position of the parameter, the GenericType it is then (a template a call binds is `@#T`, as in
+     * `@psalm-assert ExpectedType $value` with `@psalm-param class-string<ExpectedType> $class`). Negations
+     * (`!null`) and types no class is in (`array`, `'prefetch'`) are left out.
+     */
+    public const ASSERTIONS = 'phpgraph.assertions';
+
+    /**
      * Iterables whose last argument is their elements; Generator has its own place for them.
      */
     private const ITERABLES = ['array', 'list', 'non-empty-list', 'non-empty-array', 'iterable'];
 
+    /**
+     * The collections whose last argument `@param` and `@return` element types are read from.
+     */
+    private const COLLECTIONS = ['array', 'list', 'non-empty-list', 'non-empty-array', 'iterable', 'traversable', 'iterator', 'iteratoraggregate', 'generator'];
+
     private const BUILTIN = [
         'array', 'bool', 'boolean', 'callable', 'false', 'float', 'double', 'int', 'integer', 'iterable', 'mixed',
-        'never', 'null', 'object', 'resource', 'string', 'true', 'void', 'list', 'scalar', 'numeric',
+        'never', 'null', 'object', 'resource', 'string', 'true', 'void', 'list', 'scalar', 'numeric', 'empty',
     ];
+
+    /**
+     * The size of a docblock past which its tags are parsed one by one.
+     */
+    private const LARGE_DOC = 16384;
+
+    /**
+     * Tags read with a type the parser does not know by these names: their value is parsed as a type.
+     */
+    private const UNPARSED_TAGS = ['@phpstan-mixin', '@psalm-mixin', '@psalm-extends', '@psalm-implements', '@psalm-use'];
 
     /** @var list<list<string>> */
     private array $classTemplates = [];
@@ -126,52 +186,73 @@ final class DocTypeResolver extends NodeVisitorAbstract
     /** @var list<Stmt\ClassLike> */
     private array $classNodes = [];
 
+    private readonly Lexer $lexer;
+
+    private readonly PhpDocParser $parser;
+
+    private readonly TypeParser $typeParser;
+
     public function __construct(private readonly NameContext $names)
     {
+        $config = new ParserConfig([]);
+        $this->lexer = new Lexer($config);
+        $expressions = new ConstExprParser($config);
+        $this->typeParser = new TypeParser($config, $expressions);
+        $this->parser = new PhpDocParser($config, $this->typeParser, $expressions);
     }
 
     public function enterNode(AstNode $node)
     {
-        $doc = $node->getDocComment()?->getText();
+        $text = $node->getDocComment()?->getText();
+        $doc = $text === null ? null : $this->parse($text);
 
         if ($node instanceof Stmt\ClassLike) {
             $templates = $doc === null ? [] : $this->templates($doc);
             $this->classTemplates[] = $templates;
             $this->classNames[] = $node->namespacedName?->toString();
             $this->classNodes[] = $node;
+            if ($doc === null) {
+                return null;
+            }
             if ($templates !== []) {
                 $node->setAttribute(self::TEMPLATES, $templates);
             }
-            $parents = $this->parentArguments($doc ?? '');
+            $parents = $this->parentArguments($doc);
             if ($parents !== []) {
                 $node->setAttribute(self::PARENT_ARGUMENTS, $parents);
             }
 
-            $methods = [];
-            preg_match_all('/@(?:phpstan-|psalm-)?method\s+(?:static\s+)?(?:(\S+(?:<[^>]*>)?)\s+)?(\w+)\s*\(/', $doc ?? '', $matches, \PREG_SET_ORDER);
-            foreach ($matches as $match) {
-                $type = $match[1] === '' ? null : $this->resolve($match[1], $templates);
-                $generic = $match[1] === '' ? null : $this->generic($match[1], []);
-                $methods[strtolower($match[2])] = [$match[2], $type, $generic !== null && GenericType::isGeneric($generic) ? $generic : null];
+            $methods = $properties = $mixins = [];
+            foreach ($doc->getTags() as $tag) {
+                $value = $tag->value;
+                if ($value instanceof MethodTagValueNode) {
+                    $returned = $value->returnType;
+                    $generic = $returned === null ? null : $this->generic($returned, []);
+                    $methods[strtolower($value->methodName)] = [
+                        $value->methodName,
+                        $returned === null ? null : $this->resolve($returned, $templates),
+                        $generic !== null && GenericType::isGeneric($generic) ? $generic : null,
+                    ];
+                } elseif ($value instanceof PropertyTagValueNode && !str_ends_with($tag->name, '-write')) {
+                    $type = $this->resolve($value->type, $templates) ?? $this->single($value->type, []);
+                    $generic = $this->generic($value->type, []);
+                    if ($type !== null || ($generic !== null && GenericType::isGeneric($generic))) {
+                        $properties[substr($value->propertyName, 1)] = [$type, $generic !== null && GenericType::isGeneric($generic) ? $generic : null];
+                    }
+                } elseif (\in_array($tag->name, ['@mixin', '@phpstan-mixin', '@psalm-mixin'], true)) {
+                    $mixin = $this->tagType($tag);
+                    $mixin = $mixin === null ? null : $this->resolve($mixin, $templates);
+                    if ($mixin !== null) {
+                        $mixins[] = $mixin;
+                    }
+                }
             }
             if ($methods !== []) {
                 $node->setAttribute(self::DOC_METHODS, $methods);
             }
-            $properties = [];
-            preg_match_all('/@(?:phpstan-|psalm-)?property(?:-read)?\s+(\S.*?)\s*\$(\w+)/', $doc ?? '', $matches, \PREG_SET_ORDER);
-            foreach ($matches as $match) {
-                $token = $this->firstType($match[1]);
-                $type = $this->resolve($token, $templates) ?? $this->single($token, []);
-                $generic = $this->generic($token, []);
-                if ($type !== null || ($generic !== null && GenericType::isGeneric($generic))) {
-                    $properties[$match[2]] = [$type, $generic !== null && GenericType::isGeneric($generic) ? $generic : null];
-                }
-            }
             if ($properties !== []) {
                 $node->setAttribute(self::DOC_PROPERTIES, $properties);
             }
-            preg_match_all('/@(?:phpstan-|psalm-)?mixin\s+(\S+)/', $doc ?? '', $matches);
-            $mixins = array_values(array_filter(array_map(fn (string $mixin): ?string => $this->resolve($mixin, $templates), $matches[1])));
             if ($mixins !== []) {
                 $node->setAttribute(self::MIXINS, $mixins);
             }
@@ -196,103 +277,20 @@ final class DocTypeResolver extends NodeVisitorAbstract
         }
 
         if ($node instanceof Stmt\ClassMethod || $node instanceof Stmt\Function_) {
-            $positions = [];
-            foreach ($node->params as $position => $param) {
-                if ($param->var instanceof AstNode\Expr\Variable && \is_string($param->var->name)) {
-                    $positions[$param->var->name] = $position;
-                }
-            }
-            $binders = $this->binders($doc, $positions);
-            if ($binders !== []) {
-                $node->setAttribute(self::TEMPLATE_BINDERS, $binders);
-            }
-            if (($match = $this->returnTag($doc, array_keys($binders))) !== null) {
-                $type = $this->resolve($match[1], $this->templates($doc)) ?? $this->single($this->firstType(trim($match[1])), $this->templates($doc));
-                // `@phpstan-return T|false` beside `@return WP_List_Table|false`: the class when T is not bound.
-                if ($type === null && preg_match('/@return\s+(.+)/', $doc, $plain) === 1) {
-                    $type = $this->resolve($plain[1], $this->templates($doc)) ?? $this->single($this->firstType(trim($plain[1])), $this->templates($doc));
-                }
-                if ($type !== null) {
-                    $node->setAttribute(self::RETURN_TYPE, $type);
-                }
-                $element = $this->elementType($this->firstType(trim($match[1])), $this->templates($doc));
-                if ($element !== null) {
-                    $node->setAttribute(self::RETURN_ELEMENT, $element);
-                }
-                $generic = $this->generic($this->firstType(trim($match[1])), $this->templates($doc), array_keys($binders));
-                if ($generic !== null && GenericType::isGeneric($generic)) {
-                    $node->setAttribute(self::RETURN_GENERIC, $generic);
-                }
-                $conditional = $this->conditional($this->firstType(trim($match[1])), $positions);
-                if ($conditional !== null && $conditional !== ['type' => null]) {
-                    $node->setAttribute(self::RETURN_CONDITIONAL, json_encode($conditional));
-                }
-            }
-            $elements = $types = $generics = $callables = [];
-            foreach (preg_split('/\R/', $doc) ?: [] as $line) {
-                if (preg_match('/@(?:phpstan-|psalm-)?param\s+(.+)/', $line, $match) === 1) {
-                    $token = $this->firstType(trim($match[1]));
-                    if (preg_match('/^\s*(?:\.\.\.)?\$(\w+)/', substr(trim($match[1]), \strlen($token)), $variable) !== 1) {
-                        continue;
-                    }
-                    $element = $this->elementType($token, $this->templates($doc));
-                    if ($element !== null) {
-                        $elements[$variable[1]] = $element;
-                    }
-                    $type = $this->resolve($token, $this->templates($doc)) ?? $this->single($token, $this->templates($doc));
-                    if ($type !== null && $type !== TypeExpr::STATIC) {
-                        $types[$variable[1]] = $type;
-                    }
-                    $generic = $this->generic($token, $this->templates($doc));
-                    if ($generic !== null && GenericType::isGeneric($generic)) {
-                        $generics[$variable[1]] = $generic;
-                    }
-                    $callable = $this->callableParameters($token, $this->templates($doc));
-                    if ($callable !== null) {
-                        $callables[$variable[1]] = $callable;
-                    }
-                }
-            }
-            foreach ($node->params as $position => $param) {
-                if ($param->var instanceof AstNode\Expr\Variable && \is_string($param->var->name) && isset($callables[$param->var->name])) {
-                    $callables[$position] = $callables[$param->var->name];
-                }
-            }
-            if ($callables !== []) {
-                $node->setAttribute(self::CALLABLE_PARAMETERS, $callables);
-            }
-            if ($generics !== []) {
-                $node->setAttribute(self::GENERICS, $generics);
-            }
-            if ($elements !== []) {
-                $node->setAttribute(self::ELEMENT_TYPES, $elements);
-            }
-            if ($types !== []) {
-                $node->setAttribute(self::PARAM_TYPES, $types);
-            }
+            $this->onCallable($node, $doc);
 
             return null;
         }
 
         $types = $generics = [];
-        foreach (preg_split('/\R/', $doc) ?: [] as $line) {
-            if (preg_match('/@(?:phpstan-|psalm-)?var\s+(.+)/', $line, $match) !== 1) {
-                continue;
+        $first = null;
+        foreach ($this->vars($doc) as [$name, $type]) {
+            $first ??= $type;
+            $class = $this->resolve($type) ?? $this->single($type, []);
+            if ($class !== null) {
+                $types[$name] = $class;
             }
-            $text = trim($match[1]);
-            if (preg_match('/^\$(\w+)\s+(.+)/', $text, $reversed) === 1) {
-                $name = $reversed[1];
-                $token = $this->firstType(trim($reversed[2]));
-            } else {
-                $token = $this->firstType($text);
-                $rest = trim(substr($text, \strlen($token)));
-                $name = preg_match('/^\$(\w+)/', $rest, $variable) === 1 ? $variable[1] : '';
-            }
-            $type = $this->resolve($token) ?? $this->single($token, []);
-            if ($type !== null) {
-                $types[$name] = $type;
-            }
-            $generic = $this->generic($token, []);
+            $generic = $this->generic($type, []);
             if ($generic !== null && GenericType::isGeneric($generic)) {
                 $generics[$name] = $generic;
             }
@@ -304,47 +302,14 @@ final class DocTypeResolver extends NodeVisitorAbstract
         if ($generics !== []) {
             $node->setAttribute(self::GENERICS, $generics);
         }
-        if ($node instanceof Stmt\Property && preg_match('/@(?:phpstan-|psalm-)?var\s+(.+)/', $doc, $match) === 1) {
-            $element = $this->elementType($this->firstType(trim($match[1])));
+        if ($node instanceof Stmt\Property && $first !== null) {
+            $element = $this->elementType($first);
             if ($element !== null) {
                 $node->setAttribute(self::ELEMENT_TYPES, ['' => $element]);
             }
         }
 
         return null;
-    }
-
-    /**
-     * The class of the elements of a collection type: `Rule[]`, `array<Rule>`, `array<int, Rule>`, `list<Rule>`,
-     * `iterable<Rule>`, `Traversable<int, Rule>`; null for anything else.
-     *
-     * @param list<string> $templates
-     */
-    private function elementType(string $type, array $templates = []): ?string
-    {
-        $type = ltrim($type, '?');
-        if (str_ends_with($type, '[]') && !str_contains($type, '<')) {
-            return $this->resolve(substr($type, 0, -2), $templates);
-        }
-        if (preg_match('/^\\\\?(array|list|non-empty-list|non-empty-array|iterable|Traversable|Iterator|IteratorAggregate|Generator)<(.+)>$/i', $type, $match) !== 1) {
-            return null;
-        }
-        // The last argument outside nested brackets: `array<int, Rule>` gives Rule.
-        $depth = 0;
-        $start = 0;
-        $arguments = $match[2];
-        for ($i = 0, $length = \strlen($arguments); $i < $length; ++$i) {
-            $depth += match ($arguments[$i]) {
-                '<', '{', '(' => 1,
-                '>', '}', ')' => -1,
-                default => 0,
-            };
-            if ($depth === 0 && $arguments[$i] === ',') {
-                $start = $i + 1;
-            }
-        }
-
-        return $this->resolve(trim(substr($arguments, $start)), $templates);
     }
 
     public function leaveNode(AstNode $node)
@@ -358,26 +323,308 @@ final class DocTypeResolver extends NodeVisitorAbstract
         return null;
     }
 
+    private function onCallable(Stmt\ClassMethod|Stmt\Function_ $node, PhpDocNode $doc): void
+    {
+        $positions = [];
+        foreach ($node->params as $position => $param) {
+            if ($param->var instanceof AstNode\Expr\Variable && \is_string($param->var->name)) {
+                $positions[$param->var->name] = $position;
+            }
+        }
+        $templates = $this->templates($doc);
+        $binders = $this->binders($doc, $positions, $templates);
+        if ($binders !== []) {
+            $node->setAttribute(self::TEMPLATE_BINDERS, $binders);
+        }
+        [$returned, $plain] = $this->returnTag($doc, $templates, array_keys($binders));
+        if ($returned !== null) {
+            $type = $this->resolve($returned, $templates) ?? $this->single($returned, $templates);
+            // `@phpstan-return T|false` beside `@return WP_List_Table|false`: the class when T is not bound.
+            if ($type === null && $plain !== null) {
+                $type = $this->resolve($plain, $templates) ?? $this->single($plain, $templates);
+            }
+            if ($type !== null) {
+                $node->setAttribute(self::RETURN_TYPE, $type);
+            }
+            $element = $this->elementType($returned, $templates);
+            if ($element !== null) {
+                $node->setAttribute(self::RETURN_ELEMENT, $element);
+            }
+            $generic = $this->generic($returned, $templates, array_keys($binders));
+            if ($generic !== null && GenericType::isGeneric($generic)) {
+                $node->setAttribute(self::RETURN_GENERIC, $generic);
+            }
+            $conditional = $this->conditional($returned, $positions);
+            // A condition whose branches name no class says nothing: the plain `@return` is read instead.
+            $tree = $conditional === null ? '' : (string) json_encode($conditional);
+            if (str_contains($tree, '"type":"') || str_contains($tree, '"arg":')) {
+                $node->setAttribute(self::RETURN_CONDITIONAL, $tree);
+            }
+        }
+
+        $elements = $types = $generics = $callables = [];
+        foreach ($this->params($doc) as [$name, $type]) {
+            $element = $this->elementType($type, $templates);
+            if ($element !== null) {
+                $elements[$name] = $element;
+            }
+            $class = $this->resolve($type, $templates) ?? $this->single($type, $templates);
+            if ($class !== null && $class !== TypeExpr::STATIC) {
+                $types[$name] = $class;
+            }
+            $generic = $this->generic($type, $templates);
+            if ($generic !== null && GenericType::isGeneric($generic)) {
+                $generics[$name] = $generic;
+            }
+            $callable = $this->callableParameters($type, $templates);
+            if ($callable !== null) {
+                $callables[$name] = $callable;
+            }
+        }
+        foreach ($node->params as $position => $param) {
+            if ($param->var instanceof AstNode\Expr\Variable && \is_string($param->var->name) && isset($callables[$param->var->name])) {
+                $callables[$position] = $callables[$param->var->name];
+            }
+        }
+        if ($callables !== []) {
+            $node->setAttribute(self::CALLABLE_PARAMETERS, $callables);
+        }
+        $assertions = $this->assertions($doc, $positions, $templates, array_keys($binders));
+        if ($assertions !== []) {
+            $node->setAttribute(self::ASSERTIONS, $assertions);
+        }
+        if ($generics !== []) {
+            $node->setAttribute(self::GENERICS, $generics);
+        }
+        if ($elements !== []) {
+            $node->setAttribute(self::ELEMENT_TYPES, $elements);
+        }
+        if ($types !== []) {
+            $node->setAttribute(self::PARAM_TYPES, $types);
+        }
+    }
+
     /**
+     * The docblock as phpstan/phpdoc-parser reads it; one it cannot read has no tags.
+     */
+    private function parse(string $text): PhpDocNode
+    {
+        if (!str_contains($text, '@')) {
+            return new PhpDocNode([]);
+        }
+        // A method's return type after its parameters, as older code writes it: `@method static STORE(): Method`.
+        if (str_contains($text, 'method')) {
+            $text = (string) preg_replace('/(@(?:phpstan-|psalm-)?method\s+(?:static\s+)?)(\w+)\s*(\([^)]*\))\s*:\s*([^\s*]+)/', '$1$4 $2$3', $text);
+        }
+        // A tag starts a line: `/** @template T @return T */` holds two.
+        if (!str_contains($text, "\n")) {
+            $text = (string) preg_replace('/\s(?=@[a-z])/i', "\n * ", $text);
+        }
+        // The parser takes quadratic time on a docblock of thousands of tags (an SDK client's `@method` list, 700 KB):
+        // each tag is then read alone, cut where a line starts one. A tag ends where the next starts anyway.
+        if (\strlen($text) > self::LARGE_DOC) {
+            $children = [];
+            foreach (preg_split('/\R(?=\s*\*\s*@)/', $text) ?: [] as $chunk) {
+                array_push($children, ...$this->parseTags('/** ' . ltrim(ltrim($chunk), '/*') . "\n */")->children);
+            }
+
+            return new PhpDocNode($children);
+        }
+
+        return $this->parseTags($text);
+    }
+
+    private function parseTags(string $text): PhpDocNode
+    {
+        try {
+            $doc = $this->parser->parse(new TokenIterator($this->lexer->tokenize($text)));
+        } catch (ParserException) {
+            return new PhpDocNode([]);
+        }
+        foreach ($doc->children as $index => $child) {
+            if ($child instanceof PhpDocTagNode && $child->value instanceof InvalidTagValueNode) {
+                $doc->children[$index] = $this->repaired($child, $child->value->value);
+            }
+        }
+
+        return $doc;
+    }
+
+    /**
+     * A tag written as older code writes it, which PHPDoc does not allow, read as it means: a callable without a
+     * return type (`callable(\Throwable $e)|null`), a nullable member of a union (`?Response|RedirectResponse`). The
+     * tag as it was otherwise.
+     */
+    private function repaired(PhpDocTagNode $tag, string $value): PhpDocTagNode
+    {
+        $text = $value;
+        if (str_starts_with($text, '?')) {
+            $text = substr($text, 1);
+        }
+        $offset = 0;
+        while (preg_match('/\b(?:callable|Closure)\(/i', $text, $match, \PREG_OFFSET_CAPTURE, $offset) === 1) {
+            $open = $match[0][1] + \strlen($match[0][0]) - 1;
+            $depth = 0;
+            for ($close = $open, $length = \strlen($text); $close < $length; ++$close) {
+                $depth += $text[$close] === '(' ? 1 : ($text[$close] === ')' ? -1 : 0);
+                if ($depth === 0) {
+                    break;
+                }
+            }
+            if ($close >= \strlen($text)) {
+                break;
+            }
+            if (!str_starts_with(ltrim(substr($text, $close + 1)), ':')) {
+                $text = substr($text, 0, $close + 1) . ': mixed' . substr($text, $close + 1);
+            }
+            $offset = $close + 1;
+        }
+        if ($text === $value) {
+            return $tag;
+        }
+        try {
+            $repaired = $this->parser->parse(new TokenIterator($this->lexer->tokenize("/**\n * " . $tag->name . ' ' . $text . "\n */")))->getTags()[0] ?? null;
+        } catch (ParserException) {
+            return $tag;
+        }
+
+        return $repaired === null || $repaired->value instanceof InvalidTagValueNode ? $tag : $repaired;
+    }
+
+    /**
+     * The type a tag gives, for a tag the parser reads (`@mixin`) or one whose value it leaves as text (`@psalm-mixin`).
+     */
+    private function tagType(PhpDocTagNode $tag): ?TypeNode
+    {
+        $value = $tag->value;
+        if ($value instanceof MixinTagValueNode || $value instanceof ExtendsTagValueNode || $value instanceof ImplementsTagValueNode || $value instanceof UsesTagValueNode) {
+            return $value->type;
+        }
+        if ($value instanceof GenericTagValueNode && \in_array($tag->name, self::UNPARSED_TAGS, true)) {
+            return $this->typeIn($value->value);
+        }
+
+        return null;
+    }
+
+    /**
+     * The type a text starts with: the value of a tag the parser does not know, the rest of `@var $name Type`.
+     */
+    private function typeIn(string $text): ?TypeNode
+    {
+        try {
+            return $this->typeParser->parse(new TokenIterator($this->lexer->tokenize($text)));
+        } catch (ParserException) {
+            return null;
+        }
+    }
+
+    /**
+     * The `@var` tags, in order: variable name (empty when it names none) and type. `@var $name Type`, the order
+     * older code writes, is read too.
+     *
+     * @return list<array{string, TypeNode}>
+     */
+    private function vars(PhpDocNode $doc): array
+    {
+        $vars = [];
+        foreach ($doc->getTags() as $tag) {
+            if (!\in_array($tag->name, ['@var', '@phpstan-var', '@psalm-var'], true)) {
+                continue;
+            }
+            $value = $tag->value;
+            if ($value instanceof VarTagValueNode) {
+                $vars[] = [ltrim($value->variableName, '$'), $value->type];
+            } elseif ($value instanceof InvalidTagValueNode && str_starts_with($value->value, '$')) {
+                $space = strcspn($value->value, " \t");
+                $type = $this->typeIn(substr($value->value, $space));
+                if ($type !== null) {
+                    $vars[] = [substr($value->value, 1, $space - 1), $type];
+                }
+            }
+        }
+
+        return $vars;
+    }
+
+    /**
+     * The `@param` tags naming a parameter, in order: name and type.
+     *
+     * @return list<array{string, TypeNode}>
+     */
+    private function params(PhpDocNode $doc): array
+    {
+        $params = [];
+        foreach ($doc->getTags() as $tag) {
+            if ($tag->value instanceof ParamTagValueNode && \in_array($tag->name, ['@param', '@phpstan-param', '@psalm-param'], true)) {
+                $params[] = [substr($tag->value->parameterName, 1), $tag->value->type];
+            }
+        }
+
+        return $params;
+    }
+
+    /**
+     * The class of the elements of a collection type: `Rule[]`, `array<Rule>`, `array<int, Rule>`, `list<Rule>`,
+     * `iterable<Rule>`, `Traversable<int, Rule>`; null for anything else.
+     *
      * @param list<string> $templates
      */
-    private function resolve(string $text, array $templates = []): ?string
+    private function elementType(TypeNode $type, array $templates = []): ?string
     {
-        $type = $this->firstType(trim($text));
-        do {
-            $type = preg_replace('/<[^<>]*>|\{[^{}]*\}|\([^()]*\)/', '', $type, -1, $count) ?? '';
-        } while ($count > 0);
+        if ($type instanceof NullableTypeNode) {
+            $type = $type->type;
+        }
+        // `Node\Stmt[]|null`, `array<int, Rule>|array<string, Rule>`: the elements its collections agree on.
+        if ($type instanceof UnionTypeNode) {
+            $elements = array_values(array_unique(array_filter(array_map(fn (TypeNode $member): ?string => $this->elementType($member, $templates), $type->types))));
 
-        $parts = array_values(array_filter(
-            explode('|', ltrim($type, '?')),
-            // `Foo|false`, as PHP's own functions return: a Foo when it is an object at all.
-            static fn (string $part): bool => !\in_array(strtolower($part), ['null', 'false'], true),
-        ));
-        if (\count($parts) !== 1) {
+            return \count($elements) === 1 ? $elements[0] : null;
+        }
+        if ($type instanceof ArrayTypeNode && !$type->type instanceof GenericTypeNode) {
+            return $this->resolve($type->type, $templates);
+        }
+        if (!$type instanceof GenericTypeNode || !\in_array(strtolower(ltrim($type->type->name, '\\')), self::COLLECTIONS, true) || $type->genericTypes === []) {
             return null;
         }
 
-        $name = $parts[0];
+        return $this->resolve($type->genericTypes[\count($type->genericTypes) - 1], $templates);
+    }
+
+    /**
+     * The one class a type names, null for anything else: `Foo`, `?Foo`, `Foo|null`, `Foo|false` (as PHP's own
+     * functions return: a Foo when it is an object at all), `Collection<Foo>` (as Collection), `self`, `static` and
+     * `$this` (TypeExpr::STATIC). Templates are no class.
+     *
+     * @param list<string> $templates
+     */
+    private function resolve(TypeNode $type, array $templates = []): ?string
+    {
+        if ($type instanceof NullableTypeNode) {
+            $type = $type->type;
+        }
+        if ($type instanceof UnionTypeNode) {
+            $members = array_values(array_filter(
+                $type->types,
+                static fn (TypeNode $member): bool => !($member instanceof IdentifierTypeNode && \in_array(strtolower($member->name), ['null', 'false'], true)),
+            ));
+            if (\count($members) !== 1) {
+                return null;
+            }
+            $type = $members[0];
+        }
+        if ($type instanceof ThisTypeNode) {
+            return TypeExpr::STATIC;
+        }
+        $name = match (true) {
+            $type instanceof IdentifierTypeNode => $type->name,
+            $type instanceof GenericTypeNode => $type->type->name,
+            $type instanceof CallableTypeNode => $type->identifier->name,
+            default => null,
+        };
+        if ($name === null) {
+            return null;
+        }
         $lower = strtolower($name);
         if ($lower === 'static' || $lower === '$this') {
             return TypeExpr::STATIC;
@@ -385,18 +632,14 @@ final class DocTypeResolver extends NodeVisitorAbstract
         if ($lower === 'self') {
             return 'self';
         }
-        if (\in_array($lower, self::BUILTIN, true) || preg_match('/^\\\\?[A-Za-z_][A-Za-z0-9_]*(\\\\[A-Za-z_][A-Za-z0-9_]*)*$/', $name) !== 1) {
+        if (\in_array($lower, self::BUILTIN, true) || !self::isName($name)) {
             return null;
         }
         if (\in_array($name, $templates, true) || \in_array($name, array_merge(...$this->classTemplates), true)) {
             return null;
         }
 
-        $resolved = str_starts_with($name, '\\')
-            ? new Name\FullyQualified(substr($name, 1))
-            : $this->names->getResolvedClassName(new Name($name));
-
-        return $resolved->toString();
+        return str_starts_with($name, '\\') ? substr($name, 1) : $this->names->getResolvedClassName(new Name($name))->toString();
     }
 
     /**
@@ -406,59 +649,51 @@ final class DocTypeResolver extends NodeVisitorAbstract
      * @param list<string> $methodTemplates templates of the method: unknown, bound by its arguments
      * @param list<string> $bound           those a call binds (TEMPLATE_BINDERS), kept as `@#T`
      */
-    private function generic(string $text, array $methodTemplates, array $bound = []): ?string
+    private function generic(TypeNode $type, array $methodTemplates, array $bound = []): ?string
     {
-        $text = trim($text);
-        while (str_starts_with($text, '(') && str_ends_with($text, ')') && $this->closingParenthesis($text) === \strlen($text) - 1) {
-            $text = trim(substr($text, 1, -1));
+        if ($type instanceof NullableTypeNode) {
+            return $this->generic($type->type, $methodTemplates, $bound);
         }
-        $text = ltrim($text, '?');
         // A condition the arguments do not decide, `(TAsync is false ? Response : PromiseInterface)`: either branch.
-        if (preg_match('/^\$?\w+\s+is\s+(?:not\s+)?\S+?\s*\?(.*)$/s', $text, $condition) === 1) {
-            $branches = $this->split($condition[1], ':');
-            if (\count($branches) < 2) {
-                return null;
-            }
-            $then = array_shift($branches);
+        if ($type instanceof ConditionalTypeNode || $type instanceof ConditionalTypeForParameterNode) {
+            return $this->union([$type->if, $type->else], $methodTemplates);
+        }
+        if ($type instanceof UnionTypeNode) {
+            $parts = array_values(array_filter(
+                $type->types,
+                static fn (TypeNode $part): bool => !($part instanceof IdentifierTypeNode && \in_array(strtolower($part->name), ['null', 'false', 'void'], true)),
+            ));
 
-            return $this->union([$then, implode(':', $branches)], $methodTemplates);
+            return match (\count($parts)) {
+                0 => null,
+                1 => $this->generic($parts[0], $methodTemplates, $bound),
+                default => $this->union($parts, $methodTemplates),
+            };
+        }
+        // An intersection, `NodeDefinition&ParentNodeDefinitionInterface`: as a union, a call goes to the classes
+        // declaring its method.
+        if ($type instanceof IntersectionTypeNode) {
+            return $this->union($type->types, $methodTemplates);
+        }
+        if ($type instanceof ArrayTypeNode) {
+            return GenericType::format(GenericType::ARRAY, [$this->generic($type->type, $methodTemplates, $bound) ?? GenericType::UNKNOWN]);
+        }
+        if ($type instanceof ThisTypeNode) {
+            return TypeExpr::STATIC;
         }
 
-        $parts = array_values(array_filter(
-            $this->split($text, '|'),
-            static fn (string $part): bool => !\in_array(strtolower(trim($part)), ['null', 'false', 'void'], true),
-        ));
-        if (\count($parts) > 1) {
-            return $this->union($parts, $methodTemplates);
-        }
-        if ($parts === []) {
-            return null;
-        }
-        // An intersection, `NodeDefinition&ParentNodeDefinitionInterface`: its first class.
-        $text = trim($this->split($parts[0], '&')[0]);
-        if ($text !== trim($parts[0])) {
-            return $this->generic($text, $methodTemplates, $bound);
-        }
-
-        if (str_ends_with($text, '[]')) {
-            $element = $this->generic(substr($text, 0, -2), $methodTemplates, $bound);
-
-            return GenericType::format(GenericType::ARRAY, [$element ?? GenericType::UNKNOWN]);
-        }
-
-        $name = $text;
         $arguments = [];
-        $open = strpos($text, '<');
-        if ($open !== false && str_ends_with($text, '>')) {
-            $name = substr($text, 0, $open);
-            foreach ($this->split(substr($text, $open + 1, -1), ',') as $argument) {
+        if ($type instanceof GenericTypeNode) {
+            $name = $type->type->name;
+            foreach ($type->genericTypes as $argument) {
                 $arguments[] = $this->generic($argument, $methodTemplates, $bound) ?? GenericType::UNKNOWN;
             }
-        } elseif (preg_match('/[{(]/', $text) === 1) {
-            $name = (string) preg_replace('/[{(].*$/s', '', $text);
-            if (strtolower($name) !== 'closure') {
-                return null;
-            }
+        } elseif ($type instanceof CallableTypeNode && strtolower(ltrim($type->identifier->name, '\\')) === 'closure') {
+            $name = $type->identifier->name;
+        } elseif ($type instanceof IdentifierTypeNode) {
+            $name = $type->name;
+        } else {
+            return null;
         }
 
         $lower = strtolower($name);
@@ -482,7 +717,7 @@ final class DocTypeResolver extends NodeVisitorAbstract
         if (\in_array($name, (array) end($this->classTemplates), true)) {
             return '@' . $name;
         }
-        if (\in_array($lower, self::BUILTIN, true) || preg_match('/^\\\\?[A-Za-z_][A-Za-z0-9_]*(\\\\[A-Za-z_][A-Za-z0-9_]*)*$/', $name) !== 1) {
+        if (\in_array($lower, self::BUILTIN, true) || !self::isName($name)) {
             return null;
         }
 
@@ -497,74 +732,75 @@ final class DocTypeResolver extends NodeVisitorAbstract
     }
 
     /**
-     * The `@return` tag to read: `@phpstan-return` or `@psalm-return` say more, written for the other tools, unless
-     * they say nothing this reader understands.
+     * The `@return` type to read, and the plain `@return` beside it: `@phpstan-return` or `@psalm-return` say more,
+     * written for the other tools, unless they say nothing this reader understands.
      *
+     * @param list<string> $templates
      * @param list<string> $bound
      *
-     * @return array{string, string}|null
+     * @return array{?TypeNode, ?TypeNode}
      */
-    private function returnTag(string $doc, array $bound): ?array
+    private function returnTag(PhpDocNode $doc, array $templates, array $bound): array
     {
-        $plain = preg_match('/@return\s+(.+)/', $doc, $match) === 1 ? $match : null;
-        if (preg_match('/@(?:phpstan|psalm)-return\s+(.+)/', $doc, $match) !== 1) {
-            return $plain;
+        $plain = $tool = null;
+        foreach ($doc->getTags() as $tag) {
+            if (!$tag->value instanceof ReturnTagValueNode) {
+                continue;
+            }
+            if ($tag->name === '@return') {
+                $plain ??= $tag->value->type;
+            } elseif (\in_array($tag->name, ['@phpstan-return', '@psalm-return'], true)) {
+                $tool ??= $tag->value->type;
+            }
         }
-        $token = $this->firstType(trim($match[1]));
-        $understood = $this->resolve($token, $this->templates($doc)) !== null || $this->generic($token, $this->templates($doc), $bound) !== null
-            || str_contains($token, ' is ');
+        if ($tool === null) {
+            return [$plain, $plain];
+        }
+        $understood = $this->resolve($tool, $templates) !== null || $this->generic($tool, $templates, $bound) !== null
+            || $tool instanceof ConditionalTypeNode || $tool instanceof ConditionalTypeForParameterNode;
 
-        return $understood || $plain === null ? $match : $plain;
+        return [$understood || $plain === null ? $tool : $plain, $plain];
     }
 
     /**
      * How a call binds the templates of the method (TEMPLATE_BINDERS), read from its `@param` tags.
      *
      * @param array<string, int> $positions parameter name => position
+     * @param list<string>       $templates
      *
      * @return array<string, array{string, int}>
      */
-    private function binders(string $doc, array $positions): array
+    private function binders(PhpDocNode $doc, array $positions, array $templates): array
     {
-        $templates = $this->templates($doc);
         if ($templates === []) {
             return [];
         }
         $binders = [];
-        foreach (preg_split('/\R/', $doc) ?: [] as $line) {
-            if (preg_match('/@(?:phpstan-|psalm-)?param\s+(.+)/', $line, $match) !== 1) {
+        foreach ($this->params($doc) as [$name, $type]) {
+            if (!isset($positions[$name])) {
                 continue;
             }
-            $token = $this->firstType(trim($match[1]));
-            if (preg_match('/^\s*(?:\.\.\.)?\$(\w+)/', substr(trim($match[1]), \strlen($token)), $variable) !== 1 || !isset($positions[$variable[1]])) {
-                continue;
-            }
-            $position = $positions[$variable[1]];
-            $text = trim($token);
-            while (str_starts_with($text, '(') && $this->closingParenthesis($text) === \strlen($text) - 1) {
-                $text = trim(substr($text, 1, -1));
-            }
+            $position = $positions[$name];
             // `class-string<T>|null`, `?T`: the template bound, whatever else the argument may be.
-            $members = array_values(array_filter(
-                $this->split(ltrim($text, '?'), '|'),
-                static fn (string $member): bool => strtolower(trim($member, '() ')) !== 'null',
-            ));
+            if ($type instanceof NullableTypeNode) {
+                $type = $type->type;
+            }
+            $members = $type instanceof UnionTypeNode ? array_values(array_filter(
+                $type->types,
+                static fn (TypeNode $member): bool => !($member instanceof IdentifierTypeNode && strtolower($member->name) === 'null'),
+            )) : [$type];
             if (\count($members) !== 1) {
                 continue;
             }
-            $member = trim($members[0]);
-            while (str_starts_with($member, '(') && $this->closingParenthesis($member) === \strlen($member) - 1) {
-                $member = trim(substr($member, 1, -1));
-            }
-            if (preg_match('/^class-string<(\w+)>$/', $member, $found) === 1 && \in_array($found[1], $templates, true)) {
-                $binders[$found[1]] = ['class', $position];
-            } elseif (\in_array($member, $templates, true)) {
-                $binders[$member] ??= ['value', $position];
-            } elseif (preg_match('/^\\\\?(?:callable|Closure)\(/i', $member) === 1) {
-                $close = $this->closingParenthesis($member);
-                if ($close > 0 && preg_match('/^\s*:\s*(\w+)$/', substr($member, $close + 1), $found) === 1 && \in_array($found[1], $templates, true)) {
-                    $binders[$found[1]] ??= ['closure', $position];
-                }
+            $member = $members[0];
+            if ($member instanceof GenericTypeNode && $member->type->name === 'class-string' && \count($member->genericTypes) === 1
+                && $member->genericTypes[0] instanceof IdentifierTypeNode && \in_array($member->genericTypes[0]->name, $templates, true)) {
+                $binders[$member->genericTypes[0]->name] = ['class', $position];
+            } elseif ($member instanceof IdentifierTypeNode && \in_array($member->name, $templates, true)) {
+                $binders[$member->name] ??= ['value', $position];
+            } elseif ($member instanceof CallableTypeNode && \in_array(strtolower(ltrim($member->identifier->name, '\\')), ['callable', 'closure'], true)
+                && $member->returnType instanceof IdentifierTypeNode && \in_array($member->returnType->name, $templates, true)) {
+                $binders[$member->returnType->name] ??= ['closure', $position];
             }
         }
 
@@ -572,16 +808,52 @@ final class DocTypeResolver extends NodeVisitorAbstract
     }
 
     /**
+     * @param array<string, int> $positions parameter name => position
+     * @param list<string>       $templates
+     * @param list<string>       $bound     the templates of the method a call binds
+     *
+     * @return list<array{string, int, string}>
+     */
+    private function assertions(PhpDocNode $doc, array $positions, array $templates, array $bound): array
+    {
+        $assertions = [];
+        foreach ($doc->getTags() as $tag) {
+            $value = $tag->value;
+            // `=ExpectedType`, Psalm's exact type, is the type all the same.
+            if (!$value instanceof AssertTagValueNode || $value->isNegated || !isset($positions[substr($value->parameter, 1)])) {
+                continue;
+            }
+            $type = $this->generic($value->type, $templates, $bound);
+            $classes = $type === null ? [] : array_filter(
+                GenericType::members($type),
+                static fn (string $member): bool => GenericType::isClass(GenericType::base($member)) || str_starts_with($member, '@#'),
+            );
+            if ($type !== null && \count($classes) === \count(GenericType::members($type))) {
+                $assertions[] = [match (true) {
+                    str_ends_with($tag->name, '-if-true') => 'true',
+                    str_ends_with($tag->name, '-if-false') => 'false',
+                    default => 'always',
+                }, $positions[substr($value->parameter, 1)], $type];
+            }
+        }
+
+        return $assertions;
+    }
+
+    /**
      * The arguments a docblock gives the templates of parents: `@extends Repository<Order>`, `@use HasFactory<F>`.
      *
      * @return array<string, list<string>>
      */
-    private function parentArguments(string $doc): array
+    private function parentArguments(PhpDocNode $doc): array
     {
         $parents = [];
-        preg_match_all('/@(?:phpstan-|psalm-)?(?:template-)?(?:extends|implements|use)\s+(\S+<.+)/', $doc, $matches);
-        foreach ($matches[1] as $text) {
-            [$base, $arguments] = GenericType::parse((string) $this->generic($this->firstType(trim($text)), []));
+        foreach ($doc->getTags() as $tag) {
+            $type = $tag->value instanceof MixinTagValueNode || \in_array($tag->name, ['@phpstan-mixin', '@psalm-mixin'], true) ? null : $this->tagType($tag);
+            if (!$type instanceof GenericTypeNode) {
+                continue;
+            }
+            [$base, $arguments] = GenericType::parse((string) $this->generic($type, []));
             if ($arguments !== [] && GenericType::isClass($base)) {
                 $parents[$base] = $arguments;
             }
@@ -598,22 +870,29 @@ final class DocTypeResolver extends NodeVisitorAbstract
      *
      * @return list<string>|null
      */
-    private function callableParameters(string $text, array $methodTemplates): ?array
+    private function callableParameters(TypeNode $type, array $methodTemplates): ?array
     {
-        if (preg_match('/(?:^|[(|])\s*\\\\?(?:callable|Closure)\(/i', $text, $match, \PREG_OFFSET_CAPTURE) !== 1) {
+        if ($type instanceof NullableTypeNode) {
+            $type = $type->type;
+        }
+        // `(callable(TValue): float|int)|string|null` holds a union in a union.
+        $members = [$type];
+        $callable = null;
+        while ($members !== [] && $callable === null) {
+            $member = array_shift($members);
+            if ($member instanceof UnionTypeNode) {
+                array_push($members, ...$member->types);
+            } elseif ($member instanceof CallableTypeNode && \in_array(strtolower(ltrim($member->identifier->name, '\\')), ['callable', 'closure'], true)) {
+                $callable = $member;
+            }
+        }
+        if ($callable === null) {
             return null;
         }
-        $open = $match[0][1] + \strlen($match[0][0]) - 1;
-        $close = $this->closingParenthesis(substr($text, $open));
-        if ($close < 1) {
-            return null;
-        }
-        $parameters = [];
-        foreach ($this->split(substr($text, $open + 1, $close - 1), ',') as $parameter) {
-            // `callable(Builder $query): void`: the type, without the name.
-            $parameter = (string) preg_replace('/(?<=\S)\s+&?(?:\.\.\.)?\$\w+$/', '', trim($parameter));
-            $parameters[] = $parameter === '' ? GenericType::UNKNOWN : $this->generic($this->firstType($parameter), $methodTemplates) ?? GenericType::UNKNOWN;
-        }
+        $parameters = array_values(array_map(
+            fn (CallableTypeParameterNode $parameter): string => $this->generic($parameter->type, $methodTemplates) ?? GenericType::UNKNOWN,
+            $callable->parameters,
+        ));
 
         return array_filter($parameters, static fn (string $type): bool => $type !== GenericType::UNKNOWN) === [] ? null : $parameters;
     }
@@ -624,9 +903,9 @@ final class DocTypeResolver extends NodeVisitorAbstract
      *
      * @param list<string> $methodTemplates
      */
-    private function single(string $text, array $methodTemplates): ?string
+    private function single(TypeNode $type, array $methodTemplates): ?string
     {
-        $generic = $this->generic($text, $methodTemplates);
+        $generic = $this->generic($type, $methodTemplates);
 
         return $generic !== null && !GenericType::isGeneric($generic) && ($generic === TypeExpr::STATIC || GenericType::isClass($generic)) ? $generic : null;
     }
@@ -637,20 +916,19 @@ final class DocTypeResolver extends NodeVisitorAbstract
      * passed to when() returns the builder it receives, most of the time). `mixed` or `object` may be anything: null,
      * except beside the receiver alone (`static|mixed`, Eloquent's `scopes()`: the chain goes on on the receiver).
      *
-     * @param list<string> $parts
-     * @param list<string> $methodTemplates
+     * @param array<TypeNode> $parts
+     * @param list<string>    $methodTemplates
      */
     private function union(array $parts, array $methodTemplates): ?string
     {
         $members = [];
         $anything = false;
         foreach ($parts as $part) {
-            $lower = strtolower(trim($part, " ()\t"));
-            if ($lower === 'mixed' || $lower === 'object') {
+            if ($part instanceof IdentifierTypeNode && \in_array(strtolower($part->name), ['mixed', 'object'], true)) {
                 $anything = true;
                 continue;
             }
-            if (\in_array(trim($part), $methodTemplates, true)) {
+            if ($part instanceof IdentifierTypeNode && \in_array($part->name, $methodTemplates, true)) {
                 continue;
             }
             $member = $this->generic($part, $methodTemplates);
@@ -666,113 +944,70 @@ final class DocTypeResolver extends NodeVisitorAbstract
     }
 
     /**
-     * A conditional return type as a tree, null when the text is none: `($abstract is null ? Application : mixed)`.
+     * A conditional return type as a tree, null when the type is none: `($abstract is null ? Application : mixed)`.
      *
      * @param array<string, int> $parameters name => position
      *
      * @return array<string, mixed>|null
      */
-    private function conditional(string $text, array $parameters, int $depth = 0): ?array
+    private function conditional(TypeNode $type, array $parameters, int $depth = 0): ?array
     {
-        $text = trim($text);
-        while (str_starts_with($text, '(') && str_ends_with($text, ')') && $this->closingParenthesis($text) === \strlen($text) - 1) {
-            $text = trim(substr($text, 1, -1));
-        }
-        if ($depth > 5 || preg_match('/^\$(\w+)\s+is\s+(not\s+)?(\S+?)\s*\?(.*)$/s', $text, $match) !== 1 || !isset($parameters[$match[1]])) {
+        if ($depth > 5 || !$type instanceof ConditionalTypeForParameterNode || !isset($parameters[substr($type->parameterName, 1)])) {
             return null;
         }
-        // The two branches: split at the `:` outside brackets and nested conditions.
-        $branches = $this->split($match[4], ':');
-        if (\count($branches) < 2) {
-            return null;
-        }
-        $then = array_shift($branches);
-        $else = implode(':', $branches);
-        $template = preg_match('/^class-string<(\w+)>$/', $match[3], $found) === 1 ? $found[1] : null;
-        $test = strtolower($match[3]) === 'null' ? 'null' : ($template !== null ? 'class' : null);
+        $position = $parameters[substr($type->parameterName, 1)];
+        $target = $type->targetType;
+        $template = $target instanceof GenericTypeNode && $target->type->name === 'class-string' && \count($target->genericTypes) === 1
+            && $target->genericTypes[0] instanceof IdentifierTypeNode ? $target->genericTypes[0]->name : null;
+        $test = match (true) {
+            $target instanceof IdentifierTypeNode && strtolower($target->name) === 'null' => 'null',
+            $template !== null => 'class',
+            default => null,
+        };
         if ($test === null) {
             return null;
         }
-        $leaf = function (string $branch) use ($parameters, $depth, $match, $template): array {
-            if ($template !== null && trim($branch) === $template) {
-                return ['arg' => $parameters[$match[1]]];
+        $leaf = function (TypeNode $branch) use ($parameters, $depth, $position, $template): array {
+            if ($template !== null && $branch instanceof IdentifierTypeNode && $branch->name === $template) {
+                return ['arg' => $position];
             }
 
             return $this->conditional($branch, $parameters, $depth + 1) ?? ['type' => $this->resolve($branch)];
         };
-        [$then, $else] = $match[2] === '' ? [$leaf($then), $leaf($else)] : [$leaf($else), $leaf($then)];
+        [$then, $else] = $type->negated ? [$leaf($type->else), $leaf($type->if)] : [$leaf($type->if), $leaf($type->else)];
 
-        return ['param' => $parameters[$match[1]], 'test' => $test, 'then' => $then, 'else' => $else];
+        return ['param' => $position, 'test' => $test, 'then' => $then, 'else' => $else];
     }
 
     /**
-     * Splits on a separator outside `<>`, `{}` and `()`.
+     * Whether the text is a class name a docblock may write: `Foo`, `\App\Foo`.
+     */
+    private static function isName(string $name): bool
+    {
+        foreach (explode('\\', str_starts_with($name, '\\') ? substr($name, 1) : $name) as $segment) {
+            $rest = str_replace('_', '', $segment);
+            if ($segment === '' || !(ctype_alpha($segment[0]) || $segment[0] === '_') || ($rest !== '' && !ctype_alnum($rest))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * The template parameters a docblock declares, in order: `@template T of Model`.
      *
      * @return list<string>
      */
-    private function split(string $text, string $separator): array
+    private function templates(PhpDocNode $doc): array
     {
-        $parts = [];
-        $depth = 0;
-        $start = 0;
-        for ($i = 0, $length = \strlen($text); $i < $length; ++$i) {
-            $depth += match ($text[$i]) {
-                '<', '{', '(' => 1,
-                '>', '}', ')' => -1,
-                default => 0,
-            };
-            if ($depth === 0 && $text[$i] === $separator) {
-                $parts[] = substr($text, $start, $i - $start);
-                $start = $i + 1;
-            }
-        }
-        $parts[] = substr($text, $start);
-
-        return array_map('trim', $parts);
-    }
-
-    private function closingParenthesis(string $text): int
-    {
-        $depth = 0;
-        for ($i = 0, $length = \strlen($text); $i < $length; ++$i) {
-            if ($text[$i] === '(') {
-                ++$depth;
-            } elseif ($text[$i] === ')' && --$depth === 0) {
-                return $i;
+        $templates = [];
+        foreach ($doc->getTags() as $tag) {
+            if ($tag->value instanceof TemplateTagValueNode && !\in_array($tag->value->name, $templates, true)) {
+                $templates[] = $tag->value->name;
             }
         }
 
-        return -1;
-    }
-
-    /**
-     * The first type of a tag body: stops at the first space outside `<>`, `{}` and `()`.
-     */
-    private function firstType(string $text): string
-    {
-        $depth = 0;
-        $length = \strlen($text);
-        for ($i = 0; $i < $length; ++$i) {
-            $char = $text[$i];
-            if ($char === '<' || $char === '{' || $char === '(') {
-                ++$depth;
-            } elseif ($char === '>' || $char === '}' || $char === ')') {
-                --$depth;
-            } elseif ($depth <= 0 && ($char === ' ' || $char === "\t" || $char === '*')) {
-                return substr($text, 0, $i);
-            }
-        }
-
-        return $text;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function templates(string $doc): array
-    {
-        preg_match_all('/@(?:phpstan-|psalm-)?template(?:-covariant|-contravariant)?\s+(\w+)/', $doc, $matches);
-
-        return array_values(array_unique($matches[1]));
+        return $templates;
     }
 }

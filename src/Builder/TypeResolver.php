@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace PhpGraph\Builder;
 
+use PhpGraph\Builder\Libraries\Libraries;
 use PhpGraph\Extractor\GenericType;
 use PhpGraph\Extractor\TypeExpr;
 use PhpGraph\Graph\Graph;
+use PhpGraph\Graph\NodeKind;
 use PhpGraph\Graph\Relation;
 use PhpGraph\Values;
 use PhpGraph\Vendor\ClassSignature;
@@ -18,29 +20,12 @@ use PhpGraph\Vendor\VendorSignatures;
  *
  * A class the project does not declare is looked up in the dependency signatures, when they are available: a
  * project class extending a vendor class inherits its methods, and a chain goes on through vendor return types.
- * Methods found there are not project methods: the graph gets no node and no edge for them.
+ * Methods found there are not project methods: the graph gets no node and no edge for them. What a library makes
+ * of a call its signature does not say (a container's `get(Mailer::class)`, an Eloquent attribute) comes from its
+ * provider (Libraries).
  */
 final class TypeResolver
 {
-    private const MODEL = 'Illuminate\\Database\\Eloquent\\Model';
-
-    private const CARBON = 'Illuminate\\Support\\Carbon';
-
-    private const CASTS_ATTRIBUTES = 'Illuminate\\Contracts\\Database\\Eloquent\\CastsAttributes';
-
-    private const CASTABLE = 'Illuminate\\Contracts\\Database\\Eloquent\\Castable';
-
-    /**
-     * Eloquent's castables, by the class they give an attribute.
-     */
-    private const CASTABLES = [
-        'Illuminate\\Database\\Eloquent\\Casts\\AsCollection' => 'Illuminate\\Support\\Collection',
-        'Illuminate\\Database\\Eloquent\\Casts\\AsEnumCollection' => 'Illuminate\\Support\\Collection',
-        'Illuminate\\Database\\Eloquent\\Casts\\AsArrayObject' => 'Illuminate\\Database\\Eloquent\\Casts\\ArrayObject',
-        'Illuminate\\Database\\Eloquent\\Casts\\AsEnumArrayObject' => 'Illuminate\\Database\\Eloquent\\Casts\\ArrayObject',
-        'Illuminate\\Database\\Eloquent\\Casts\\AsStringable' => 'Illuminate\\Support\\Stringable',
-    ];
-
     /** @var array<string, ?string> */
     private array $methods = [];
 
@@ -73,8 +58,12 @@ final class TypeResolver
         private readonly ?VendorSignatures $vendor = null,
         private readonly array $returnElements = [],
         private readonly Generics $generics = new Generics(),
+        ?Libraries $libraries = null,
     ) {
+        $this->libraries = $libraries ?? Libraries::defaults($generics);
     }
+
+    private readonly Libraries $libraries;
 
     /** @var array<string, list<string>> */
     private array $supertypes = [];
@@ -99,44 +88,262 @@ final class TypeResolver
     }
 
     /**
-     * The class of a receiver a method is called on: the member of a union declaring the method.
+     * The classes a type may be: each member of a union, the class itself otherwise; and whether every member is
+     * known (no branch left it unknown).
+     *
+     * @return array{list<string>, bool}
      */
-    public function resolveReceiver(TypeExpr $type, string $method, bool &$leftProject = false): ?string
+    public function classesOf(TypeExpr $type): array
     {
-        $resolved = $this->resolveGeneric($type, $leftProject);
-        $resolved = $resolved === null ? null : $this->narrow($resolved, $method, false);
-        $base = $resolved === null ? null : GenericType::base($resolved);
+        $left = false;
+        $resolved = $this->resolveGeneric($type, $left);
+        if ($resolved === null) {
+            return [[], false];
+        }
+        $classes = [];
+        $complete = true;
+        foreach (GenericType::members($resolved) as $member) {
+            $base = GenericType::base($member);
+            if (GenericType::isClass($base)) {
+                $classes[] = $base;
+            }
+            $complete = $complete && $member !== GenericType::UNKNOWN;
+        }
 
-        return $base !== null && GenericType::isClass($base) ? $base : null;
+        return [array_values(array_unique($classes)), $complete];
     }
 
     /**
-     * The member of a union a method is called on (or a property read on): the one declaring it. Members inheriting
-     * the same method all do; members declaring different ones leave the call unresolved.
+     * The classes a method may be called on: the members of a union declaring it, each declaration once (members
+     * inheriting the same method give one). Complete when every member of the receiver is known; a branch leaving it
+     * of unknown type makes it partial.
+     *
+     * @return array{list<string>, bool}
      */
-    private function narrow(string $type, string $member, bool $isProperty): ?string
+    public function receivers(TypeExpr $type, string $method, bool &$leftProject = false): array
     {
-        if (!GenericType::isUnion($type)) {
-            return $type;
+        $resolved = $this->resolveGeneric($type, $leftProject);
+        if ($resolved === null) {
+            return [[], false];
+        }
+        [$members, $complete] = $this->declaring($resolved, $method, false);
+        $classes = [];
+        foreach ($members as $member) {
+            $base = GenericType::base($member);
+            if (GenericType::isClass($base) && !\in_array($base, $classes, true)) {
+                $classes[] = $base;
+            }
         }
 
-        $chosen = null;
+        return [$classes, $complete];
+    }
+
+    /**
+     * The members of a union a method is called on (or a property read on): those declaring it, one per declaration.
+     * A type that is no union is its own member. Members declaring nothing are left out: the code calling the method
+     * holds one of the others. An unknown member (`?`, a branch of unknown type) makes the answer incomplete.
+     *
+     * @return array{list<string>, bool}
+     */
+    private function declaring(string $type, string $member, bool $isProperty): array
+    {
+        if (!GenericType::isUnion($type)) {
+            return [[$type], true];
+        }
+
+        $chosen = [];
         $found = [];
+        $complete = true;
         foreach (GenericType::members($type) as $candidate) {
             $class = GenericType::base($candidate);
             if (!GenericType::isClass($class)) {
+                $complete = $complete && $candidate !== GenericType::UNKNOWN;
                 continue;
             }
             $declared = $isProperty
                 ? ($this->genericProperty($candidate, $member) ?? $this->findProperty($class, $member))
                 : $this->findMethod($class, strtolower($member));
-            if ($declared !== null) {
-                $chosen ??= $candidate;
+            if ($declared !== null && !isset($found[$declared])) {
                 $found[$declared] = true;
+                $chosen[] = $candidate;
             }
         }
 
-        return \count($found) === 1 ? $chosen : null;
+        return [$chosen, $complete];
+    }
+
+    /**
+     * Members of a union, as a GenericType: duplicates and members whose parent is a member too are left out
+     * (`Circle|Shape` is a Shape), `?` stays for an unknown one. Null when nothing is known.
+     *
+     * @param list<string> $members
+     */
+    private function simplified(array $members): ?string
+    {
+        $members = array_values(array_unique($members));
+        $classes = array_filter($members, static fn (string $member): bool => GenericType::isClass(GenericType::base($member)));
+        $kept = [];
+        foreach ($members as $member) {
+            $base = GenericType::base($member);
+            if (GenericType::isClass($base)) {
+                foreach ($classes as $other) {
+                    $parent = GenericType::base($other);
+                    if (strtolower($parent) !== strtolower($base) && $this->isA($base, $parent)) {
+                        continue 2;
+                    }
+                }
+            }
+            $kept[] = $member;
+        }
+
+        return $kept === [] || $kept === [GenericType::UNKNOWN] ? null : GenericType::union($kept);
+    }
+
+    /**
+     * What an `instanceof` test leaves of a type. Narrowed to the classes tested: a member that is one of them stays
+     * (with its arguments), a member one of them extends gives way to it, an unknown member becomes them; a single
+     * type unrelated to the class may still be both when one of them is an interface (or not known): both are kept,
+     * a call is linked to the one declaring its method. Without the classes: the members that are one of them go.
+     *
+     * A call asserting what an argument is (`@phpstan-assert-if-true WP_Error $thing`) narrows it the same way, to
+     * the classes its callable asserts; the subject stays as it is when it asserts nothing.
+     *
+     * @param array{TypeExpr, list<string>, bool, 3?: array{TypeExpr, int, bool}} $test
+     */
+    private function narrowed(array $test, bool &$leftProject): ?string
+    {
+        [$tested, $classes, $excluding] = $test;
+        $subject = $this->resolveGeneric($tested, $leftProject);
+        if (isset($test[3])) {
+            $classes = $this->asserted($test[3][0], $test[3][1], match (true) {
+                $excluding => ['false'],
+                $test[3][2] => ['always'],
+                default => ['always', 'true'],
+            });
+            if ($classes === []) {
+                return $subject;
+            }
+            $excluding = false;
+        }
+        $classes = array_map(fn (string $class): string => $this->names->canonical($class), $classes);
+        if ($excluding) {
+            if ($subject === null || !GenericType::isUnion($subject)) {
+                return $subject;
+            }
+            $kept = [];
+            foreach (GenericType::members($subject) as $member) {
+                $base = GenericType::base($member);
+                if (!GenericType::isClass($base) || array_filter($classes, fn (string $class): bool => $this->isA($base, $class)) === []) {
+                    $kept[] = $member;
+                }
+            }
+
+            return $kept === [] ? $subject : $this->simplified($kept);
+        }
+
+        $members = $subject === null ? [GenericType::UNKNOWN] : GenericType::members($subject);
+        $kept = [];
+        foreach ($members as $member) {
+            $base = GenericType::base($member);
+            if (!GenericType::isClass($base)) {
+                array_push($kept, ...$classes);
+                continue;
+            }
+            foreach ($classes as $class) {
+                if ($this->isA($base, $class)) {
+                    $kept[] = $member;
+                } elseif ($this->isA($class, $base)) {
+                    $kept[] = $class;
+                } elseif (\count($members) === 1 && ($this->mayBeInterface($base) || $this->mayBeInterface($class))) {
+                    array_push($kept, $member, $class);
+                }
+            }
+        }
+
+        return $this->simplified($kept === [] ? $classes : $kept);
+    }
+
+    /**
+     * The classes a call asserts an argument is, by its callable's `@phpstan-assert` / `@psalm-assert` tags of the
+     * kinds given; a template of the callable is bound by the call (`Assert::isInstanceOf($x, Order::class)` with
+     * `@psalm-param class-string<ExpectedType> $class`). The callable is the project's function or method first, then
+     * the dependencies'.
+     *
+     * @param list<string> $kinds `always`, `true`, `false`
+     *
+     * @return list<string>
+     */
+    private function asserted(TypeExpr $call, int $position, array $kinds): array
+    {
+        $found = [];
+        if ($call->functions !== []) {
+            foreach ($call->functions as $name) {
+                $id = $this->names->canonical($name);
+                $assertions = $this->generics->assertions[$id] ?? null;
+                $binders = $this->generics->binders[$id] ?? [];
+                if ($assertions === null && $this->vendor !== null) {
+                    $assertions = $this->vendor->functionAssertions($name);
+                    $binders = $this->vendor->function($name)[3] ?? [];
+                }
+                if ($assertions !== null && $assertions !== []) {
+                    $found[] = [$assertions, $binders];
+                    break;
+                }
+            }
+        } elseif ($call->receiver !== null && $call->member !== null && !$call->isProperty) {
+            $left = false;
+            [$classes] = $this->receivers($call->receiver, $call->member, $left);
+            foreach ($classes as $class) {
+                $method = $this->findMethod($class, strtolower($call->member));
+                if ($method === null) {
+                    continue;
+                }
+                $owner = substr($method, 0, (int) strrpos($method, '::'));
+                $assertions = $this->generics->assertions[$method] ?? $this->vendorSignature($owner)->assertions[$method] ?? [];
+                $binders = $this->generics->binders[$method] ?? $this->vendorSignature($owner)->templateBinders[$method] ?? [];
+                $found[] = [$assertions, $binders];
+            }
+        }
+
+        $asserted = [];
+        foreach ($found as [$assertions, $binders]) {
+            foreach ($assertions as [$kind, $parameter, $type]) {
+                if ($parameter !== $position || !\in_array($kind, $kinds, true)) {
+                    continue;
+                }
+                $bound = GenericType::substitute($type, $binders === [] ? [] : $this->methodBindings($binders, $call), null);
+                foreach ($bound === null ? [] : GenericType::members($this->canonicalType($bound)) as $member) {
+                    $base = GenericType::base($member);
+                    if (GenericType::isClass($base) && !\in_array($base, $asserted, true)) {
+                        $asserted[] = $base;
+                    }
+                }
+            }
+        }
+
+        return $asserted;
+    }
+
+    /**
+     * Whether the class is the parent, extends it or implements it, in the project or its dependencies.
+     */
+    public function isA(string $class, string $parent): bool
+    {
+        $parent = strtolower($parent);
+        foreach ($this->lineage($class) as $ancestor) {
+            if (strtolower($ancestor) === $parent) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function mayBeInterface(string $class): bool
+    {
+        $node = $this->graph->node($class);
+
+        return $node === null || $node->kind === NodeKind::PhpInterface;
     }
 
     /**
@@ -145,7 +352,7 @@ final class TypeResolver
      */
     private function resolveGeneric(TypeExpr $type, bool &$leftProject): ?string
     {
-        if ($type->receiver === null) {
+        if ($type->receiver === null && $type->members === [] && $type->test === null) {
             return $this->resolveUncached($type, $leftProject);
         }
 
@@ -165,6 +372,18 @@ final class TypeResolver
         if ($type->functions !== []) {
             return $this->functionReturn($type);
         }
+        if ($type->members !== []) {
+            $members = [];
+            foreach ($type->members as $member) {
+                $resolved = $this->resolveGeneric($member, $leftProject);
+                array_push($members, ...($resolved === null ? [GenericType::UNKNOWN] : GenericType::members($resolved)));
+            }
+
+            return $this->simplified($members);
+        }
+        if ($type->test !== null) {
+            return $this->narrowed($type->test, $leftProject);
+        }
         if ($type->receiver === null) {
             if ($type->generic !== null) {
                 return $this->canonicalType($type->generic);
@@ -180,10 +399,26 @@ final class TypeResolver
         if ($type->member === null) {
             return $this->elementOf($receiverType);
         }
-        $receiverType = $this->narrow($receiverType, $type->member, $type->isProperty);
-        if ($receiverType === null) {
-            return null;
+        [$members, $complete] = $this->declaring($receiverType, $type->member, $type->isProperty);
+        if (\count($members) === 1 && $complete) {
+            return $this->memberType($members[0], $type, $leftProject);
         }
+        // Several members declaring it, or an unknown one: what each gives, an unknown one staying unknown.
+        $types = $complete ? [] : [GenericType::UNKNOWN];
+        foreach ($members as $member) {
+            $resolved = $this->memberType($member, $type, $leftProject);
+            array_push($types, ...($resolved === null ? [GenericType::UNKNOWN] : GenericType::members($resolved)));
+        }
+
+        return $members === [] ? null : $this->simplified($types);
+    }
+
+    /**
+     * The type of a member (property, method return, element, closure parameter) of a receiver that is no union.
+     */
+    private function memberType(string $receiverType, TypeExpr $type, bool &$leftProject): ?string
+    {
+        \assert($type->member !== null);
         $receiver = GenericType::base($receiverType);
         if (!GenericType::isClass($receiver)) {
             return null;
@@ -194,7 +429,7 @@ final class TypeResolver
             if ($generic !== null) {
                 return $generic;
             }
-            $property = $this->findProperty($receiver, $type->member) ?? $this->modelAttribute($receiver, $type);
+            $property = $this->findProperty($receiver, $type->member) ?? $this->libraries->propertyType($receiver, $type, $this);
             if ($property === null) {
                 $leftProject = true;
             }
@@ -222,6 +457,10 @@ final class TypeResolver
             return $returned === null ? null : $this->elementOf($returned);
         }
 
+        $provided = $this->libraries->methodReturn($receiver, $method, $type, $this);
+        if ($provided !== null) {
+            return $this->canonicalType($provided);
+        }
         $generic = $this->genericReturn($method, $receiverType, $type);
         if ($generic !== null) {
             return $generic;
@@ -275,53 +514,6 @@ final class TypeResolver
         }
 
         return null;
-    }
-
-    /**
-     * An attribute of an Eloquent model no property declares: its cast (`'paid_at' => 'datetime'`), a timestamp, or
-     * the relation of the same name (`$page->book`, what `book()->getResults()` returns).
-     */
-    private function modelAttribute(string $class, TypeExpr $type): ?string
-    {
-        $lineage = $this->lineage($class);
-        if (!\in_array(self::MODEL, $lineage, true) || $type->receiver === null || $type->member === null) {
-            return null;
-        }
-        foreach ($lineage as $owner) {
-            $cast = $this->generics->casts[$owner . '::' . $type->member] ?? null;
-            if ($cast !== null) {
-                return $this->castClass($cast);
-            }
-        }
-        if (\in_array($type->member, ['created_at', 'updated_at', 'deleted_at'], true)) {
-            return self::CARBON;
-        }
-        if ($this->findMethod($class, strtolower($type->member)) === null) {
-            return null;
-        }
-        $left = false;
-
-        return $this->resolve(TypeExpr::returnOf(TypeExpr::returnOf($type->receiver, $type->member), 'getResults'), $left);
-    }
-
-    /**
-     * The class a cast gives an attribute: the `TGet` of a cast class, the class of a built-in castable, the class
-     * itself otherwise (an enum, a value object).
-     */
-    private function castClass(string $cast): ?string
-    {
-        $lineage = $this->lineage($cast);
-        if (\in_array(self::CASTS_ATTRIBUTES, $lineage, true)) {
-            $get = $this->bindings($cast, self::CASTS_ATTRIBUTES)['TGet'] ?? null;
-            $base = $get === null ? null : GenericType::base($get);
-
-            return $base !== null && GenericType::isClass($base) ? $base : null;
-        }
-        if (\in_array(self::CASTABLE, $lineage, true)) {
-            return self::CASTABLES[$cast] ?? null;
-        }
-
-        return $cast;
     }
 
     /**
@@ -486,7 +678,7 @@ final class TypeResolver
      *
      * @return array<string, string>
      */
-    private function bindings(string $type, string $class): array
+    public function bindings(string $type, string $class): array
     {
         $class = strtolower($class);
         foreach ($this->supertypes($type) as $supertype) {

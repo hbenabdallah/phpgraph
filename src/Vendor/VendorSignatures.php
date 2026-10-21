@@ -50,6 +50,9 @@ final class VendorSignatures
     /** @var array<string, array{?string, ?string, ?string, array<string, array{string, int}>}> lowercase function name => return type, GenericType, conditional, template binders */
     private array $functions = [];
 
+    /** @var array<string, list<array{string, int, string}>> lowercase function name => what a call tells of its arguments */
+    private array $functionAssertions = [];
+
     /**
      * What a function of the packages returns: its class, its GenericType, its conditional return type (JSON), how a
      * call binds its templates. The autoloaded files are scanned for the names they declare; the file declaring it is
@@ -97,10 +100,23 @@ final class VendorSignatures
                     $extraction->conditionalReturns[$node->id] ?? null,
                     $extraction->templateBinders[$node->id] ?? [],
                 ];
+                $this->functionAssertions[strtolower($node->id)] = $extraction->assertions[$node->id] ?? [];
             }
         }
 
         return $this->functions[$key] ??= [null, null, null, []];
+    }
+
+    /**
+     * What a call to a function of the packages tells of its arguments (`@phpstan-assert-if-true WP_Error $thing`).
+     *
+     * @return list<array{string, int, string}>
+     */
+    public function functionAssertions(string $name): array
+    {
+        $this->function($name);
+
+        return $this->functionAssertions[strtolower(ltrim($name, '\\'))] ?? [];
     }
 
     public function filesRead(): int
@@ -168,6 +184,7 @@ final class VendorSignatures
                 $extraction->mixins[$name] ?? [],
                 array_intersect_key($extraction->callableParameters, array_flip($class['methods'])),
                 array_intersect_key($extraction->templateBinders, array_flip($class['methods'])),
+                array_intersect_key($extraction->assertions, array_flip($class['methods'])),
             );
         }
     }

@@ -157,7 +157,7 @@ Chaque relation porte un niveau de confiance :
 |---|---|
 | `EXTRACTED` | Lu dans le code d'un fichier, ou dans la configuration (attribut, tag de service, fichier de routes). |
 | `INFERRED` | Résolu entre fichiers à partir des types déclarés : paramètres, propriétés, `$this`, héritage, types de retour, forme du code. |
-| `AMBIGUOUS` | Une supposition, par exemple la seule méthode du projet portant ce nom, appelée sur un récepteur de type inconnu. |
+| `AMBIGUOUS` | Une supposition, par exemple la seule méthode du projet portant ce nom, appelée sur un récepteur de type inconnu ; ou la méthode d'une classe qu'une variable peut contenir, quand une autre branche la laisse de type inconnu. |
 
 <details>
 <summary><b>Frameworks et conventions reconnus</b></summary>
@@ -241,17 +241,17 @@ Les reconstructions sont incrémentales : l'extraction de chaque fichier est mis
 
 ## Mesuré sur de vrais projets
 
-phpgraph est développé sur un corpus de projets open source figés à un commit, et chaque évolution se juge sur leurs chiffres (`composer corpus:measure`). Code applicatif seulement ; *récepteur typé* est la part des appels de méthodes dont phpgraph a pu déterminer le type du récepteur.
+phpgraph est développé sur un corpus de projets open source figés à un commit, et chaque évolution se juge sur leurs chiffres (`composer corpus:measure`). Code applicatif seulement ; *récepteur typé* est la part des appels de méthodes dont phpgraph a pu déterminer le type du récepteur. Build mesuré par `corpus:measure`, projet par projet, dans Docker (PHP 8.5, sans opcache), version 1.5.0.
 
 | Projet | Type | Fichiers PHP | Build | Récepteur typé |
 |---|---|---:|---:|---:|
-| [php-ddd-example](https://github.com/CodelyTV/php-ddd-example) | DDD, CQRS | 304 | 0,4 s | 98,3 % |
-| [Sylius](https://github.com/Sylius/Sylius) | e-commerce Symfony | 4 946 | 6,5 s | 79,6 % |
-| [Akeneo PIM](https://github.com/akeneo/pim-community-dev) | hexagonal, bounded contexts | 8 416 | 10,3 s | 87,0 % |
-| [PrestaShop](https://github.com/PrestaShop/PrestaShop) | CQRS et legacy | 7 850 | 10,0 s | 90,5 % |
-| [Ecotone quickstart](https://github.com/ecotoneframework/quickstart-examples) | 47 services, messagerie | 583 | 0,6 s | 91,8 % |
-| [BookStack](https://github.com/BookStackApp/BookStack) | Laravel | 1 513 | 2,8 s | 87,4 % |
-| [WordPress](https://github.com/WordPress/WordPress) | sans framework, hooks | 1 899 | 5,3 s | 90,9 % |
+| [php-ddd-example](https://github.com/CodelyTV/php-ddd-example) | DDD, CQRS | 304 | 0,8 s | 99,1 % |
+| [Sylius](https://github.com/Sylius/Sylius) | e-commerce Symfony | 4 946 | 13,9 s | 98,3 % |
+| [Akeneo PIM](https://github.com/akeneo/pim-community-dev) | hexagonal, bounded contexts | 8 416 | 21,9 s | 92,9 % |
+| [PrestaShop](https://github.com/PrestaShop/PrestaShop) | CQRS et legacy | 7 850 | 21,1 s | 96,6 % |
+| [Ecotone quickstart](https://github.com/ecotoneframework/quickstart-examples) | 47 services, messagerie | 583 | 1,3 s | 94,5 % |
+| [BookStack](https://github.com/BookStackApp/BookStack) | Laravel | 1 513 | 5,6 s | 97,3 % |
+| [WordPress](https://github.com/WordPress/WordPress) | sans framework, hooks | 1 899 | 10,9 s | 96,0 % |
 
 Deux petits projets microservices complètent le corpus : [deux services Laravel reliés par RabbitMQ](https://github.com/mostafaaminflakes/Using-RabbitMQ-in-Microservices), avec 4 contrats de messages, et [quatre services Laravel reliés par HTTP](https://github.com/omarihab99/Art-Gallery), où phpgraph a trouvé un `POST` envoyé vers une route `GET` seulement. Aucun échec d'analyse sur environ 26 000 fichiers. Le détail par projet, messages, routes et services compris, est dans [`corpus/RESULTS.md`](https://github.com/hbenabdallah/phpgraph/blob/main/corpus/RESULTS.md).
 
@@ -293,7 +293,7 @@ Sylius (le commit du corpus), octobre 2026, sans LLM : phpgraph 1.0.2, [codebase
 
 **Avec quels agents fonctionne-t-il ?** Tout client MCP sur stdio : [Sherpa](https://github.com/hbenabdallah/sherpa), Claude Code, Codex, Cursor, Claude Desktop, et d'autres. `mcp-config` affiche la configuration des plus courants.
 
-**Quelle taille de projet supporte-t-il ?** Le plus gros projet du corpus, Akeneo, compte 8 400 fichiers : environ 10 s et 500 Mo pour un build complet, environ 3 s pour une reconstruction après une modification.
+**Quelle taille de projet supporte-t-il ?** Le plus gros projet du corpus, Akeneo, compte 8 400 fichiers : environ 22 s et 730 Mo pour un build complet (dans Docker, sans opcache), environ 3 s pour une reconstruction après une modification.
 
 ## Limites
 

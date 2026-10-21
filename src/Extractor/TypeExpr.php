@@ -23,6 +23,13 @@ final readonly class TypeExpr
      *                                             the parameter of the closure
      * @param array<int, self> $argumentTypes the types of the arguments the call passes, by position; for a closure,
      *                                        what it returns: they bind the templates of the method (`@param T $value`)
+     * @param list<self> $members the types a variable may hold where branches meet, sorted by key; an unknown
+     *                          one last when a branch leaves it of unknown type
+     * @param array{self, list<string>, bool, 3?: array{self, int, bool}}|null $test the type an `instanceof` test
+     *                                                   narrows, the classes tested, whether the test failed (the classes
+     *                                                   are then excluded); for a call asserting what an argument is
+     *                                                   (`is_wp_error($e)`), no class but the call, the position of the
+     *                                                   argument and whether the call is a statement of its own
      */
     private function __construct(
         public ?string $className,
@@ -35,7 +42,95 @@ final readonly class TypeExpr
         public array $arguments = [],
         public ?array $closure = null,
         public array $argumentTypes = [],
+        public array $members = [],
+        public ?array $test = null,
     ) {
+    }
+
+    /**
+     * A type nothing is known of: a variable assigned an expression of unknown type, an untyped parameter. Where
+     * branches meet, it makes the union partial.
+     */
+    public static function unknown(): self
+    {
+        return new self(null);
+    }
+
+    public function isUnknown(): bool
+    {
+        return $this->className === null && $this->receiver === null && $this->functions === [] && $this->members === [] && $this->test === null && $this->generic === null;
+    }
+
+    /**
+     * What a variable may hold where branches meet: `if (...) { $shape = new Circle(); } else { $shape = new Square(); }`.
+     * Nested unions are flattened, an unknown member makes it partial; the members are sorted, so that the order of the
+     * branches does not matter. A test and its negation of the same type give the type back (`if ($x instanceof A)`
+     * without an assignment leaves `$x` as it was).
+     *
+     * @param list<self> $types
+     */
+    public static function union(array $types): self
+    {
+        $members = [];
+        $partial = false;
+        foreach ($types as $type) {
+            foreach ($type->members !== [] ? $type->members : [$type] as $member) {
+                if ($member->isUnknown()) {
+                    $partial = true;
+                } else {
+                    $members[$member->key()] = $member;
+                }
+            }
+        }
+        // A type narrowed, beside the type itself or its negation: the type.
+        do {
+            $reduced = false;
+            foreach ($members as $key => $member) {
+                if ($member->test === null) {
+                    continue;
+                }
+                [$subject, $classes, $excluding] = $member->test;
+                $negation = (new self(null, null, null, false, false, null, [], [], null, [], [], [$subject, $classes, !$excluding, ...\array_slice($member->test, 3)]))->key();
+                if (isset($members[$subject->key()]) || isset($members[$negation])) {
+                    unset($members[$key], $members[$negation]);
+                    $members[$subject->key()] = $subject;
+                    $reduced = true;
+                    break;
+                }
+            }
+        } while ($reduced);
+        ksort($members, \SORT_STRING);
+        $members = array_values($members);
+
+        return match (true) {
+            $members === [] => self::unknown(),
+            \count($members) === 1 && !$partial => $members[0],
+            default => new self(null, null, null, false, false, null, [], [], null, [], $partial ? [...$members, self::unknown()] : $members),
+        };
+    }
+
+    /**
+     * The type an `instanceof` test leaves in its branch: `$subject` narrowed to the classes tested
+     * (`if ($shape instanceof Circle)`), or without them when the test failed (`else`, after `if (!...) { return; }`).
+     * Resolved by the builder, which knows the hierarchy.
+     *
+     * @param list<string> $classes
+     */
+    public static function narrowed(self $subject, array $classes, bool $excluding = false): self
+    {
+        return new self(null, null, null, false, false, null, [], [], null, [], [], [$subject, $classes, $excluding]);
+    }
+
+    /**
+     * What a call tells of an argument, resolved by the builder from the callable's `@phpstan-assert` tags:
+     * `is_wp_error($result)` in a condition that held (or failed), `Assert::isInstanceOf($order, Order::class)` as a
+     * statement. The subject unchanged when the callable asserts nothing.
+     *
+     * @param self $call the call, as the type of what it returns: its callable and its arguments
+     */
+    public static function asserted(self $subject, self $call, int $position, bool $failed, bool $statement): self
+    {
+        return new self(null, null, null, false, false, null, [], [], null, [], [], [$subject, [], $failed, [$call, $position, $statement]]);
     }
 
     /**
@@ -120,6 +215,16 @@ final readonly class TypeExpr
             $this->arguments,
         );
         $argumentTypes = array_map(static fn (self $type): self => $type->map($map), $this->argumentTypes);
+        if ($this->members !== []) {
+            return new self(null, null, null, false, false, null, [], [], null, [], array_map(static fn (self $member): self => $member->map($map), $this->members));
+        }
+        if ($this->test !== null) {
+            $call = $this->test[3] ?? null;
+
+            return $call === null
+                ? self::narrowed($this->test[0]->map($map), array_map($map, $this->test[1]), $this->test[2])
+                : self::asserted($this->test[0]->map($map), $call[0]->map($map), $call[1], $this->test[2], $call[2]);
+        }
         if ($this->functions !== []) {
             return new self(null, null, null, false, false, null, array_map($map, $this->functions), $arguments, null, $argumentTypes);
         }
@@ -131,6 +236,15 @@ final readonly class TypeExpr
 
     public function key(): string
     {
+        if ($this->members !== []) {
+            return '{' . implode('|', array_map(static fn (self $member): string => $member->isUnknown() ? '?' : $member->key(), $this->members)) . '}';
+        }
+        if ($this->test !== null) {
+            $call = $this->test[3] ?? null;
+            $tested = $call === null ? strtolower(implode('|', $this->test[1])) : $call[0]->key() . '#' . $call[1] . ($call[2] ? ';' : '');
+
+            return '(' . $this->test[0]->key() . ($this->test[2] ? ')!is(' : ')is(') . $tested . ')';
+        }
         if ($this->functions !== []) {
             return strtolower(implode('|', $this->functions)) . '(' . $this->argumentsKey() . ')';
         }

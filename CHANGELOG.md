@@ -3,6 +3,58 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## 1.5.0 (2026-10-21)
+
+### Added
+- Local variables follow the branches: after `if`/`elseif`/`else`, `switch`, `match`, `try`/`catch`, a ternary, `??`
+  or a loop, a variable holds what any branch reaching that point assigned, instead of the last assignment read.
+  `instanceof`, `is_a()`, `assert()`, `&&`/`||` and `match (true)` narrow it where they hold; a negated test followed
+  by `return`, `throw` or `continue` narrows the code after it. A call on it is linked to the method of each class it
+  may hold, INFERRED when every branch typed it, AMBIGUOUS when one left it of unknown type.
+- A send whose message branches build one way or another (`$command = $unofficial ? new AddUnofficialCurrencyCommand()
+  : new AddCurrencyCommand()`) dispatches each of them; AMBIGUOUS when a branch leaves the message unknown.
+- Native and documented intersections (`Countable&Named`, `@var OrderInterface&MockObject`) are called on each member
+  declaring the method, instead of being dropped (native) or reduced to their first class (documented).
+- Fixtures with inline expectations, `tests/Fixtures/expectations/*.php`: `// @phpgraph-expect calls App\Foo::bar
+  INFERRED` on the line of each call; a missing or an unexpected call fails, `@phpgraph-todo` marks a known gap.
+- A call narrows its arguments as its callable's docblock asserts, in the project or its dependencies:
+  `@phpstan-assert`, `@psalm-assert`, `-if-true`, `-if-false`, a template bound by a `class-string` argument
+  (`is_wp_error($result)`, `Assert::isInstanceOf($order, Order::class)`, `$this->assertInstanceOf(Order::class, $order)`).
+- Library providers (`src/Builder/Libraries`): a PSR-11 container's `get(Mailer::class)` is a Mailer. Eloquent's
+  attributes moved there from `TypeResolver`, unchanged.
+- `phpgraph check` checks the project's own rules, `rules` in `phpgraph.yaml`, with the same baseline: who may depend
+  on what (`dependency: Doctrine\`, `allow-from`, `deny-from`), what the classes a pattern selects must be (final,
+  abstract, readonly, named, implementing, extending, using a trait, only some public methods), and that a message
+  handler dispatches the messages of its own bounded context only (`handlers: {own-context: true, shared: [Shared]}`).
+- Nodes of `graph.json` carry their `modifiers`: `final`, `abstract`, `readonly` on a class; `protected`, `private`,
+  `static`, `abstract`, `final` on a method.
+
+### Changed
+- Docblocks are read by `phpstan/phpdoc-parser` (a new dependency) instead of regular expressions: types over several
+  lines, unions with spaces (`Token | Exception`), callables in unions (`(callable(TValue): float|int)|null`), by-reference
+  and variadic `@param`, nested conditional returns. A `@param` mentioned in a description no longer counts. Compared
+  with the regular expressions on five projects and their `vendor/` (about 105,000 docblocks): 2,696 facts gained,
+  154 lost, all checked: words of descriptions taken for classes (`and`, `annotations`, `empty`), a callable of an
+  array element taken for the parameter's, a conditional whose branches name no class (the plain `@return` is read).
+  A docblock of thousands of tags (an SDK client's `@method` list) is parsed tag by tag, the parser being quadratic
+  on it.
+- A call on a union whose members declare different methods (`Cat|Dog` calling `sleep()`) is linked to each of them,
+  INFERRED; it was left unresolved. A chain goes on with the union of what they return.
+
+### Fixed
+- A method passing its parameter on to a bus is plumbing even when nothing calls it: its send is not counted untyped.
+- An inline `@var` naming a union or an intersection without any single class typed nothing.
+- A parameter without a native type is typed by a `@param` naming a single class (`@param WP_Error|null $error`); it
+  was only with arguments or as a union.
+
+Corpus, call sites compared one by one with 1.4.3 (INFERRED / AMBIGUOUS / unknown receiver): Sylius +299 / −2 /
+−2,408, Akeneo +1,183 / −85 / −1,110, PrestaShop +642 / −79 / −652, WordPress +1,097 / −455 / −635, BookStack
++86 / −50 / −99. No call site lost an INFERRED edge except to a more precise one (an `instanceof` narrowing
+`ValueInterface::getData()` to `OptionValue::getData()`), to AMBIGUOUS where another branch leaves the receiver
+unknown, or where the edge was wrong (the last assignment of an `if` read in its `else`). Builds take 5 to 24 % longer
+(Sylius +5 %, PrestaShop and BookStack +14 %, Akeneo +15 %, WordPress +24 %, each measured beside 1.4.3) and 3 to 10 %
+more memory.
+
 ## 1.4.3 (2026-10-17)
 
 ### Fixed

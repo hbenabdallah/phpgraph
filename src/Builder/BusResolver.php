@@ -116,14 +116,15 @@ final class BusResolver
                 }
             }
 
-            $message = $this->message($dispatch);
-            if ($message === null) {
+            [$messages, $complete] = $this->messages($dispatch);
+            if ($messages === []) {
                 if ($channel !== null) {
                     continue;
                 }
                 $source = $this->names->canonical($dispatch->source);
-                // A forwarder sends its parameter, and a bus implementation an abstract message: plumbing, not a gap.
-                if (!$inTests && $confidence === Confidence::Inferred && !isset($throughForwarders[$source]) && !$this->sendsAbstractType($dispatch)
+                // A forwarder sends its parameter (called or not), and a bus implementation an abstract message: plumbing,
+                // not a gap.
+                if (!$inTests && $confidence === Confidence::Inferred && !isset($throughForwarders[$source]) && !isset($forwarders[$source]) && !$this->sendsAbstractType($dispatch)
                     && !\in_array(strtolower($dispatch->method), self::RECORD_METHODS, true)
                 ) {
                     ++$untyped;
@@ -131,19 +132,23 @@ final class BusResolver
                 continue;
             }
 
-            $this->graph->addEdge(new Edge($this->names->canonical($dispatch->source), $message, Relation::Dispatches, $confidence));
-            $this->markSent($message, $confidence, $inTests);
+            // A message of a union, the branches sending one or another: each is sent, a guess when a branch is unknown.
+            $confidence = $complete ? $confidence : Confidence::Ambiguous;
             if (!$inTests && $channel === null) {
                 $sends[$confidence->value] = ($sends[$confidence->value] ?? 0) + 1;
             }
+            foreach ($messages as $message) {
+                $this->graph->addEdge(new Edge($this->names->canonical($dispatch->source), $message, Relation::Dispatches, $confidence));
+                $this->markSent($message, $confidence, $inTests);
 
-            // A Laravel job or event dispatching itself runs its own handle() method.
-            $ownHandler = $this->isSelfDispatching($message) ? $this->types->findMethod($message, 'handle') : null;
-            if ($ownHandler !== null && $this->graph->hasNode($ownHandler)) {
-                $this->graph->addEdge(new Edge($message, $ownHandler, Relation::HandledBy, Confidence::Inferred));
-                if (!$inTests && !isset($handled[$message])) {
-                    $linked[Confidence::Inferred->value] = ($linked[Confidence::Inferred->value] ?? 0) + 1;
-                    $handled[$message] = true;
+                // A Laravel job or event dispatching itself runs its own handle() method.
+                $ownHandler = $this->isSelfDispatching($message) ? $this->types->findMethod($message, 'handle') : null;
+                if ($ownHandler !== null && $this->graph->hasNode($ownHandler)) {
+                    $this->graph->addEdge(new Edge($message, $ownHandler, Relation::HandledBy, Confidence::Inferred));
+                    if (!$inTests && !isset($handled[$message])) {
+                        $linked[Confidence::Inferred->value] = ($linked[Confidence::Inferred->value] ?? 0) + 1;
+                        $handled[$message] = true;
+                    }
                 }
             }
         }
@@ -312,9 +317,9 @@ final class BusResolver
 
     private function sendsAbstractType(PendingDispatch $dispatch): bool
     {
-        $type = $dispatch->message === null ? null : $this->types->resolve($dispatch->message);
+        [$classes] = $dispatch->message === null ? [[]] : $this->types->classesOf($dispatch->message);
 
-        return $type !== null && $this->isProjectClass($type) && $this->hasImplementations($type);
+        return array_filter($classes, fn (string $type): bool => $this->isProjectClass($type) && $this->hasImplementations($type)) !== [];
     }
 
     /**
@@ -331,18 +336,22 @@ final class BusResolver
     }
 
     /**
-     * The project class sent: the first argument, or the class itself for `ProcessPodcast::dispatch($podcast)`.
+     * The project classes sent: the first argument, each class of a union when branches send one or another
+     * (`$command = $unofficial ? new AddUnofficialCurrencyCommand() : new AddCurrencyCommand()`), or the class itself
+     * for `ProcessPodcast::dispatch($podcast)`; and whether every branch is known.
+     *
+     * @return array{list<string>, bool}
      */
-    private function message(PendingDispatch $dispatch): ?string
+    private function messages(PendingDispatch $dispatch): array
     {
         if ($dispatch->staticClass !== null && $this->isSelfDispatching($this->names->canonical($dispatch->staticClass))) {
-            return $this->names->canonical($dispatch->staticClass);
+            return [[$this->names->canonical($dispatch->staticClass)], true];
         }
 
-        $message = $dispatch->message === null ? null : $this->types->resolve($dispatch->message);
+        [$classes, $complete] = $dispatch->message === null ? [[], false] : $this->types->classesOf($dispatch->message);
 
         // An abstract message type (Command, DomainEventInterface) only says that something is sent: not what.
-        return $message !== null && $this->isProjectClass($message) && !$this->hasImplementations($message) ? $message : null;
+        return [array_values(array_filter($classes, fn (string $message): bool => $this->isProjectClass($message) && !$this->hasImplementations($message))), $complete];
     }
 
     private function handlerConfidence(HandlerFact $handler, string $message): ?Confidence

@@ -18,6 +18,7 @@ use PhpGraph\Query\Result\LayerViolation;
 use PhpGraph\Query\Result\NamespaceGroup;
 use PhpGraph\Query\Result\PathMode;
 use PhpGraph\Query\Result\RouteEntry;
+use PhpGraph\Query\Result\RuleViolation;
 
 /**
  * Plain-text answers shared by the CLI and the MCP server. Kept compact: the main reader is an AI assistant.
@@ -759,6 +760,42 @@ final class TextPresenter
                     $lines[] = '  ' . $this->violation($violation);
                 }
             }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * The violations of the project's rules (phpgraph.yaml `rules`), by rule, those of the baseline left out.
+     *
+     * @param list<RuleViolation> $violations
+     * @param list<string>        $accepted   keys of the violations the baseline accepts
+     */
+    public function ruleViolations(array $violations, array $accepted = []): string
+    {
+        $violations = array_values(array_filter($violations, static fn (RuleViolation $violation): bool => !\in_array($violation->key(), $accepted, true)));
+        if ($violations === []) {
+            return $accepted === [] ? 'No class breaks the project\'s rules.' : 'No new class breaks the project\'s rules.';
+        }
+
+        $lines = [\sprintf('%d breaches of the project\'s rules%s:', \count($violations), $accepted === [] ? '' : ' (not in the baseline)')];
+        $rule = null;
+        foreach ($violations as $violation) {
+            if ($violation->rule !== $rule) {
+                $rule = $violation->rule;
+                $lines[] = '';
+                $lines[] = $rule . ($violation->reason === null ? '' : ': ' . $violation->reason);
+            }
+            $node = $this->query->graph()->node($violation->edge === null ? $violation->subject : explode('::', $violation->edge->source)[0])
+                ?? $this->query->graph()->node($violation->subject);
+            $lines[] = \sprintf(
+                '  %s %s%s%s  %s',
+                $violation->subject,
+                $violation->detail,
+                $violation->edge === null ? '' : ': ' . $this->formatEdge($violation->edge),
+                $violation->edges > 1 ? \sprintf(' (+%d more)', $violation->edges - 1) : '',
+                $node === null ? '' : $this->location($node),
+            );
         }
 
         return implode("\n", $lines);
