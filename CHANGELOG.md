@@ -48,8 +48,9 @@ Corpus, call sites compared one by one with 1.4.3 (INFERRED / AMBIGUOUS / unknow
 −2,408, Akeneo +1,183 / −85 / −1,110, PrestaShop +642 / −79 / −652, WordPress +1,097 / −455 / −635, BookStack
 +86 / −50 / −99. No call site lost an INFERRED edge except to a more precise one (an `instanceof` narrowing
 `ValueInterface::getData()` to `OptionValue::getData()`), to AMBIGUOUS where another branch leaves the receiver
-unknown, or where the edge was wrong (the last assignment of an `if` read in its `else`). Builds take 5 to 16 % longer
-(Sylius, Akeneo) and 3 to 5 % more memory.
+unknown, or where the edge was wrong (the last assignment of an `if` read in its `else`). Builds take 5 to 24 % longer
+(Sylius +5 %, PrestaShop and BookStack +14 %, Akeneo +15 %, WordPress +24 %, each measured beside 1.4.3) and 3 to 10 %
+more memory.
 
 ## 1.4.3 (2026-10-17)
 
