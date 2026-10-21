@@ -108,6 +108,15 @@ final class DocTypeResolver extends NodeVisitorAbstract
     public const TEMPLATE_BINDERS = 'phpgraph.templateBinders';
 
     /**
+     * list<array{string, int, string}>: what a call tells of an argument, `@phpstan-assert`, `@psalm-assert` and their
+     * `-if-true` and `-if-false` forms: when it holds (`always`, once the call returns; `true` or `false`, what it
+     * returns), the position of the parameter, the GenericType it is then (a template a call binds is `@#T`, as in
+     * `@psalm-assert ExpectedType $value` with `@psalm-param class-string<ExpectedType> $class`). Negations
+     * (`!null`) and types no class is in (`array`, `'prefetch'`) are left out.
+     */
+    public const ASSERTIONS = 'phpgraph.assertions';
+
+    /**
      * Iterables whose last argument is their elements; Generator has its own place for them.
      */
     private const ITERABLES = ['array', 'list', 'non-empty-list', 'non-empty-array', 'iterable'];
@@ -260,6 +269,10 @@ final class DocTypeResolver extends NodeVisitorAbstract
             }
             if ($callables !== []) {
                 $node->setAttribute(self::CALLABLE_PARAMETERS, $callables);
+            }
+            $assertions = $this->assertions($doc, $positions, array_keys($binders));
+            if ($assertions !== []) {
+                $node->setAttribute(self::ASSERTIONS, $assertions);
             }
             if ($generics !== []) {
                 $node->setAttribute(self::GENERICS, $generics);
@@ -571,6 +584,45 @@ final class DocTypeResolver extends NodeVisitorAbstract
         }
 
         return $binders;
+    }
+
+    /**
+     * @param array<string, int> $positions parameter name => position
+     * @param list<string>       $bound     the templates of the method a call binds
+     *
+     * @return list<array{string, int, string}>
+     */
+    private function assertions(string $doc, array $positions, array $bound): array
+    {
+        $assertions = [];
+        foreach (preg_split('/\R/', $doc) ?: [] as $line) {
+            if (preg_match('/@(?:phpstan|psalm)-assert(-if-true|-if-false)?\s+(.+)/', $line, $match) !== 1) {
+                continue;
+            }
+            $token = $this->firstType(trim($match[2]));
+            if (preg_match('/^\s*\$(\w+)/', substr(trim($match[2]), \strlen($token)), $variable) !== 1 || !isset($positions[$variable[1]])) {
+                continue;
+            }
+            // `=ExpectedType`: Psalm's exact type, the type all the same.
+            $text = ltrim(trim($token), '=');
+            if ($text === '' || str_starts_with($text, '!')) {
+                continue;
+            }
+            $type = $this->generic($text, $this->templates($doc), $bound);
+            $classes = $type === null ? [] : array_filter(
+                GenericType::members($type),
+                static fn (string $member): bool => GenericType::isClass(GenericType::base($member)) || str_starts_with($member, '@#'),
+            );
+            if ($type !== null && \count($classes) === \count(GenericType::members($type))) {
+                $assertions[] = [match ($match[1]) {
+                    '-if-true' => 'true',
+                    '-if-false' => 'false',
+                    default => 'always',
+                }, $positions[$variable[1]], $type];
+            }
+        }
+
+        return $assertions;
     }
 
     /**

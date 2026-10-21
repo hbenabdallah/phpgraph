@@ -22,6 +22,7 @@ final readonly class Generics
      *                                                                     takes, by position and name, GenericType strings
      * @param array<string, array<string, array{string, int}>> $binders callable id => how a call binds its templates
      * @param array<string, string>                      $casts           "Class::attribute" => the class an Eloquent cast gives it
+     * @param array<string, list<array{string, int, string}>> $assertions callable id => what a call tells of its arguments
      */
     public function __construct(
         public array $templates = [],
@@ -34,6 +35,7 @@ final readonly class Generics
         public array $callables = [],
         public array $binders = [],
         public array $casts = [],
+        public array $assertions = [],
     ) {
     }
 }

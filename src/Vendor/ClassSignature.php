@@ -23,6 +23,8 @@ final readonly class ClassSignature
      *                                                closures it takes, by position and name
      * @param array<string, array<string, array{string, int}>> $templateBinders method id => how a call binds the
      *                                                templates of the method
+     * @param array<string, list<array{string, int, string}>> $assertions method id => what a call tells of its
+     *                                                arguments (`@psalm-assert`)
      */
     public function __construct(
         public string $name,
@@ -37,6 +39,7 @@ final readonly class ClassSignature
         public array $mixins = [],
         public array $callableParameters = [],
         public array $templateBinders = [],
+        public array $assertions = [],
     ) {
     }
 }

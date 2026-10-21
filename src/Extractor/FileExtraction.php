@@ -71,6 +71,8 @@ final readonly class FileExtraction
      * @param array<string, string> $casts "Class::attribute" => the class an Eloquent cast gives the attribute
      * @param array<string, string> $baseUrls method id => the base URL of the HTTP client it returns, `*` where
      *                                             computed: `return Http::baseUrl($this->apiUrl);`
+     * @param array<string, list<array{string, int, string}>> $assertions callable id => what a call tells of its
+     *                                             arguments (DocTypeResolver::ASSERTIONS)
      */
     public function __construct(
         public array $nodes,
@@ -110,6 +112,7 @@ final readonly class FileExtraction
         public array $templateBinders = [],
         public array $casts = [],
         public array $baseUrls = [],
+        public array $assertions = [],
     ) {
     }
 }

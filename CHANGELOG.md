@@ -16,6 +16,12 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 - Fixtures with inline expectations, `tests/Fixtures/expectations/*.php`: `// @phpgraph-expect calls App\Foo::bar
   INFERRED` on the line of each call; a missing or an unexpected call fails, `@phpgraph-todo` marks a known gap.
 
+- A call narrows its arguments as its callable's docblock asserts, in the project or its dependencies:
+  `@phpstan-assert`, `@psalm-assert`, `-if-true`, `-if-false`, a template bound by a `class-string` argument
+  (`is_wp_error($result)`, `Assert::isInstanceOf($order, Order::class)`, `$this->assertInstanceOf(Order::class, $order)`).
+- Library providers (`src/Builder/Libraries`): a PSR-11 container's `get(Mailer::class)` is a Mailer. Eloquent's
+  attributes moved there from `TypeResolver`, unchanged.
+
 ### Changed
 - A call on a union whose members declare different methods (`Cat|Dog` calling `sleep()`) is linked to each of them,
   INFERRED; it was left unresolved. A chain goes on with the union of what they return.
@@ -25,8 +31,9 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 - A parameter without a native type is typed by a `@param` naming a single class (`@param WP_Error|null $error`); it
   was only with arguments or as a union.
 
-Corpus, call sites (INFERRED / AMBIGUOUS / unknown receiver): Sylius +221 / +1 / −2,302, Akeneo +806 / −37 / −858,
-PrestaShop +515 / −48 / −526, WordPress +1,034 / −411 / −616, BookStack +58 / −27 / −70. No call site lost an
+Corpus, call sites (INFERRED / AMBIGUOUS / unknown receiver): Sylius +299 / 0 / −2,407, Akeneo +1,119 / −75 / −1,050,
+PrestaShop +640 / −79 / −650, WordPress +1,092 / −454 / −631, BookStack +59 / −28 / −75; assertions and providers
+account for Sylius +78, Akeneo +313, PrestaShop +125, WordPress +58 of the INFERRED. No call site lost an
 INFERRED edge except to a more precise one (an `instanceof` narrowing `ValueInterface::getData()` to
 `OptionValue::getData()`), to AMBIGUOUS where another branch leaves the receiver unknown, or where the edge was wrong
 (the last assignment of an `if` read in its `else`).

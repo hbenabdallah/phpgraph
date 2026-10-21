@@ -157,6 +157,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<string, array<string, array{string, int}>> callable id => how a call binds its templates */
     private array $templateBinders = [];
 
+    /** @var array<string, list<array{string, int, string}>> callable id => what a call tells of its arguments */
+    private array $assertions = [];
+
     /** @var array<string, string> "Class::attribute" => the class an Eloquent cast gives it (`'paid_at' => 'datetime'`) */
     private array $casts = [];
 
@@ -236,6 +239,21 @@ final class ExtractionVisitor extends NodeVisitorAbstract
      */
     private const MERGED_KEY = 4000;
 
+    /**
+     * Names of the calls that may assert what an argument is, looked up in their callable's docblock by the builder.
+     */
+    private const ASSERTING = '/^(is|assert|ensure|check|expect|validate|verify)/';
+
+    /**
+     * PHP's own tests of a value, which assert no class: not worth a lookup.
+     */
+    private const PHP_TESTS = [
+        'is_array', 'is_bool', 'is_callable', 'is_countable', 'is_dir', 'is_double', 'is_executable', 'is_file',
+        'is_finite', 'is_float', 'is_infinite', 'is_int', 'is_integer', 'is_iterable', 'is_link', 'is_long', 'is_nan',
+        'is_null', 'is_numeric', 'is_object', 'is_readable', 'is_resource', 'is_scalar', 'is_string', 'is_uploaded_file',
+        'is_writable', 'is_writeable', 'isset', 'is_a', 'is_subclass_of',
+    ];
+
     public function __construct(private readonly string $path)
     {
         $this->fileId = 'file:' . $path;
@@ -291,6 +309,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->templateBinders,
             $this->casts,
             $this->baseUrls,
+            $this->assertions,
         );
     }
 
@@ -433,6 +452,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         if ($node instanceof Expr\FuncCall && $node->name instanceof Name && strtolower($node->name->getLast()) === 'assert'
             && ($node->args[0] ?? null) instanceof AstNode\Arg) {
             $this->assume($node->args[0]->value, true);
+        }
+        // `Assert::isInstanceOf($order, Order::class);`, `$this->assertInstanceOf(Order::class, $order);`
+        if ($node instanceof Stmt\Expression && ($node->expr instanceof Expr\FuncCall || $node->expr instanceof Expr\StaticCall
+            || $node->expr instanceof Expr\MethodCall || $node->expr instanceof Expr\NullsafeMethodCall)) {
+            $this->apply($this->calledAssertions($node->expr, false, true));
         }
 
         if ($node instanceof Stmt\Return_ && $node->expr !== null && $this->closureNodes !== []) {
@@ -686,6 +710,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         $conditional = $node->getAttribute(DocTypeResolver::RETURN_CONDITIONAL);
         if (\is_string($conditional)) {
             $this->conditionalReturns[$id] = $conditional;
+        }
+        $assertions = $node->getAttribute(DocTypeResolver::ASSERTIONS);
+        if (\is_array($assertions)) {
+            /** @var list<array{string, int, string}> $assertions */
+            $this->assertions[$id] = $assertions;
         }
         $binders = $node->getAttribute(DocTypeResolver::TEMPLATE_BINDERS);
         if (\is_array($binders)) {
@@ -1363,9 +1392,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
     /**
      * What a condition tells of the variables it tests when it holds, or when it does not: variable => the classes
-     * it is an instance of, or is not (excluding).
+     * it is an instance of, or is not (excluding); or, for a call that may assert it (`is_wp_error($result)`), no
+     * class but the call, which the builder reads the callable's assertions for.
      *
-     * @return array<string, array{list<string>, bool}>
+     * @return array<string, array{list<string>, bool, 2?: array{TypeExpr, int, bool}}>
      */
     private function assertions(Expr $condition, bool $holds): array
     {
@@ -1391,6 +1421,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                 : [];
         }
 
+        if ($condition instanceof Expr\FuncCall || $condition instanceof Expr\StaticCall || $condition instanceof Expr\MethodCall || $condition instanceof Expr\NullsafeMethodCall) {
+            return $this->calledAssertions($condition, !$holds, false);
+        }
+
         $and = $condition instanceof Expr\BinaryOp\BooleanAnd || $condition instanceof Expr\BinaryOp\LogicalAnd;
         $or = $condition instanceof Expr\BinaryOp\BooleanOr || $condition instanceof Expr\BinaryOp\LogicalOr;
         if (!$and && !$or) {
@@ -1401,10 +1435,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         $right = $this->assertions($condition->right, $holds);
         if ($and === $holds) {
             // Both sides hold (or both fail): a variable excluded from classes on both sides is none of them.
-            foreach ($right as $variable => [$classes, $excluding]) {
-                $left[$variable] = $excluding && ($left[$variable][1] ?? false)
-                    ? [array_values(array_unique([...$left[$variable][0], ...$classes])), true]
-                    : [$classes, $excluding];
+            foreach ($right as $variable => $assertion) {
+                $left[$variable] = $assertion[1] && ($left[$variable][1] ?? false) && !isset($assertion[2]) && !isset($left[$variable][2])
+                    ? [array_values(array_unique([...$left[$variable][0], ...$assertion[0]])), true]
+                    : $assertion;
             }
 
             return $left;
@@ -1416,17 +1450,18 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /**
      * One of two sets of assertions holds: a variable both say is an instance of classes is an instance of one of them.
      *
-     * @param array<string, array{list<string>, bool}> $left
-     * @param array<string, array{list<string>, bool}> $right
+     * @param array<string, array{list<string>, bool, 2?: array{TypeExpr, int, bool}}> $left
+     * @param array<string, array{list<string>, bool, 2?: array{TypeExpr, int, bool}}> $right
      *
-     * @return array<string, array{list<string>, bool}>
+     * @return array<string, array{list<string>, bool, 2?: array{TypeExpr, int, bool}}>
      */
     private static function either(array $left, array $right): array
     {
         $either = [];
-        foreach ($left as $variable => [$classes, $excluding]) {
-            if (!$excluding && isset($right[$variable]) && !$right[$variable][1]) {
-                $either[$variable] = [array_values(array_unique([...$classes, ...$right[$variable][0]])), false];
+        foreach ($left as $variable => $assertion) {
+            $other = $right[$variable] ?? null;
+            if (!$assertion[1] && !isset($assertion[2]) && $other !== null && !$other[1] && !isset($other[2])) {
+                $either[$variable] = [array_values(array_unique([...$assertion[0], ...$other[0]])), false];
             }
         }
 
@@ -1434,13 +1469,56 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     }
 
     /**
-     * @param array<string, array{list<string>, bool}> $assertions
+     * The variables a call passes that its callable may assert something of: the builder reads its assertions
+     * (`@phpstan-assert-if-true WP_Error $thing`). Only for a call whose name says it may (`is…`, `assert…`, `ensure…`,
+     * `check…`, a static call on an `…Assert` or `…Assertion` class), and not PHP's own `is_*()` tests: each such
+     * variable is wrapped in what the call tells of it.
+     *
+     * @return array<string, array{list<string>, bool, 2?: array{TypeExpr, int, bool}}>
+     */
+    private function calledAssertions(Expr\FuncCall|Expr\StaticCall|Expr\MethodCall|Expr\NullsafeMethodCall $call, bool $failed, bool $statement): array
+    {
+        $name = $call->name instanceof Name ? $call->name->getLast() : ($call->name instanceof Identifier ? $call->name->toString() : null);
+        if ($name === null || $this->currentCallable === null && $this->currentClass !== null) {
+            return [];
+        }
+        $name = strtolower($name);
+        $asserting = $call instanceof Expr\StaticCall && $call->class instanceof Name
+            && preg_match('/assert(ion)?$/i', $call->class->getLast()) === 1;
+        if (!$asserting && (preg_match(self::ASSERTING, $name) !== 1 || $name === 'assert' || ($call instanceof Expr\FuncCall && \in_array($name, self::PHP_TESTS, true)))) {
+            return [];
+        }
+        $callee = $this->typeOf($call);
+        if ($callee === null) {
+            return [];
+        }
+        $assertions = [];
+        foreach ($call->args as $position => $arg) {
+            if (!$arg instanceof AstNode\Arg || $arg->name !== null || $arg->unpack) {
+                break;
+            }
+            if ($arg->value instanceof Expr\Variable && \is_string($arg->value->name) && $arg->value->name !== 'this') {
+                $assertions[$arg->value->name] = [[], $failed, [$callee, $position, $statement]];
+            }
+        }
+
+        return $assertions;
+    }
+
+    /**
+     * @param array<string, array{list<string>, bool, 2?: array{TypeExpr, int, bool}}> $assertions
      */
     private function apply(array $assertions): void
     {
-        foreach ($assertions as $variable => [$classes, $excluding]) {
+        foreach ($assertions as $variable => $assertion) {
+            [$classes, $excluding] = $assertion;
             $current = $this->localTypes[$variable] ?? null;
             $known = $current !== null && !$current->isUnknown();
+            if (isset($assertion[2])) {
+                [$call, $position, $statement] = $assertion[2];
+                $this->localTypes[$variable] = TypeExpr::asserted($current ?? TypeExpr::unknown(), $call, $position, $excluding, $statement);
+                continue;
+            }
             if ($excluding) {
                 // Only a union, or a type the builder may find to be one, loses members.
                 $single = $known && $current->receiver === null && $current->members === [] && $current->test === null

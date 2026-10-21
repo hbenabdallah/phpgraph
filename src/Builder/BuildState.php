@@ -65,7 +65,7 @@ final class BuildState
         foreach ($extraction->returnElements as $method => $type) {
             hash_update($hash, 'l' . $method . '=' . $type . "\n");
         }
-        hash_update($hash, 'g' . json_encode([$extraction->templates, $extraction->parentArguments, $extraction->genericReturns, $extraction->genericProperties, $extraction->documentedMethods, $extraction->mixins, $extraction->conditionalReturns, $extraction->callableParameters, $extraction->templateBinders, $extraction->casts]) . "\n");
+        hash_update($hash, 'g' . json_encode([$extraction->templates, $extraction->parentArguments, $extraction->genericReturns, $extraction->genericProperties, $extraction->documentedMethods, $extraction->mixins, $extraction->conditionalReturns, $extraction->callableParameters, $extraction->templateBinders, $extraction->casts, $extraction->assertions]) . "\n");
 
         return hash_final($hash);
     }

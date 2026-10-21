@@ -160,6 +160,8 @@ final class GraphBuilder
         $binders = [];
         /** @var array<string, string> $casts */
         $casts = [];
+        /** @var array<string, list<array{string, int, string}>> $assertions */
+        $assertions = [];
         /** @var array<string, array{method: string, types: list<string>|true|null}> $guards */
         $guards = [];
         /** @var array<string, list<array{string, int, list<?string>, list<?string>}>> $callArguments */
@@ -238,6 +240,9 @@ final class GraphBuilder
             }
             foreach ($extraction->templateBinders as $callable => $bindersOfCallable) {
                 $binders[$id($callable)] ??= $bindersOfCallable;
+            }
+            foreach ($extraction->assertions as $callable => $assertionsOfCallable) {
+                $assertions[$id($callable)] ??= array_map(static fn (array $assertion): array => [$assertion[0], $assertion[1], GenericType::mapNames($assertion[2], $id)], $assertionsOfCallable);
             }
             foreach ($extraction->mixins as $class => $classes) {
                 $mixins[$id($class)] ??= array_map($id, $classes);
@@ -353,7 +358,7 @@ final class GraphBuilder
         }
 
         $methodsByClass = $this->methodsByClass($graph);
-        $types = new TypeResolver($graph, $names, $methodsByClass, $returnTypes, $propertyTypes, $vendor, $returnElements, new Generics($templates, $parentArguments, $genericReturns, $genericProperties, $documentedMethods, $mixins, $conditionals, $callables, $binders, $casts));
+        $types = new TypeResolver($graph, $names, $methodsByClass, $returnTypes, $propertyTypes, $vendor, $returnElements, new Generics($templates, $parentArguments, $genericReturns, $genericProperties, $documentedMethods, $mixins, $conditionals, $callables, $binders, $casts, $assertions));
 
         // A method reading a property typed as an enum (`$violation->type`) uses that enum: what it outputs depends on it.
         foreach ($propertyReads as [$reader, $property]) {

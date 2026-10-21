@@ -25,8 +25,11 @@ final readonly class TypeExpr
      *                                        what it returns: they bind the templates of the method (`@param T $value`)
      * @param list<self> $members the types a variable may hold where branches meet, sorted by key; an unknown
      *                          one last when a branch leaves it of unknown type
-     * @param array{self, list<string>, bool}|null $test the type an `instanceof` test narrows, the classes tested,
-     *                                                   whether the test failed (the classes are then excluded)
+     * @param array{self, list<string>, bool, 3?: array{self, int, bool}}|null $test the type an `instanceof` test
+     *                                                   narrows, the classes tested, whether the test failed (the classes
+     *                                                   are then excluded); for a call asserting what an argument is
+     *                                                   (`is_wp_error($e)`), no class but the call, the position of the
+     *                                                   argument and whether the call is a statement of its own
      */
     private function __construct(
         public ?string $className,
@@ -87,7 +90,7 @@ final readonly class TypeExpr
                     continue;
                 }
                 [$subject, $classes, $excluding] = $member->test;
-                $negation = self::narrowed($subject, $classes, !$excluding)->key();
+                $negation = (new self(null, null, null, false, false, null, [], [], null, [], [], [$subject, $classes, !$excluding, ...\array_slice($member->test, 3)]))->key();
                 if (isset($members[$subject->key()]) || isset($members[$negation])) {
                     unset($members[$key], $members[$negation]);
                     $members[$subject->key()] = $subject;
@@ -116,6 +119,18 @@ final readonly class TypeExpr
     public static function narrowed(self $subject, array $classes, bool $excluding = false): self
     {
         return new self(null, null, null, false, false, null, [], [], null, [], [], [$subject, $classes, $excluding]);
+    }
+
+    /**
+     * What a call tells of an argument, resolved by the builder from the callable's `@phpstan-assert` tags:
+     * `is_wp_error($result)` in a condition that held (or failed), `Assert::isInstanceOf($order, Order::class)` as a
+     * statement. The subject unchanged when the callable asserts nothing.
+     *
+     * @param self $call the call, as the type of what it returns: its callable and its arguments
+     */
+    public static function asserted(self $subject, self $call, int $position, bool $failed, bool $statement): self
+    {
+        return new self(null, null, null, false, false, null, [], [], null, [], [], [$subject, [], $failed, [$call, $position, $statement]]);
     }
 
     /**
@@ -204,7 +219,11 @@ final readonly class TypeExpr
             return new self(null, null, null, false, false, null, [], [], null, [], array_map(static fn (self $member): self => $member->map($map), $this->members));
         }
         if ($this->test !== null) {
-            return self::narrowed($this->test[0]->map($map), array_map($map, $this->test[1]), $this->test[2]);
+            $call = $this->test[3] ?? null;
+
+            return $call === null
+                ? self::narrowed($this->test[0]->map($map), array_map($map, $this->test[1]), $this->test[2])
+                : self::asserted($this->test[0]->map($map), $call[0]->map($map), $call[1], $this->test[2], $call[2]);
         }
         if ($this->functions !== []) {
             return new self(null, null, null, false, false, null, array_map($map, $this->functions), $arguments, null, $argumentTypes);
@@ -221,7 +240,10 @@ final readonly class TypeExpr
             return '{' . implode('|', array_map(static fn (self $member): string => $member->isUnknown() ? '?' : $member->key(), $this->members)) . '}';
         }
         if ($this->test !== null) {
-            return '(' . $this->test[0]->key() . ($this->test[2] ? ')!is(' : ')is(') . strtolower(implode('|', $this->test[1])) . ')';
+            $call = $this->test[3] ?? null;
+            $tested = $call === null ? strtolower(implode('|', $this->test[1])) : $call[0]->key() . '#' . $call[1] . ($call[2] ? ';' : '');
+
+            return '(' . $this->test[0]->key() . ($this->test[2] ? ')!is(' : ')is(') . $tested . ')';
         }
         if ($this->functions !== []) {
             return strtolower(implode('|', $this->functions)) . '(' . $this->argumentsKey() . ')';
