@@ -119,7 +119,7 @@ final class GraphBuilder
             $service = $serviceMap->serviceOf((string) $path);
             foreach ($extraction->nodes as $node) {
                 if ($service !== '' && $node->kind !== NodeKind::File) {
-                    $node = new Node(NameCanonicalizer::qualify($node->id, $service), $node->label, $node->kind, $node->file, $node->line, $service);
+                    $node = new Node(NameCanonicalizer::qualify($node->id, $service), $node->label, $node->kind, $node->file, $node->line, $service, $node->modifiers);
                 }
                 $existing = $graph->node($names->canonical($node->id));
                 if ($existing !== null && $node->kind !== NodeKind::Method) {

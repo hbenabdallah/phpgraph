@@ -22,6 +22,13 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
 - Library providers (`src/Builder/Libraries`): a PSR-11 container's `get(Mailer::class)` is a Mailer. Eloquent's
   attributes moved there from `TypeResolver`, unchanged.
 
+- `phpgraph check` checks the project's own rules, `rules` in `phpgraph.yaml`, with the same baseline: who may depend
+  on what (`dependency: Doctrine\`, `allow-from`, `deny-from`), what the classes a pattern selects must be (final,
+  abstract, readonly, named, implementing, extending, using a trait, only some public methods), and that a message
+  handler dispatches the messages of its own bounded context only (`handlers: {own-context: true, shared: [Shared]}`).
+- Nodes of `graph.json` carry their `modifiers`: `final`, `abstract`, `readonly` on a class; `protected`, `private`,
+  `static`, `abstract`, `final` on a method.
+
 ### Changed
 - Docblocks are read by `phpstan/phpdoc-parser` (a new dependency) instead of regular expressions: types over several
   lines, unions with spaces (`Token | Exception`), callables in unions (`(callable(TValue): float|int)|null`), by-reference

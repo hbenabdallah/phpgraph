@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace PhpGraph\Command;
 
 use PhpGraph\Presentation\TextPresenter;
+use PhpGraph\Project\ProjectConfig;
 use PhpGraph\Project\ProjectGraph;
 use PhpGraph\Query\GraphQueryProvider;
 use PhpGraph\Query\Result\LayerViolation;
+use PhpGraph\Query\Result\RuleViolation;
 use PhpGraph\Values;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -18,7 +20,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 #[AsCommand(
     name: 'check',
-    description: 'Check the layer dependency rules, for CI: fails when a dependency breaks them and is not in the baseline',
+    description: 'Check the layer dependency rules and the rules of phpgraph.yaml, for CI: fails on a breach not in the baseline',
 )]
 final class CheckCommand extends Command
 {
@@ -51,34 +53,37 @@ final class CheckCommand extends Command
         );
         $query = GraphQueryProvider::forProject($project)->get();
         $baseline = \is_string($input->getOption('baseline')) ? $input->getOption('baseline') : $root . '/' . self::DEFAULT_BASELINE;
+        $rules = ProjectConfig::load($root)->rules;
+        $layers = array_map(static fn (LayerViolation $violation): string => $violation->key(), $query->architecture()->violations);
+        $breaches = $rules->isEmpty() ? [] : $query->ruleViolations($rules);
+        $ruleKeys = array_map(static fn (RuleViolation $violation): string => $violation->key(), $breaches);
 
         if ($input->getOption('generate-baseline')) {
-            $keys = array_map(static fn (LayerViolation $violation): string => $violation->key(), $query->architecture()->violations);
-            file_put_contents($baseline, json_encode(['layerViolations' => $keys], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
-            $output->writeln(sprintf('%d violations written to %s.', \count($keys), $baseline));
+            $data = ['layerViolations' => $layers] + ($rules->isEmpty() ? [] : ['ruleViolations' => $ruleKeys]);
+            file_put_contents($baseline, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
+            $output->writeln(sprintf('%d violations written to %s.', \count($layers) + \count($ruleKeys), $baseline));
 
             return Command::SUCCESS;
         }
 
-        $accepted = $this->accepted($baseline);
-        $output->writeln((new TextPresenter($query))->layerViolations($accepted), OutputInterface::OUTPUT_RAW);
-
-        foreach ($query->architecture()->violations as $violation) {
-            if (!\in_array($violation->key(), $accepted, true)) {
-                return Command::FAILURE;
-            }
+        $acceptedLayers = $this->accepted($baseline, 'layerViolations');
+        $acceptedRules = $this->accepted($baseline, 'ruleViolations');
+        $presenter = new TextPresenter($query);
+        $output->writeln($presenter->layerViolations($acceptedLayers), OutputInterface::OUTPUT_RAW);
+        if (!$rules->isEmpty()) {
+            $output->writeln(['', $presenter->ruleViolations($breaches, $acceptedRules)], OutputInterface::OUTPUT_RAW);
         }
 
-        return Command::SUCCESS;
+        return array_diff($layers, $acceptedLayers) === [] && array_diff($ruleKeys, $acceptedRules) === [] ? Command::SUCCESS : Command::FAILURE;
     }
 
     /**
      * @return list<string>
      */
-    private function accepted(string $baseline): array
+    private function accepted(string $baseline, string $section): array
     {
         $data = is_file($baseline) ? json_decode((string) file_get_contents($baseline), true) : null;
-        $keys = \is_array($data) && \is_array($data['layerViolations'] ?? null) ? $data['layerViolations'] : [];
+        $keys = \is_array($data) && \is_array($data[$section] ?? null) ? $data[$section] : [];
 
         return array_values(array_filter($keys, 'is_string'));
     }

@@ -537,7 +537,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             default => NodeKind::PhpClass,
         };
 
-        $this->nodes[] = new Node($fqcn, $node->name->toString(), $kind, $this->path, $node->getStartLine());
+        $modifiers = $node instanceof Stmt\Class_ ? array_keys(array_filter(['final' => $node->isFinal(), 'abstract' => $node->isAbstract(), 'readonly' => $node->isReadonly()])) : [];
+        $this->nodes[] = new Node($fqcn, $node->name->toString(), $kind, $this->path, $node->getStartLine(), null, $modifiers);
         $this->link($this->fileId, $fqcn, Relation::Defines);
 
         $this->currentClass = $fqcn;
@@ -647,7 +648,14 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
     private function onCallable(string $id, string $label, NodeKind $kind, Stmt\ClassMethod|Stmt\Function_ $node): void
     {
-        $this->nodes[] = new Node($id, $label, $kind, $this->path, $node->getStartLine());
+        $modifiers = $node instanceof Stmt\ClassMethod ? array_keys(array_filter([
+            'protected' => $node->isProtected(),
+            'private' => $node->isPrivate(),
+            'static' => $node->isStatic(),
+            'abstract' => $node->isAbstract(),
+            'final' => $node->isFinal(),
+        ])) : [];
+        $this->nodes[] = new Node($id, $label, $kind, $this->path, $node->getStartLine(), null, $modifiers);
 
         if ($kind === NodeKind::Method && $this->currentClass !== null) {
             $this->link($this->currentClass, $id, Relation::HasMethod);

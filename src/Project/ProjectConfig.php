@@ -6,6 +6,7 @@ namespace PhpGraph\Project;
 
 use PhpGraph\Builder\ActionMapping;
 use PhpGraph\Builder\SourceFiles;
+use PhpGraph\Project\Rules\RuleSet;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -19,6 +20,8 @@ use Symfony\Component\Yaml\Yaml;
  *     actions:             # routing files of the project's own making: see ActionMapping
  *       - file: Framework/actions.xml
  *         controller_file: '{dir}/control/{name}CTRL.php'
+ *     rules:               # the project's own rules, checked by `phpgraph check`: see Rules\RuleSet
+ *       dependencies: [...]
  */
 final readonly class ProjectConfig
 {
@@ -26,7 +29,7 @@ final readonly class ProjectConfig
      * @param list<string>|null   $services service directories relative to the root, null to detect them
      * @param list<ActionMapping> $actions  routing files mapping action codes to controller methods
      */
-    public function __construct(public ?array $services = null, public array $actions = [])
+    public function __construct(public ?array $services = null, public array $actions = [], public RuleSet $rules = new RuleSet())
     {
     }
 
@@ -49,9 +52,9 @@ final readonly class ProjectConfig
             throw new \RuntimeException(sprintf('%s must be a map of settings.', SourceFiles::CONFIG));
         }
 
-        $unknown = array_diff(array_keys($data), ['services', 'actions']);
+        $unknown = array_diff(array_keys($data), ['services', 'actions', 'rules']);
         if ($unknown !== []) {
-            throw new \RuntimeException(sprintf('%s: unknown setting "%s". Known: services, actions.', SourceFiles::CONFIG, implode('", "', $unknown)));
+            throw new \RuntimeException(sprintf('%s: unknown setting "%s". Known: services, actions, rules.', SourceFiles::CONFIG, implode('", "', $unknown)));
         }
 
         $services = $data['services'] ?? null;
@@ -68,6 +71,7 @@ final readonly class ProjectConfig
         return new self(
             $services === null ? null : array_values($services),
             array_values(array_map(static fn (array $entry): ActionMapping => ActionMapping::fromArray($entry, SourceFiles::CONFIG), array_filter($actions, 'is_array'))),
+            RuleSet::fromArray($data['rules'] ?? null, SourceFiles::CONFIG),
         );
     }
 }
