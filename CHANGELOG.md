@@ -3,6 +3,14 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## 1.5.3 (2026-10-21)
+
+### Fixed
+- An executable could be missing from a release: when www.php.net could not be reached, static-php-cli took PHP from a
+  mirror still serving 8.5.11, and the build refused the runtime after compiling it (the Linux x86_64 executable of
+  1.5.2, published by running the job again). The PHP source is now checked before compiling and downloaded again, up
+  to three times, while it is older than the minimum.
+
 ## 1.5.2 (2026-10-21)
 
 ### Fixed
