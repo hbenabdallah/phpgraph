@@ -1,6 +1,6 @@
 <?php
 
-// @phpgraph-todo a generic written over several lines is not read, nor `iterable<int, Item>` on a parameter typed `iterable`
+// Docblock types phpdoc-parser reads: nullable, a single class beside null, iterables, shapes, generics over several lines.
 
 namespace App;
 

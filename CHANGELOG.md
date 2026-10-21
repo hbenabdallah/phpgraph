@@ -23,6 +23,14 @@ phpgraph follows [semantic versioning](https://semver.org); what stays stable is
   attributes moved there from `TypeResolver`, unchanged.
 
 ### Changed
+- Docblocks are read by `phpstan/phpdoc-parser` (a new dependency) instead of regular expressions: types over several
+  lines, unions with spaces (`Token | Exception`), callables in unions (`(callable(TValue): float|int)|null`), by-reference
+  and variadic `@param`, nested conditional returns. A `@param` mentioned in a description no longer counts. Compared
+  with the regular expressions on five projects and their `vendor/` (about 105,000 docblocks): 2,696 facts gained,
+  154 lost, all checked: words of descriptions taken for classes (`and`, `annotations`, `empty`), a callable of an
+  array element taken for the parameter's, a conditional whose branches name no class (the plain `@return` is read).
+  A docblock of thousands of tags (an SDK client's `@method` list) is parsed tag by tag, the parser being quadratic
+  on it.
 - A call on a union whose members declare different methods (`Cat|Dog` calling `sleep()`) is linked to each of them,
   INFERRED; it was left unresolved. A chain goes on with the union of what they return.
 
