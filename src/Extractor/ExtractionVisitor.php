@@ -73,6 +73,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var list<array<string, TypeExpr>> */
     private array $outerScopes = [];
 
+    /** @var array<int, array{array<string, TypeExpr>, array<string, int>}> function or class declared in a script => the script's variables, back after it */
+    private array $scripts = [];
+
     /** @var array<string, string> */
     private array $returnTypes = [];
 
@@ -333,6 +336,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             return null;
         }
 
+        if (($node instanceof Stmt\ClassLike || $node instanceof Stmt\Function_) && $this->currentCallable === null && $this->currentClass === null) {
+            $this->scripts[spl_object_id($node)] = [$this->localTypes, $this->pinned];
+        }
+
         if ($node instanceof Stmt\ClassLike) {
             return $this->onClassLike($node);
         }
@@ -502,6 +509,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->localTypes = [];
             $this->pinned = [];
             $this->outerScopes = [];
+        }
+
+        if (isset($this->scripts[spl_object_id($node)])) {
+            [$this->localTypes, $this->pinned] = $this->scripts[spl_object_id($node)];
+            unset($this->scripts[spl_object_id($node)]);
         }
 
         return null;
@@ -1631,9 +1643,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             if ($receiver !== null) {
                 $this->onPassedParameters((string) $this->currentCallable, $receiver, $node->name->toString(), $node->args);
             }
-            if ($this->currentCallable !== null) {
+            // Outside any method, in a script, the file calls it: `$pdf = new Report(); $pdf->render();`.
+            $caller = $this->currentCallable ?? ($this->currentClass === null ? $this->fileId : null);
+            if ($caller !== null) {
                 $this->pending[] = new PendingCall(
-                    $this->currentCallable,
+                    $caller,
                     $this->typeOf($node->var),
                     $node->name->toString(),
                     false,

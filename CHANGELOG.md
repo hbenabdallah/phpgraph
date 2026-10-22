@@ -3,6 +3,19 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## 1.5.5 (2026-10-22)
+
+### Fixed
+- Method calls written in a script, outside any function (legacy pages, batches, PDF reports, `wp-admin/*.php`), were
+  not linked: `$pdf = new Report(); $pdf->render();` gave no edge, only static calls did. The file is now their
+  caller, and the script's variables keep their types across a function or a class declared in the middle of it.
+
+On jac2-web, 24,260 more call sites resolved from types and 725 more linked by name, none lost; the callers found of
+the methods whose name is declared once go from 88.7 % to 92.9 % (grep: 34,204 caller files). The corpus loses no
+call (WordPress +456 INFERRED, PrestaShop +34, Ecotone +27). The unknown-receiver share rises on the small projects
+(laravel-rabbitmq-microservices 4.4 → 9.9 %, Ecotone 5.5 → 8.9 %): calls not counted before, mostly on the value of
+a `require` (`$app = require 'bootstrap/app.php'; $app->make()`), which is not followed.
+
 ## 1.5.4 (2026-10-22)
 
 ### Fixed
