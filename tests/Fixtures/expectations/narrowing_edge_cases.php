@@ -69,7 +69,7 @@ class EdgeCases
             $shape = new Square();
         }
 
-        // A Square, or a Shape that is no Circle.
-        return $shape->area(); // @phpgraph-expect calls App\Shape::area INFERRED
+        // A Square, or a Shape that is no Circle: each, as for a documented `Square|Shape`.
+        return $shape->area(); // @phpgraph-expect calls App\Shape::area INFERRED @phpgraph-expect calls App\Square::area INFERRED
     }
 }

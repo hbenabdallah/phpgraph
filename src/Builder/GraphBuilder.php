@@ -375,12 +375,24 @@ final class GraphBuilder
 
         // File by file, in the order of a full build: an edge keeps the confidence of the first call adding it.
         $methodsByName = $this->methodsByName($methodsByClass);
+        // Every dependency read (or none to read): a class known nowhere in one of the project's namespaces is a wrong
+        // name, not one of theirs. The global one only when the project declares classes there: a namespaced project's
+        // global classes known nowhere are those of an extension (`AMQPQueue`).
+        $ownNamespaces = null;
+        if ($this->readVendor && \count($vendorDirectories) === \count($composerFiles)) {
+            $ownNamespaces = [];
+            foreach ($graph->nodes() as $node) {
+                if ($node->kind->isClassLike()) {
+                    $ownNamespaces[strtolower(self::namespaceOf($node->id))] = true;
+                }
+            }
+        }
         $counter = new CallCounter();
         $calls = [];
         foreach ($pending as $path => $fileCalls) {
             $calls[$path] = $reuse && $previous !== null && !isset($changed[$path])
                 ? $previous->calls[$path] ?? []
-                : $this->resolveCalls($graph, $types, $methodsByName, $fileCalls, $invokedParameters);
+                : $this->resolveCalls($graph, $types, $methodsByName, $fileCalls, $invokedParameters, $ownNamespaces);
             $inTests = TestFiles::isTest((string) $path);
             foreach ($calls[$path] as [$edge, $outcome, $method]) {
                 if ($edge !== null) {
@@ -659,16 +671,17 @@ final class GraphBuilder
      * @param array<string, list<string>> $methodsByName
      * @param list<PendingCall>           $calls
      * @param array<string, list<array{int, string}>> $invokedParameters method id => the parameters it calls
+     * @param array<string, true>|null    $ownNamespaces see resolveCall()
      *
      * @return list<array{?Edge, string, string}> an empty outcome for an edge counting no call site
      */
-    private function resolveCalls(Graph $graph, TypeResolver $types, array $methodsByName, array $calls, array $invokedParameters = []): array
+    private function resolveCalls(Graph $graph, TypeResolver $types, array $methodsByName, array $calls, array $invokedParameters = [], ?array $ownNamespaces = null): array
     {
         $results = [];
         $targets = [];
         foreach ($calls as $index => $call) {
             $count = \count($results);
-            $this->resolveCall($graph, $types, $methodsByName, $call, $results);
+            $this->resolveCall($graph, $types, $methodsByName, $call, $results, $ownNamespaces);
             $edge = $results[$count][0] ?? null;
             if ($edge === null || $edge->relation !== Relation::Calls) {
                 continue;
@@ -695,8 +708,12 @@ final class GraphBuilder
     /**
      * @param array<string, list<string>>        $methodsByName
      * @param list<array{?Edge, string, string}> $results
+     * @param array<string, true>|null $ownNamespaces the namespaces of the project's classes ('' the global one), when
+     *                                                every dependency is read: a receiver of classes known nowhere in them
+     *                                                (`@param unknown $bean`, a placeholder) is no class outside the
+     *                                                project, the method is looked for by name
      */
-    private function resolveCall(Graph $graph, TypeResolver $types, array $methodsByName, PendingCall $call, array &$results): void
+    private function resolveCall(Graph $graph, TypeResolver $types, array $methodsByName, PendingCall $call, array &$results, ?array $ownNamespaces = null): void
     {
         $name = strtolower($call->method);
 
@@ -723,7 +740,13 @@ final class GraphBuilder
 
             return;
         }
-        if ($classes !== [] && ($complete || $declared)) {
+        // A class known nowhere in a namespace of another (`Doctrine\EntityManager`) is a dependency's, one not
+        // installed; in the project's own, a placeholder or a mistake (`@param unknown $bean`, `@param DAO $dao`).
+        $named = $ownNamespaces !== null && !$declared && array_filter(
+            $classes,
+            static fn (string $class): bool => !isset($ownNamespaces[strtolower(self::namespaceOf($class))]) || $types->knows($class),
+        ) === [];
+        if ($classes !== [] && ($complete || $declared) && !$named) {
             $edge = $call->referenceOnMiss ? new Edge($call->source, $classes[0], Relation::References, Confidence::Extracted) : null;
             $results[] = [$edge, 'outsideProject', $call->method];
 
@@ -734,6 +757,13 @@ final class GraphBuilder
         $results[] = \count($candidates) === 1
             ? [new Edge($call->source, $candidates[0], Relation::Calls, Confidence::Ambiguous, (string) $call->line, self::named($call)), 'ambiguous', $call->method]
             : [null, $leftProject ? 'chainOutsideProject' : 'unknownReceiver', $call->method];
+    }
+
+    private static function namespaceOf(string $class): string
+    {
+        $separator = strrpos($class, '\\');
+
+        return $separator === false ? '' : substr($class, 0, $separator);
     }
 
     /**

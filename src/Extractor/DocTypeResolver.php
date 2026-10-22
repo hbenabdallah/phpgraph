@@ -203,7 +203,7 @@ final class DocTypeResolver extends NodeVisitorAbstract
 
     public function enterNode(AstNode $node)
     {
-        $text = $node->getDocComment()?->getText();
+        $text = $node->getDocComment()?->getText() ?? $this->inlineVar($node);
         $doc = $text === null ? null : $this->parse($text);
 
         if ($node instanceof Stmt\ClassLike) {
@@ -434,6 +434,27 @@ final class DocTypeResolver extends NodeVisitorAbstract
         return $this->parseTags($text);
     }
 
+    /**
+     * A `@var` in a plain comment before a statement, as older code writes it (`/* @var $line JacBean *\/`): read as
+     * the docblock the statement lacks. Only when it names its variable: an unnamed one in a plain comment is a note
+     * more often than a type (PrestaShop's `/* @var PriceSpecification *\/`, a class it does not import). Not before
+     * a class or a callable, whose docblocks say more than a variable.
+     */
+    private function inlineVar(AstNode $node): ?string
+    {
+        if (!$node instanceof Stmt || $node instanceof Stmt\ClassLike || $node instanceof Stmt\ClassMethod || $node instanceof Stmt\Function_) {
+            return null;
+        }
+        foreach (array_reverse($node->getComments()) as $comment) {
+            $text = $comment->getText();
+            if (str_starts_with($text, '/*') && !str_starts_with($text, '/**') && preg_match('/@var\s+(?:\$\w+|\S+\s+\$\w+)/', $text) === 1) {
+                return '/**' . substr($text, 2);
+            }
+        }
+
+        return null;
+    }
+
     private function parseTags(string $text): PhpDocNode
     {
         try {
@@ -452,8 +473,8 @@ final class DocTypeResolver extends NodeVisitorAbstract
 
     /**
      * A tag written as older code writes it, which PHPDoc does not allow, read as it means: a callable without a
-     * return type (`callable(\Throwable $e)|null`), a nullable member of a union (`?Response|RedirectResponse`). The
-     * tag as it was otherwise.
+     * return type (`callable(\Throwable $e)|null`), a nullable member of a union (`?Response|RedirectResponse`), a
+     * class followed by parentheses (`EmailDraft()`). The tag as it was otherwise.
      */
     private function repaired(PhpDocTagNode $tag, string $value): PhpDocTagNode
     {
@@ -461,6 +482,8 @@ final class DocTypeResolver extends NodeVisitorAbstract
         if (str_starts_with($text, '?')) {
             $text = substr($text, 1);
         }
+        // A class written as a call: `@return EmailDraft() $lEmailDraft`, `@param Client () $pClient`.
+        $text = (string) preg_replace('/^(?!(?:callable|Closure)\b)(\\\\?[A-Za-z_][\w\\\\]*(?:\[\])*)\s*\(\)/i', '$1', $text);
         $offset = 0;
         while (preg_match('/\b(?:callable|Closure)\(/i', $text, $match, \PREG_OFFSET_CAPTURE, $offset) === 1) {
             $open = $match[0][1] + \strlen($match[0][0]) - 1;

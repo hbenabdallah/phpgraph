@@ -81,7 +81,7 @@ final class TypeResolver
      */
     public function resolve(TypeExpr $type, bool &$leftProject = false): ?string
     {
-        $resolved = $this->resolveGeneric($type, $leftProject);
+        $resolved = $this->collapsed($this->resolveGeneric($type, $leftProject));
         $base = $resolved === null ? null : GenericType::base($resolved);
 
         return $base !== null && GenericType::isClass($base) ? $base : null;
@@ -96,7 +96,7 @@ final class TypeResolver
     public function classesOf(TypeExpr $type): array
     {
         $left = false;
-        $resolved = $this->resolveGeneric($type, $left);
+        $resolved = $this->collapsed($this->resolveGeneric($type, $left));
         if ($resolved === null) {
             return [[], false];
         }
@@ -141,7 +141,8 @@ final class TypeResolver
     /**
      * The members of a union a method is called on (or a property read on): those declaring it, one per declaration.
      * A type that is no union is its own member. Members declaring nothing are left out: the code calling the method
-     * holds one of the others. An unknown member (`?`, a branch of unknown type) makes the answer incomplete.
+     * holds one of the others (`JacBean|Societe` holds a Societe for `isChineseSoc()`, which only Societe declares). An
+     * unknown member (`?`, a branch of unknown type) makes the answer incomplete.
      *
      * @return array{list<string>, bool}
      */
@@ -176,16 +177,19 @@ final class TypeResolver
      * Members of a union, as a GenericType: duplicates and members whose parent is a member too are left out
      * (`Circle|Shape` is a Shape), `?` stays for an unknown one. Null when nothing is known.
      *
+     * Where branches meet, the members whose parent is a member stay ($subtypes), as in a documented union: a call on
+     * the variable reaches the method each declares (declaring()), the subclass's when only it declares one.
+     *
      * @param list<string> $members
      */
-    private function simplified(array $members): ?string
+    private function simplified(array $members, bool $subtypes = false): ?string
     {
         $members = array_values(array_unique($members));
         $classes = array_filter($members, static fn (string $member): bool => GenericType::isClass(GenericType::base($member)));
         $kept = [];
         foreach ($members as $member) {
             $base = GenericType::base($member);
-            if (GenericType::isClass($base)) {
+            if (!$subtypes && GenericType::isClass($base)) {
                 foreach ($classes as $other) {
                     $parent = GenericType::base($other);
                     if (strtolower($parent) !== strtolower($base) && $this->isA($base, $parent)) {
@@ -197,6 +201,15 @@ final class TypeResolver
         }
 
         return $kept === [] || $kept === [GenericType::UNKNOWN] ? null : GenericType::union($kept);
+    }
+
+    /**
+     * A union where branches meet without the members whose parent is a member: what the variable is, rather than
+     * what a call on it reaches.
+     */
+    private function collapsed(?string $type): ?string
+    {
+        return $type === null || !GenericType::isUnion($type) ? $type : $this->simplified(GenericType::members($type));
     }
 
     /**
@@ -379,7 +392,7 @@ final class TypeResolver
                 array_push($members, ...($resolved === null ? [GenericType::UNKNOWN] : GenericType::members($resolved)));
             }
 
-            return $this->simplified($members);
+            return $this->simplified($members, true);
         }
         if ($type->test !== null) {
             return $this->narrowed($type->test, $leftProject);
@@ -567,7 +580,7 @@ final class TypeResolver
             $bound = match (true) {
                 $kind === 'class' => $argument !== null && str_starts_with($argument, 'class:') ? $this->names->canonical(substr($argument, 6)) : null,
                 $type === null || ($kind === 'closure') !== ($argument === 'fn') => null,
-                default => $this->resolveGeneric($type, $left),
+                default => $this->collapsed($this->resolveGeneric($type, $left)),
             };
             if ($bound !== null) {
                 $bindings['#' . $template] = $bound;

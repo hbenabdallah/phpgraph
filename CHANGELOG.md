@@ -3,6 +3,27 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## 1.5.4 (2026-10-22)
+
+### Fixed
+Calls 1.5 stopped linking in older code (jac2-web, PHP 4 era), against 1.4.3:
+- A variable assigned a class in one branch and a subclass in another kept only the class: a method only the subclass
+  declares was no longer linked (`Context::getSocieteEnCours()` documented `JacBean`, a `Societe` elsewhere, then
+  `isChineseSoc()`). Where branches meet, the subclass stays, as in a documented union: each declaration a call may
+  reach gets its edge.
+- `@return EmailDraft()` and `@param Client () $client`, a class written as a call, are read as the class (the
+  PHPDoc parser of 1.5 rejected them).
+- `/* @var $line JacBean */`, a `@var` naming its variable in a plain comment, is read like a docblock.
+- `static $bean = null;` no longer makes the variable unknown: it holds what the function assigns it.
+- A receiver documented with a class no one declares, in a namespace of the project (`@param unknown $bean`, an IDE
+  placeholder), no longer counts as a class outside the project: the method is looked for by its name, as without
+  the docblock. Only when every dependency is read.
+
+On jac2-web, 66 of the 91 call edges 1.5.3 lost are back, 1,051 more call sites resolved from types than with 1.5.3
+(1.4.3: 226,932; 1.5.3: 241,942; now 242,993). The rest are edges 1.4.3 linked wrongly or whose receiver really is
+unknown in one branch. The corpus loses no INFERRED call (WordPress +19, PrestaShop +14, Akeneo +5); PrestaShop's
+`/* @var Category $category */` now types three calls on a class it creates at run time, as `/** */` does.
+
 ## 1.5.3 (2026-10-21)
 
 ### Fixed

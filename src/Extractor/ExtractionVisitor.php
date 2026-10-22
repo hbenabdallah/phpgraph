@@ -1042,10 +1042,24 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
             return false;
         }
-        if ($node instanceof Stmt\Global_ || $node instanceof Stmt\Static_) {
-            foreach ($node instanceof Stmt\Global_ ? $node->vars : array_map(static fn (AstNode\StaticVar $var): Expr\Variable => $var->var, $node->vars) as $variable) {
+        if ($node instanceof Stmt\Global_) {
+            foreach ($node->vars as $variable) {
                 if ($variable instanceof Expr\Variable && \is_string($variable->name)) {
                     $this->assignLocal($variable->name, null);
+                }
+            }
+
+            return false;
+        }
+        // A static variable holds what the function assigns it, from one call to the next: with no object to start
+        // with (`static $bean = null;`), no more than the assignments read.
+        if ($node instanceof Stmt\Static_) {
+            foreach ($node->vars as $static) {
+                if (\is_string($static->var->name)) {
+                    $default = $static->default;
+                    $noObject = $default === null || $default instanceof AstNode\Scalar || $default instanceof Expr\Array_
+                        || ($default instanceof Expr\ConstFetch && \in_array(strtolower($default->name->toString()), ['null', 'false', 'true'], true));
+                    $noObject ? $this->assignObject($static->var->name, null) : $this->assignLocal($static->var->name, null);
                 }
             }
 
