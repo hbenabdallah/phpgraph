@@ -82,10 +82,7 @@ retry() {
 }
 
 retry "$spc" doctor --auto-fix
-retry "$spc" download --with-php="$PHP_VERSION" --for-extensions="$EXTENSIONS" --prefer-pre-built
-"$spc" build "$EXTENSIONS" --build-micro
 
-# The runtime built must not be older than PHP_MINIMUM: a cached or mirrored download could be.
 # Compared in bash: on Windows, `sort` is System32's (first in the PATH, see above), which knows no -V.
 at_least() {
     local IFS=.
@@ -98,6 +95,31 @@ at_least() {
         fi
     done
 }
+
+# The PHP release downloaded, as static-php-cli records its archive: "filename": "php-8.5.12.tar.xz".
+downloaded() {
+    sed -n 's/.*"filename": *"php-\([0-9][0-9.]*\)\.tar\.[a-z]*".*/\1/p' downloads/.lock.json | head -1
+}
+
+retry "$spc" download --with-php="$PHP_VERSION" --for-extensions="$EXTENSIONS" --prefer-pre-built
+# When www.php.net cannot be reached, static-php-cli takes PHP from a mirror that may lag behind a release: the source is
+# checked before compiling and downloaded again while it is older than PHP_MINIMUM.
+for attempt in 1 2 3; do
+    source=$(downloaded)
+    if [ -n "$source" ] && at_least "$source" "$PHP_MINIMUM"; then
+        break
+    fi
+    if [ "$attempt" = 3 ]; then
+        echo "The PHP source downloaded is ${source:-unknown}, older than $PHP_MINIMUM: refusing to build it." >&2
+        exit 1
+    fi
+    echo "The PHP source downloaded is ${source:-unknown}, older than $PHP_MINIMUM: downloading it again in 60 s." >&2
+    sleep 60
+    retry "$spc" download --with-php="$PHP_VERSION" --for-extensions="$EXTENSIONS" --prefer-pre-built --ignore-cache-sources=php-src
+done
+"$spc" build "$EXTENSIONS" --build-micro
+
+# The runtime built must not be older than PHP_MINIMUM: a cached or mirrored download could be.
 built=$(grep -ao 'X-Powered-By: PHP/[0-9.]*' "$micro" | head -1 | sed 's#.*PHP/##')
 if [ -z "$built" ] || ! at_least "$built" "$PHP_MINIMUM"; then
     echo "The runtime built is PHP ${built:-unknown}, older than $PHP_MINIMUM: refusing to ship it." >&2
