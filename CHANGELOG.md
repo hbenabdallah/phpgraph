@@ -3,6 +3,16 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## 1.5.6 (2026-10-22)
+
+### Fixed
+- `serve` left its client waiting forever once phpgraph was updated while it ran (`install.sh` replacing the
+  executable): PHP reads the classes of the PHAR from its file the first time they are needed, so a tool never used
+  before read the new file at the old offsets and printed source code in place of its response. The server now
+  answers each request with an error asking to restart it.
+- A route whose segment mixes a placeholder and text (`/exports/{id}.csv`) made an invalid regular expression (a
+  PHP warning on stderr), and no HTTP call reached it.
+
 ## 1.5.5 (2026-10-22)
 
 ### Fixed

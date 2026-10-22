@@ -34,10 +34,18 @@ class McpServer
         . 'channels and API schema operations (OpenAPI, protobuf) are nodes too; in a multi-service repository ids read service@Class and services meet through '
         . 'contracts (shared message classes, channels, HTTP routes, API schemas). The graph rebuilds itself when the code changes.';
 
+    /** The executable as it was when the server started: size, date and inode, null when not run from a PHAR. */
+    private readonly ?string $stamp;
+
+    /**
+     * @param string $executable the PHAR or the binary running the server (`Phar::running(false)`), '' for none
+     */
     public function __construct(
         private readonly GraphQueryProvider $provider,
         private readonly string $version = 'dev',
+        private readonly string $executable = '',
     ) {
+        $this->stamp = $executable === '' ? null : self::stamp($executable);
     }
 
     /**
@@ -92,6 +100,15 @@ class McpServer
 
         if (!\is_string($method)) {
             return $this->error($id, -32600, 'Invalid request');
+        }
+
+        // PHP reads the classes of a PHAR from its file when it first needs them: once another version replaced it,
+        // it would read them at the old offsets of the new file and print source code in place of the response.
+        if ($this->stamp !== null && self::stamp($this->executable) !== $this->stamp) {
+            return $this->error($id, -32603, sprintf(
+                'phpgraph was replaced by another version (%s) while this server was running: restart the MCP server (in Claude Code: /mcp, then reconnect phpgraph).',
+                $this->executable,
+            ));
         }
 
         try {
@@ -367,6 +384,14 @@ class McpServer
         return $json !== false
             ? $json
             : (string) json_encode($this->error($response['id'] ?? null, -32603, 'The response could not be encoded as JSON: ' . json_last_error_msg()), $flags);
+    }
+
+    private static function stamp(string $file): string
+    {
+        clearstatcache(true, $file);
+        $stat = @stat($file);
+
+        return $stat === false ? 'missing' : $stat['size'] . ':' . $stat['mtime'] . ':' . $stat['ino'];
     }
 
     /**

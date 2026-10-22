@@ -264,6 +264,17 @@ final class HttpTest extends TestCase
         self::assertSame(0, $result->http->requestsToProject);
     }
 
+    public function testARouteSegmentMixingAPlaceholderAndText(): void
+    {
+        $graph = $this->buildProject([
+            'app/ExportController.php' => 'namespace App; class ExportController { public function download(): void {} }',
+            'routes/api.php' => 'use Illuminate\Support\Facades\Route; Route::get("/exports/{id}.csv", [App\ExportController::class, "download"]);',
+            'app/Client.php' => 'namespace App; use Illuminate\Support\Facades\Http; class Client { public function export(): void { Http::get("http://exports.internal/api/exports/12.csv"); } }',
+        ])->graph;
+
+        self::assertTrue($this->hasEdge($graph, 'App\Client::export', 'route:routes/api.php#GET /api/exports/{id}.csv', Relation::Requests, Confidence::Inferred));
+    }
+
     public function testLaravelHttpFacade(): void
     {
         $graph = $this->buildProject([

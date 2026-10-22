@@ -312,7 +312,7 @@ final class HttpResolver
 
         // A segment partly computed in the call (`order-*`) or partly a placeholder in the route (`{id}.json`).
         $pattern = '/^' . str_replace(['\*', '\{', '\}'], ['.*', '{', '}'], preg_quote($call, '/')) . '$/';
-        $routePattern = '/^' . preg_replace('/\\\\\{[^}]*\\\\\}/', '[^/]+', preg_quote($route, '/')) . '$/';
+        $routePattern = '/^' . preg_replace('/\\\\\{[^}]*\\\\\}/', '[^\\/]+', preg_quote($route, '/')) . '$/';
 
         return preg_match($pattern, $route) === 1 || preg_match($routePattern, $call) === 1;
     }
