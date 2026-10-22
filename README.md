@@ -295,6 +295,22 @@ The ranges of the runs with and without phpgraph do not overlap.
 
 ### Compared with other code graphs
 
+[Kimai](https://github.com/kimai/kimai) 2.70.2 (Symfony, 1,072 source and 761 test files, not in the corpus phpgraph is measured on), October 2026, without any LLM: phpgraph 1.5.2 and [graphify](https://github.com/Graphify-Labs/graphify) 0.9.93 (`extract --code-only`), on the same machine, in Docker. graphify keeps one edge per caller and callee, so calls between methods of the project are compared by pair; samples of the differences were checked in the code. `tools/graphify/benchmark.sh` runs it again.
+
+| | phpgraph | graphify |
+|---|---:|---:|
+| Build (median of 6 runs; graphify 2.2 to 2.7 times longer in each) | 11 s | 27 s |
+| Caller and callee pairs, methods of the project | 20,195 | 7,615 |
+| found by this tool only | 12,936 | 356 |
+| Caller files of the methods whose name is declared once (2,408, from grep) | 2,407, no false one | 902, no false one |
+| Events linked to their subscribers, dispatches | 26, 135 | 0, 0 |
+| Routes linked to their controller | 266 | 0 |
+
+- The pairs found by phpgraph only are resolved from declared types, inherited methods and `instanceof` included: 14 of 14 checked right. graphify misses calls on local variables and chains even when the method name is unique (`$sut->hasUser()`, `$this->getDateTimeFactory()->getStartOfMonth()`).
+- Of graphify's 356 pairs, 243 link a call phpgraph links to another method of the same name: phpgraph is right on 11 of 12 checked, graphify on the twelfth (phpgraph follows the declared return type, `AbstractWidgetType`, to the inherited method; the object is a subclass overriding it). The 113 others: 11 of 12 checked wrong, calls on another object linked to the method of the same name in the current class (Doctrine's `$em->rollback()` to `TimesheetRepository::rollback()`); the twelfth is right, a call on a helper without a return type, which phpgraph counts as an unknown receiver.
+- phpgraph's one miss among the 2,408 files: `$user->isFirstDayOfWeekSunday()` on what `loadUserByIdentifier()` declares to return, Symfony's `UserInterface`, which has no such method.
+- What graphify has and phpgraph has not: other languages (Kimai's JavaScript), communities, an interactive visualisation and documents in the graph.
+
 Sylius (the corpus commit), October 2026, without any LLM: phpgraph 1.0.2, [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp) 0.11.0 and [graphify](https://github.com/safishamsi/graphify) 0.9.76 (`--code-only`), on the same machine, in Docker. The calls were compared site by site (file, line, method), and samples of the differences were checked in the code.
 
 | | phpgraph | codebase-memory-mcp | graphify |
@@ -308,7 +324,7 @@ Sylius (the corpus commit), October 2026, without any LLM: phpgraph 1.0.2, [code
 
 - codebase-memory-mcp agrees with phpgraph on 99.7 % of the calls it resolves from types. The rest of its edges are guessed from the method name (confidence 0.04 to 0.44): where both link the same call, they disagree on 9,400 sites, and its 11,300 extra edges are mostly calls into `vendor/` attached to a project method of the same name (19 of 20 checked).
 - graphify links `$this->other->foo()` to `foo()` of the current class: right for `$this->foo()`, wrong for the 10 of 10 differences checked.
-- What they have and phpgraph has not: other languages, full-text and vector search, Cypher queries (codebase-memory-mcp), an interactive visualisation and documents in the graph (graphify).
+- What codebase-memory-mcp has and phpgraph has not: other languages, full-text and vector search, Cypher queries.
 
 ## FAQ
 
