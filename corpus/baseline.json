@@ -10,25 +10,25 @@
         "methods": 770,
         "external": 123,
         "edges": 4182,
-        "vendorFilesRead": 110,
+        "vendorFilesRead": 111,
         "edgesByConfidence": {
             "EXTRACTED": 3212,
             "INFERRED": 964,
             "AMBIGUOUS": 6
         },
         "calls": {
-            "total": 1346,
+            "total": 1362,
             "inferred": 918,
             "ambiguous": 6,
-            "outsideProject": 408,
+            "outsideProject": 424,
             "unknownReceiver": 14,
             "chainOutsideProject": 1
         },
         "applicationCalls": {
-            "total": 666,
+            "total": 682,
             "inferred": 449,
             "ambiguous": 1,
-            "outsideProject": 210,
+            "outsideProject": 226,
             "unknownReceiver": 6,
             "chainOutsideProject": 1
         },
@@ -108,7 +108,7 @@
             "contextPairs": 14,
             "layerFirst": false
         },
-        "seconds": 0.77,
+        "seconds": 3.72,
         "peakMemoryMb": 30
     },
     {
@@ -122,34 +122,34 @@
         "methods": 23781,
         "external": 904,
         "edges": 140717,
-        "vendorFilesRead": 636,
+        "vendorFilesRead": 677,
         "edgesByConfidence": {
             "EXTRACTED": 107737,
             "INFERRED": 32636,
             "AMBIGUOUS": 344
         },
         "calls": {
-            "total": 102601,
+            "total": 109979,
             "inferred": 23364,
             "ambiguous": 32,
-            "outsideProject": 58149,
-            "unknownReceiver": 21056,
-            "chainOutsideProject": 20689
+            "outsideProject": 65504,
+            "unknownReceiver": 21079,
+            "chainOutsideProject": 20692
         },
         "applicationCalls": {
-            "total": 19687,
+            "total": 24523,
             "inferred": 4840,
             "ambiguous": 4,
-            "outsideProject": 14509,
-            "unknownReceiver": 334,
-            "chainOutsideProject": 181
+            "outsideProject": 19325,
+            "unknownReceiver": 354,
+            "chainOutsideProject": 184
         },
         "testCalls": {
-            "total": 82914,
+            "total": 85456,
             "inferred": 18524,
             "ambiguous": 28,
-            "outsideProject": 43640,
-            "unknownReceiver": 20722,
+            "outsideProject": 46179,
+            "unknownReceiver": 20725,
             "chainOutsideProject": 20508
         },
         "bus": {
@@ -239,8 +239,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 17.33,
-        "peakMemoryMb": 690
+        "seconds": 61.31,
+        "peakMemoryMb": 704
     },
     {
         "name": "akeneo-pim",
@@ -252,34 +252,34 @@
         "classLike": 8447,
         "methods": 38595,
         "external": 888,
-        "edges": 218447,
-        "vendorFilesRead": 749,
+        "edges": 218451,
+        "vendorFilesRead": 762,
         "edgesByConfidence": {
             "EXTRACTED": 155411,
-            "INFERRED": 61455,
+            "INFERRED": 61459,
             "AMBIGUOUS": 1581
         },
         "calls": {
-            "total": 159034,
-            "inferred": 62638,
+            "total": 159059,
+            "inferred": 62641,
             "ambiguous": 1612,
-            "outsideProject": 60662,
-            "unknownReceiver": 34122,
-            "chainOutsideProject": 11034
+            "outsideProject": 60690,
+            "unknownReceiver": 34116,
+            "chainOutsideProject": 11031
         },
         "applicationCalls": {
-            "total": 33853,
-            "inferred": 18540,
+            "total": 33868,
+            "inferred": 18543,
             "ambiguous": 157,
-            "outsideProject": 12760,
-            "unknownReceiver": 2396,
-            "chainOutsideProject": 854
+            "outsideProject": 12778,
+            "unknownReceiver": 2390,
+            "chainOutsideProject": 851
         },
         "testCalls": {
-            "total": 125181,
+            "total": 125191,
             "inferred": 44098,
             "ambiguous": 1455,
-            "outsideProject": 47902,
+            "outsideProject": 47912,
             "unknownReceiver": 31726,
             "chainOutsideProject": 10180
         },
@@ -369,8 +369,8 @@
             "contextPairs": 13,
             "layerFirst": false
         },
-        "seconds": 21.73,
-        "peakMemoryMb": 726
+        "seconds": 45.04,
+        "peakMemoryMb": 724
     },
     {
         "name": "prestashop",
@@ -382,36 +382,36 @@
         "classLike": 7291,
         "methods": 32895,
         "external": 1094,
-        "edges": 187189,
-        "vendorFilesRead": 638,
+        "edges": 187241,
+        "vendorFilesRead": 647,
         "edgesByConfidence": {
             "EXTRACTED": 126837,
-            "INFERRED": 59037,
-            "AMBIGUOUS": 1315
+            "INFERRED": 59085,
+            "AMBIGUOUS": 1319
         },
         "calls": {
-            "total": 116906,
-            "inferred": 64739,
-            "ambiguous": 1101,
-            "outsideProject": 47372,
-            "unknownReceiver": 3694,
-            "chainOutsideProject": 2141
+            "total": 117210,
+            "inferred": 64793,
+            "ambiguous": 1106,
+            "outsideProject": 47475,
+            "unknownReceiver": 3836,
+            "chainOutsideProject": 2149
         },
         "applicationCalls": {
-            "total": 75968,
-            "inferred": 44815,
-            "ambiguous": 964,
-            "outsideProject": 27641,
-            "unknownReceiver": 2548,
-            "chainOutsideProject": 1746
+            "total": 76228,
+            "inferred": 44845,
+            "ambiguous": 968,
+            "outsideProject": 27722,
+            "unknownReceiver": 2693,
+            "chainOutsideProject": 1755
         },
         "testCalls": {
-            "total": 40938,
-            "inferred": 19924,
-            "ambiguous": 137,
-            "outsideProject": 19731,
-            "unknownReceiver": 1146,
-            "chainOutsideProject": 395
+            "total": 40982,
+            "inferred": 19948,
+            "ambiguous": 138,
+            "outsideProject": 19753,
+            "unknownReceiver": 1143,
+            "chainOutsideProject": 394
         },
         "bus": {
             "handlers": {
@@ -493,7 +493,7 @@
             "contextPairs": 293,
             "layerFirst": true
         },
-        "seconds": 21.37,
+        "seconds": 25.69,
         "peakMemoryMb": 654
     },
     {
@@ -506,28 +506,28 @@
         "classLike": 443,
         "methods": 901,
         "external": 222,
-        "edges": 6801,
-        "vendorFilesRead": 64,
+        "edges": 6823,
+        "vendorFilesRead": 76,
         "edgesByConfidence": {
             "EXTRACTED": 6143,
-            "INFERRED": 649,
+            "INFERRED": 671,
             "AMBIGUOUS": 9
         },
         "calls": {
-            "total": 1363,
-            "inferred": 299,
+            "total": 1936,
+            "inferred": 326,
             "ambiguous": 2,
-            "outsideProject": 1010,
-            "unknownReceiver": 52,
-            "chainOutsideProject": 51
+            "outsideProject": 1472,
+            "unknownReceiver": 136,
+            "chainOutsideProject": 103
         },
         "applicationCalls": {
-            "total": 948,
-            "inferred": 238,
+            "total": 1521,
+            "inferred": 265,
             "ambiguous": 2,
-            "outsideProject": 656,
-            "unknownReceiver": 52,
-            "chainOutsideProject": 51
+            "outsideProject": 1118,
+            "unknownReceiver": 136,
+            "chainOutsideProject": 103
         },
         "testCalls": {
             "total": 415,
@@ -604,7 +604,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.94,
+        "seconds": 2.75,
         "peakMemoryMb": 38
     },
     {
@@ -613,39 +613,39 @@
         "filesParsed": 1513,
         "filesFailed": 0,
         "duplicates": 0,
-        "nodes": 6967,
+        "nodes": 6966,
         "classLike": 698,
         "methods": 4076,
-        "external": 325,
-        "edges": 22862,
-        "vendorFilesRead": 390,
+        "external": 324,
+        "edges": 22822,
+        "vendorFilesRead": 391,
         "edgesByConfidence": {
-            "EXTRACTED": 14007,
+            "EXTRACTED": 13967,
             "INFERRED": 8607,
             "AMBIGUOUS": 248
         },
         "calls": {
-            "total": 25501,
+            "total": 25531,
             "inferred": 9401,
             "ambiguous": 325,
-            "outsideProject": 13899,
-            "unknownReceiver": 1876,
-            "chainOutsideProject": 654
+            "outsideProject": 13858,
+            "unknownReceiver": 1947,
+            "chainOutsideProject": 653
         },
         "applicationCalls": {
-            "total": 7468,
+            "total": 7498,
             "inferred": 3470,
             "ambiguous": 115,
-            "outsideProject": 3678,
-            "unknownReceiver": 205,
-            "chainOutsideProject": 97
+            "outsideProject": 3702,
+            "unknownReceiver": 211,
+            "chainOutsideProject": 96
         },
         "testCalls": {
             "total": 18033,
             "inferred": 5931,
             "ambiguous": 210,
-            "outsideProject": 10221,
-            "unknownReceiver": 1671,
+            "outsideProject": 10156,
+            "unknownReceiver": 1736,
             "chainOutsideProject": 557
         },
         "bus": {
@@ -702,7 +702,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 5.81,
+        "seconds": 6.29,
         "peakMemoryMb": 156
     },
     {
@@ -715,27 +715,27 @@
         "classLike": 840,
         "methods": 7580,
         "external": 117,
-        "edges": 42688,
+        "edges": 43078,
         "vendorFilesRead": 0,
         "edgesByConfidence": {
             "EXTRACTED": 19124,
-            "INFERRED": 22454,
-            "AMBIGUOUS": 1110
+            "INFERRED": 22793,
+            "AMBIGUOUS": 1161
         },
         "calls": {
-            "total": 26450,
-            "inferred": 22993,
-            "ambiguous": 1658,
-            "outsideProject": 749,
-            "unknownReceiver": 1050,
+            "total": 27019,
+            "inferred": 23462,
+            "ambiguous": 1734,
+            "outsideProject": 751,
+            "unknownReceiver": 1072,
             "chainOutsideProject": 63
         },
         "applicationCalls": {
-            "total": 26450,
-            "inferred": 22993,
-            "ambiguous": 1658,
-            "outsideProject": 749,
-            "unknownReceiver": 1050,
+            "total": 27019,
+            "inferred": 23462,
+            "ambiguous": 1734,
+            "outsideProject": 751,
+            "unknownReceiver": 1072,
             "chainOutsideProject": 63
         },
         "testCalls": {
@@ -822,8 +822,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 11.52,
-        "peakMemoryMb": 181
+        "seconds": 12.68,
+        "peakMemoryMb": 183
     },
     {
         "name": "laravel-rabbitmq-microservices",
@@ -836,26 +836,26 @@
         "methods": 74,
         "external": 109,
         "edges": 762,
-        "vendorFilesRead": 110,
+        "vendorFilesRead": 116,
         "edgesByConfidence": {
             "EXTRACTED": 739,
             "INFERRED": 19,
             "AMBIGUOUS": 4
         },
         "calls": {
-            "total": 146,
+            "total": 171,
             "inferred": 2,
             "ambiguous": 5,
-            "outsideProject": 129,
-            "unknownReceiver": 10,
+            "outsideProject": 144,
+            "unknownReceiver": 20,
             "chainOutsideProject": 2
         },
         "applicationCalls": {
-            "total": 136,
+            "total": 161,
             "inferred": 2,
             "ambiguous": 5,
-            "outsideProject": 123,
-            "unknownReceiver": 6,
+            "outsideProject": 138,
+            "unknownReceiver": 16,
             "chainOutsideProject": 2
         },
         "testCalls": {
@@ -921,7 +921,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.97,
+        "seconds": 0.82,
         "peakMemoryMb": 42
     },
     {
@@ -934,35 +934,35 @@
         "classLike": 140,
         "methods": 148,
         "external": 99,
-        "edges": 1692,
-        "vendorFilesRead": 94,
+        "edges": 1693,
+        "vendorFilesRead": 114,
         "edgesByConfidence": {
             "EXTRACTED": 1672,
             "INFERRED": 16,
-            "AMBIGUOUS": 4
+            "AMBIGUOUS": 5
         },
         "calls": {
-            "total": 661,
+            "total": 952,
             "inferred": 24,
-            "ambiguous": 1,
-            "outsideProject": 590,
-            "unknownReceiver": 46,
+            "ambiguous": 3,
+            "outsideProject": 749,
+            "unknownReceiver": 176,
             "chainOutsideProject": 26
         },
         "applicationCalls": {
-            "total": 586,
+            "total": 684,
             "inferred": 24,
             "ambiguous": 1,
-            "outsideProject": 523,
-            "unknownReceiver": 38,
+            "outsideProject": 597,
+            "unknownReceiver": 62,
             "chainOutsideProject": 26
         },
         "testCalls": {
-            "total": 75,
+            "total": 268,
             "inferred": 0,
-            "ambiguous": 0,
-            "outsideProject": 67,
-            "unknownReceiver": 8,
+            "ambiguous": 2,
+            "outsideProject": 152,
+            "unknownReceiver": 114,
             "chainOutsideProject": 0
         },
         "bus": {
@@ -1016,7 +1016,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.93,
+        "seconds": 1.37,
         "peakMemoryMb": 48
     },
     {
@@ -1030,25 +1030,25 @@
         "methods": 737,
         "external": 361,
         "edges": 5040,
-        "vendorFilesRead": 219,
+        "vendorFilesRead": 220,
         "edgesByConfidence": {
             "EXTRACTED": 4309,
             "INFERRED": 712,
             "AMBIGUOUS": 19
         },
         "calls": {
-            "total": 1674,
+            "total": 1689,
             "inferred": 593,
             "ambiguous": 12,
-            "outsideProject": 986,
+            "outsideProject": 1001,
             "unknownReceiver": 83,
             "chainOutsideProject": 47
         },
         "applicationCalls": {
-            "total": 1646,
+            "total": 1661,
             "inferred": 590,
             "ambiguous": 12,
-            "outsideProject": 961,
+            "outsideProject": 976,
             "unknownReceiver": 83,
             "chainOutsideProject": 47
         },
@@ -1120,7 +1120,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 1.42,
+        "seconds": 1.31,
         "peakMemoryMb": 34
     },
     {
@@ -1133,27 +1133,27 @@
         "classLike": 112,
         "methods": 323,
         "external": 49,
-        "edges": 2031,
-        "vendorFilesRead": 152,
+        "edges": 2035,
+        "vendorFilesRead": 156,
         "edgesByConfidence": {
             "EXTRACTED": 1745,
-            "INFERRED": 286,
+            "INFERRED": 290,
             "AMBIGUOUS": 0
         },
         "calls": {
-            "total": 1324,
-            "inferred": 284,
+            "total": 1432,
+            "inferred": 289,
             "ambiguous": 0,
-            "outsideProject": 1028,
-            "unknownReceiver": 12,
+            "outsideProject": 1117,
+            "unknownReceiver": 26,
             "chainOutsideProject": 5
         },
         "applicationCalls": {
-            "total": 981,
-            "inferred": 284,
+            "total": 1089,
+            "inferred": 289,
             "ambiguous": 0,
-            "outsideProject": 692,
-            "unknownReceiver": 5,
+            "outsideProject": 781,
+            "unknownReceiver": 19,
             "chainOutsideProject": 5
         },
         "testCalls": {
@@ -1221,7 +1221,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 2.41,
+        "seconds": 2.14,
         "peakMemoryMb": 56
     }
 ]
