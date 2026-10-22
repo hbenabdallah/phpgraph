@@ -88,6 +88,24 @@ final class McpServerTest extends TestCase
         self::assertTrue(Dig::at($response, 'result', 'isError'));
     }
 
+    public function testRefusesToAnswerOnceItsExecutableIsReplaced(): void
+    {
+        $executable = \dirname($this->graphPath) . '/phpgraph';
+        file_put_contents($executable, 'version 1');
+        $server = new McpServer(new GraphQueryProvider($this->graphPath), '1.0.0', $executable);
+        $request = ['jsonrpc' => '2.0', 'id' => 8, 'method' => 'tools/call', 'params' => ['name' => 'god_nodes']];
+        self::assertArrayHasKey('result', $this->call($request, $server));
+
+        // What install.sh does: the new version written aside, then moved over the old one.
+        file_put_contents($executable . '.new', 'version 2, longer');
+        rename($executable . '.new', $executable);
+        $response = $this->call($request, $server);
+        unlink($executable);
+
+        self::assertSame(-32603, Dig::at($response, 'error', 'code'));
+        self::assertStringContainsString('restart the MCP server', Dig::text($response, 'error', 'message'));
+    }
+
     public function testOutlivesTheSocketTimeout(): void
     {
         // Node (Claude Code) gives its children a socketpair as stdin: a read there gives up after the socket timeout.

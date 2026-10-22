@@ -41,7 +41,7 @@ final class ServeCommand extends Command
         ini_set('default_socket_timeout', '-1');
         $graph = $input->getOption('graph');
         if (\is_string($graph)) {
-            (new McpServer(new GraphQueryProvider($graph), Version::get()))->run();
+            (new McpServer(new GraphQueryProvider($graph), Version::get(), \Phar::running(false)))->run();
 
             return Command::SUCCESS;
         }
@@ -68,7 +68,7 @@ final class ServeCommand extends Command
         );
 
         $project->deferCacheWrites();
-        (new McpServer(GraphQueryProvider::forProject($project), Version::get()))->run();
+        (new McpServer(GraphQueryProvider::forProject($project), Version::get(), \Phar::running(false)))->run();
 
         return Command::SUCCESS;
     }
