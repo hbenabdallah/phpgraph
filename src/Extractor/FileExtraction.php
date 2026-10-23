@@ -73,6 +73,8 @@ final readonly class FileExtraction
      *                                             computed: `return Http::baseUrl($this->apiUrl);`
      * @param array<string, list<array{string, int, string}>> $assertions callable id => what a call tells of its
      *                                             arguments (DocTypeResolver::ASSERTIONS)
+     * @param ?TypeExpr $returned what the file returns to the script requiring it, `return $app;`: null when it
+     *                            returns nothing
      */
     public function __construct(
         public array $nodes,
@@ -113,6 +115,7 @@ final readonly class FileExtraction
         public array $casts = [],
         public array $baseUrls = [],
         public array $assertions = [],
+        public ?TypeExpr $returned = null,
     ) {
     }
 }

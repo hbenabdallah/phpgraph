@@ -157,6 +157,21 @@ final readonly class TypeExpr
         return new self(null, null, null, false, false, null, $names, $arguments, null, $argumentTypes);
     }
 
+    /**
+     * What a `require` or an `include` returns: the value of the file's `return`, `$app = require 'bootstrap/app.php'`.
+     *
+     * @param list<string> $files the ids of the files it may load (`file:<path>`), the first found wins
+     */
+    public static function included(array $files): self
+    {
+        return new self(null, null, null, false, false, null, $files);
+    }
+
+    public function isIncluded(): bool
+    {
+        return str_starts_with($this->functions[0] ?? '', 'file:');
+    }
+
     public static function named(string $className): self
     {
         return new self($className);
