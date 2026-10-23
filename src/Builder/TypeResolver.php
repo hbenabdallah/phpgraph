@@ -48,6 +48,7 @@ final class TypeResolver
      * @param array<string, string>                $returnTypes    method id to class, or TypeExpr::STATIC
      * @param array<string, string>                $propertyTypes  "Class::property" to class
      * @param array<string, string>                $returnElements method id to the class of the elements it returns
+     * @param array<string, TypeExpr>              $fileReturns    file id to what it returns to the script requiring it
      */
     public function __construct(
         private readonly Graph $graph,
@@ -59,6 +60,7 @@ final class TypeResolver
         private readonly array $returnElements = [],
         private readonly Generics $generics = new Generics(),
         ?Libraries $libraries = null,
+        private readonly array $fileReturns = [],
     ) {
         $this->libraries = $libraries ?? Libraries::defaults($generics);
     }
@@ -67,6 +69,9 @@ final class TypeResolver
 
     /** @var array<string, list<string>> */
     private array $supertypes = [];
+
+    /** @var array<string, true> the files whose return value is being resolved: two files requiring each other */
+    private array $including = [];
 
     /**
      * Resolved expressions, by key: each call of a chain resolves its receiver, the chain before it, again.
@@ -382,6 +387,9 @@ final class TypeResolver
 
     private function resolveUncached(TypeExpr $type, bool &$leftProject): ?string
     {
+        if ($type->isIncluded()) {
+            return $this->fileReturn($type, $leftProject);
+        }
         if ($type->functions !== []) {
             return $this->functionReturn($type);
         }
@@ -523,6 +531,27 @@ final class TypeResolver
             $returned = $this->returnTypes[$parent] ?? $this->vendorReturnType($parent);
             if ($returned !== null) {
                 return $returned === TypeExpr::STATIC ? $receiverType : $this->names->canonical($returned);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * What a `require` returns: the value the first of its files found returns.
+     */
+    private function fileReturn(TypeExpr $type, bool &$leftProject): ?string
+    {
+        foreach ($type->functions as $file) {
+            $returned = $this->fileReturns[$file] ?? null;
+            if ($returned === null || isset($this->including[$file])) {
+                continue;
+            }
+            $this->including[$file] = true;
+            try {
+                return $this->resolveGeneric($returned, $leftProject);
+            } finally {
+                unset($this->including[$file]);
             }
         }
 

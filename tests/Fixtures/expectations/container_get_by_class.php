@@ -10,6 +10,14 @@ namespace Psr\Container {
     }
 }
 
+namespace Illuminate\Contracts\Container {
+    interface Container extends \Psr\Container\ContainerInterface
+    {
+        /** @return mixed */
+        public function make(string $abstract, array $parameters = []);
+    }
+}
+
 namespace Symfony\Component\DependencyInjection {
     interface ContainerInterface extends \Psr\Container\ContainerInterface
     {
@@ -40,6 +48,12 @@ namespace App {
         public function symfony(\Symfony\Component\DependencyInjection\ContainerInterface $container): void
         {
             $container->get(Notifier::class)->send(); // @phpgraph-expect calls Psr\Container\ContainerInterface::get INFERRED @phpgraph-expect calls App\Notifier::send INFERRED
+        }
+
+        public function laravel(\Illuminate\Contracts\Container\Container $app): void
+        {
+            // A container building a class: Laravel's make(), documented `mixed` before Laravel 10.
+            $app->make(Notifier::class)->send(); // @phpgraph-expect calls Illuminate\Contracts\Container\Container::make INFERRED @phpgraph-expect calls App\Notifier::send INFERRED
         }
     }
 }

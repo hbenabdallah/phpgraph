@@ -3,6 +3,20 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## 1.5.7 (2026-10-23)
+
+### Added
+- What a `require` or an `include` returns types the calls on it: `$app = require __DIR__ . '/../bootstrap/app.php';
+  $app->make(...)` (the value of the required file's `return`, found by a path written from literals, `__DIR__`,
+  `__FILE__` and `dirname()`; a relative path next to the script, then from the project root). A computed path stays
+  unknown.
+- A container asked to build a class gives an instance of it, `$app->make(Kernel::class)`, as `get(X::class)` already
+  did: Laravel documents `make()` as `mixed` before Laravel 10.
+
+Corpus, receiver type unknown in application code: laravel-rabbitmq 9.9 → 5.0 %, art-gallery 9.1 → 6.7 %, Ecotone
+8.9 → 7.3 %, BookStack 2.8 → 2.6 % (+30 call sites INFERRED, all checked on a sample; one wrong AMBIGUOUS guess gone).
+No INFERRED edge lost on the 11 projects.
+
 ## 1.5.6 (2026-10-22)
 
 ### Fixed

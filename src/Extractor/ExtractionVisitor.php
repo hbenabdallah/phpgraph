@@ -107,6 +107,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<string, string> method id => the base URL of the client it returns, `Http::baseUrl(...)` */
     private array $baseUrls = [];
 
+    /** @var list<TypeExpr> what the file returns, by its `return` statements outside any function */
+    private array $returned = [];
+
     /** @var array<string, string> property of the current class => the string it holds by default */
     private array $stringProperties = [];
 
@@ -313,6 +316,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->casts,
             $this->baseUrls,
             $this->assertions,
+            $this->returned === [] ? null : TypeExpr::union($this->returned),
         );
     }
 
@@ -468,6 +472,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
         if ($node instanceof Stmt\Return_ && $node->expr !== null && $this->closureNodes !== []) {
             $this->closureReturned[end($this->closureNodes)][] = $this->typeOf($node->expr);
+        }
+        // A script returning a value to the one requiring it: `return $app;` in bootstrap/app.php.
+        if ($node instanceof Stmt\Return_ && $this->closureNodes === [] && $this->currentCallable === null && $this->currentClass === null) {
+            $this->returned[] = ($node->expr === null ? null : $this->typeOf($node->expr)) ?? TypeExpr::unknown();
         }
         // A method returning a client with its base URL set: the calls made on what it returns are relative to it.
         if ($node instanceof Stmt\Return_ && $node->expr !== null && $this->closureNodes === [] && $this->currentCallable !== null) {
@@ -2776,6 +2784,12 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             return $this->typeOf($expr->expr);
         }
 
+        if ($expr instanceof Expr\Include_) {
+            $files = $this->includedFiles($expr->expr);
+
+            return $files === [] ? null : TypeExpr::included($files);
+        }
+
         if ($expr instanceof Expr\Assign) {
             return $this->typeOf($expr->expr);
         }
@@ -3098,6 +3112,84 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         return [];
+    }
+
+    /**
+     * The project files a `require` or an `include` may load, the first found wins: `__DIR__ . '/../bootstrap/app.php'`
+     * is one file; a relative path, `'config.php'`, is looked for next to the script, then from the project root (the
+     * include path is not known). None when the path is computed or leaves the project.
+     *
+     * @return list<string>
+     */
+    private function includedFiles(Expr $expr): array
+    {
+        $path = $this->includedPath($expr);
+        if ($path === null || $path === '' || str_starts_with($path, '/')) {
+            return [];
+        }
+        if ($path[0] === "\0") {
+            $files = [self::normalizedPath(substr($path, 1))];
+        } else {
+            $directory = \dirname($this->path);
+            $files = [self::normalizedPath(($directory === '.' ? '' : $directory . '/') . $path), self::normalizedPath($path)];
+        }
+
+        return array_values(array_unique(array_map(static fn (string $file): string => 'file:' . $file, array_filter($files, 'is_string'))));
+    }
+
+    /**
+     * The path an expression gives, from string literals, `__DIR__`, `__FILE__` and `dirname()`; a path built from the
+     * file's own location starts with "\0", as it is relative to the project root.
+     */
+    private function includedPath(Expr $expr, int $depth = 0): ?string
+    {
+        if ($depth > 10) {
+            return null;
+        }
+
+        return match (true) {
+            $expr instanceof AstNode\Scalar\String_ => $expr->value,
+            $expr instanceof AstNode\Scalar\MagicConst\Dir => "\0" . \dirname($this->path),
+            $expr instanceof AstNode\Scalar\MagicConst\File => "\0" . $this->path,
+            $expr instanceof Expr\BinaryOp\Concat => ($left = $this->includedPath($expr->left, $depth + 1)) === null
+                || ($right = $this->includedPath($expr->right, $depth + 1)) === null || str_starts_with($right, "\0") ? null : $left . $right,
+            $expr instanceof Expr\FuncCall && $expr->name instanceof Name && $expr->name->toLowerString() === 'dirname'
+                && ($expr->args[0] ?? null) instanceof AstNode\Arg => $this->dirnameOf($expr, $depth),
+            default => null,
+        };
+    }
+
+    private function dirnameOf(Expr\FuncCall $call, int $depth): ?string
+    {
+        \assert($call->args[0] instanceof AstNode\Arg);
+        $path = $this->includedPath($call->args[0]->value, $depth + 1);
+        $levels = ($call->args[1] ?? null) instanceof AstNode\Arg && $call->args[1]->value instanceof AstNode\Scalar\Int_ ? $call->args[1]->value->value : 1;
+
+        // Its parent, the `..` resolved with the rest of the path.
+        return $path === null || !str_starts_with($path, "\0") || $levels < 1 || $levels > 10 ? null : $path . str_repeat('/..', $levels);
+    }
+
+    /**
+     * A path relative to the project root without `.` and `..`, null when it leaves the project.
+     */
+    private static function normalizedPath(string $path): ?string
+    {
+        $segments = [];
+        foreach (explode('/', $path) as $segment) {
+            if ($segment === '' || $segment === '.') {
+                continue;
+            }
+            if ($segment === '..') {
+                if ($segments === []) {
+                    return null;
+                }
+                array_pop($segments);
+            } else {
+                $segments[] = $segment;
+            }
+        }
+
+        return $segments === [] ? null : implode('/', $segments);
     }
 
     private function resolveName(Name $name): ?string

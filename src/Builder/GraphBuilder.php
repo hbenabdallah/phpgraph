@@ -136,6 +136,8 @@ final class GraphBuilder
         $handlers = [];
         $dispatches = [];
         $returnTypes = [];
+        /** @var array<string, TypeExpr> $fileReturns */
+        $fileReturns = [];
         /** @var array<string, string> $returnElements */
         $returnElements = [];
         $invokedParameters = [];
@@ -205,6 +207,9 @@ final class GraphBuilder
             }
             foreach ($extraction->returnTypes as $method => $type) {
                 $returnTypes[$id($method)] ??= $type === TypeExpr::STATIC ? $type : $id($type);
+            }
+            if ($extraction->returned !== null) {
+                $fileReturns['file:' . $path] = $extraction->returned->map($id);
             }
             foreach ($extraction->invokedParameters as $method => $parameters) {
                 $invokedParameters[$id($method)] = $parameters;
@@ -358,7 +363,7 @@ final class GraphBuilder
         }
 
         $methodsByClass = $this->methodsByClass($graph);
-        $types = new TypeResolver($graph, $names, $methodsByClass, $returnTypes, $propertyTypes, $vendor, $returnElements, new Generics($templates, $parentArguments, $genericReturns, $genericProperties, $documentedMethods, $mixins, $conditionals, $callables, $binders, $casts, $assertions));
+        $types = new TypeResolver($graph, $names, $methodsByClass, $returnTypes, $propertyTypes, $vendor, $returnElements, new Generics($templates, $parentArguments, $genericReturns, $genericProperties, $documentedMethods, $mixins, $conditionals, $callables, $binders, $casts, $assertions), null, $fileReturns);
 
         // A method reading a property typed as an enum (`$violation->type`) uses that enum: what it outputs depends on it.
         foreach ($propertyReads as [$reader, $property]) {
