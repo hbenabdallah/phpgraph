@@ -27,7 +27,7 @@
 
 Un agent IA lâché dans un projet PHP qu'il ne connaît pas lit les fichiers un par un et cherche des noms. Il passe à côté de l'essentiel d'une vraie base de code : **qui appelle quoi, quel handler reçoit un message, quel contrôleur sert une route, ce qui casse si une méthode change, et quelle couche dépend de quelle autre**.
 
-phpgraph analyse tout le projet une fois (avec [`nikic/php-parser`](https://github.com/nikic/PHP-Parser)) et répond à ces questions à partir d'un graphe :
+phpgraph analyse tout le projet une fois (avec [`nikic/php-parser`](https://github.com/nikic/PHP-Parser), les docblocks avec [`phpstan/phpdoc-parser`](https://github.com/phpstan/phpdoc-parser)) et répond à ces questions à partir d'un graphe :
 
 - **Des faits déterministes, pas des devinettes.** Chaque relation est `EXTRACTED` (lue dans le code), `INFERRED` (résolue à partir des types déclarés) ou `AMBIGUOUS` (une supposition, signalée comme telle).
 - **Il dit ce qu'il ne sait pas.** Appels non résolus, `vendor/` absent, messages sans handler : les trous sont signalés, et l'agent sait quand lire le code lui-même.
@@ -40,8 +40,9 @@ phpgraph analyse tout le projet une fois (avec [`nikic/php-parser`](https://gith
 - **Architecture** : couches DDD et hexagonales, bounded contexts, règles de couches vérifiées en CI (`phpgraph check`) et analyse d'impact (`impact_of`) : ce qui dépend d'une classe ou d'une méthode, et les tests à lancer.
 - **Messages et événements** : envoi → message → handler pour Symfony Messenger, les jobs et événements Laravel, Ecotone, le CQRS de PrestaShop, les hooks WordPress, les événements de domaine et vos propres bus, à partir des attributs, de la configuration des services (YAML, XML, PHP) ou de la forme du code.
 - **HTTP** : routes (attributs Symfony, fichiers de routage YAML et PHP, ressources API Platform, fichiers de routes Laravel, contrôleurs nommés par identifiant de service) reliées à leurs contrôleurs, et appels HTTP reliés aux routes qu'ils atteignent. Une route dont la classe contrôleur n'existe ni dans le projet ni dans `vendor/` est signalée avec son fichier de routage.
-- **Injection de dépendances** : ce que la configuration du conteneur Symfony injecte au-delà des types du constructeur, tous les services d'un tag (`tagged_iterator`, `#[AutowireIterator]`) ou un service nommé par son identifiant, en PHP, YAML ou XML, y compris dans des helpers appelés avec des arguments littéraux (`Wiring::wire($services, 'sales', ...)`, évalués, jamais exécutés) : un validateur est relié aux règles qu'il reçoit.
+- **Injection de dépendances** : ce que la configuration du conteneur Symfony injecte au-delà des types du constructeur, tous les services d'un tag (`tagged_iterator`, `#[AutowireIterator]`) ou un service nommé par son identifiant, en PHP, YAML ou XML, y compris dans des helpers appelés avec des arguments littéraux (`Wiring::wire($services, 'sales', ...)`, évalués, jamais exécutés) : un validateur est relié aux règles qu'il reçoit. Une règle qui déclare ce qu'elle accepte (`supports(object $input): bool { return $input instanceof CreateEstimateQuery; }`, aussi `canHandle`, `accepts`…) est écartée des cas d'usage qui passent une autre entrée au pipeline partagé, classes contenues dans les propriétés de l'entrée comprises. Une entrée typée par une interface est toute classe du projet qui l'implémente, et les types des paramètres auxquels elle est transmise (`QueryInterface $query` passé à `setUp(CreateEstimateQueryInterface $query)` : une `CreateEstimateQuery`) ; un garde qu'il ne sait pas lire, ou une règle qui ne s'exécute que pour certaines de ces classes, est gardé, marqué `supports() not resolved`.
 - **Microservices** : un espace d'identifiants par service, et des liens entre services par leurs contrats : classes de messages partagées, clés de routage, routes HTTP.
+- **Schémas d'API** : les opérations des documents OpenAPI (Swagger) reliées aux routes qui les implémentent, ou, pour le document d'une autre API, aux appels HTTP de son client ; les rpcs des services protobuf reliés aux classes qui implémentent leur interface générée. Ce qui est documenté et non implémenté, et les routes qu'aucun document ne décrit, sont signalés. `impact` liste les opérations derrière une modification (le contrat sur lequel ses clients comptent), `outline` celles que sert une fonctionnalité.
 - **Serveur MCP sans configuration** : construit au premier usage, reconstruit de façon incrémentale quand le code change (environ 3 s par modification sur un projet de 8 400 fichiers).
 
 ## Démarrage rapide
@@ -147,7 +148,8 @@ Options de `build` : `-e` pour exclure des chemins (répétable), `--no-vendor` 
 | `calls` | méthode → méthode résolue, avec les lignes des appels ; une méthode qui exécute une closure reçue (`$apply(...)`) appelle ce que la closure appelle, INFERRED, `via` `closure of <la méthode qui l'écrit>` |
 | `dispatches`, `handled_by` | envoi → message ou canal → handler ; route → contrôleur ; classe testée par une méthode `supports()` → cette stratégie |
 | `contract` | une classe de message envoyée par un service → la même classe traitée par un autre |
-| `requests` | appel HTTP → la route qu'il atteint, du même service ou d'un autre |
+| `requests` | appel HTTP → la route qu'il atteint, du même service ou d'un autre, ou l'opération du document OpenAPI d'une autre API |
+| `implemented_by` | opération d'un schéma d'API (`operation:`) → la route avec sa méthode et son chemin (OpenAPI), ou la méthode d'une classe qui implémente le service généré (protobuf) |
 | `receives` | service → chaque service que la configuration du conteneur lui injecte (un tag, un identifiant, le service décoré) ; `via` dit lequel : `service sales.pipeline` pour l'un des services d'une même classe |
 | `reads_state_of` | méthode → une méthode de la même classe qui modifie, hors constructeur, une propriété qu'elle lit (`hasErrors()` → `add()`), INFERRED |
 
@@ -156,7 +158,7 @@ Chaque relation porte un niveau de confiance :
 | Niveau | Signification |
 |---|---|
 | `EXTRACTED` | Lu dans le code d'un fichier, ou dans la configuration (attribut, tag de service, fichier de routes). |
-| `INFERRED` | Résolu entre fichiers à partir des types déclarés : paramètres, propriétés, `$this`, héritage, types de retour, forme du code. |
+| `INFERRED` | Résolu entre fichiers à partir des types déclarés : paramètres, propriétés, `$this`, héritage, types de retour, tests `instanceof`, forme du code. Une variable que les branches laissent contenir l'une de plusieurs classes relie un appel à la méthode de chacune. |
 | `AMBIGUOUS` | Une supposition, par exemple la seule méthode du projet portant ce nom, appelée sur un récepteur de type inconnu ; ou la méthode d'une classe qu'une variable peut contenir, quand une autre branche la laisse de type inconnu. |
 
 <details>
@@ -165,7 +167,7 @@ Chaque relation porte un niveau de confiance :
 | | Handlers et écouteurs | Messages envoyés | HTTP |
 |---|---|---|---|
 | **Symfony** | `#[AsMessageHandler]`, `#[AsEventListener]`, tags `messenger.message_handler` et `kernel.event_listener` (YAML, XML, PHP, `_instanceof`), `getSubscribedEvents()`, `addListener()` | `MessageBusInterface`, `EventDispatcherInterface`, événements nommés | `#[Route]` (chemins en constantes de classe compris), fichiers de routage YAML et PHP, contrôleurs nommés par identifiant de service ; `#[ApiResource]` et attributs d'opération d'API Platform, traités par leur provider, processor ou contrôleur |
-| **Laravel** | `$listen`, `Event::listen()`, jobs (`ShouldQueue`, `Dispatchable`) | `event()`, `dispatch()`, façades, `Job::dispatch()` | `Route::get/post/…`, `match`, `resource`, groupes avec `prefix`, `routes/api.php` ; client `Http::` |
+| **Laravel** | `$listen`, `Event::listen()`, subscribers (`$events->listen()` dans `subscribe()`, ou le tableau qu'elle renvoie), écouteurs d'une union d'événements (`handle(Accepted\|Rejected $event)`), jobs (`ShouldQueue`, `Dispatchable`) | `event()`, `dispatch()`, façades, `Job::dispatch()` | `Route::get/post/…`, `match`, `resource`, `view`, `redirect`, groupes avec `prefix` et `domain`, `routes/api.php` ; client `Http::`, relatif à son `baseUrl()` |
 | **Ecotone** | `#[CommandHandler]`, `#[EventHandler]`, `#[QueryHandler]`, clés de routage | `CommandBus`, `EventBus`, `DistributedBus`, `sendWithRouting()` | |
 | **PrestaShop** | `#[AsCommandHandler]`, `#[AsQueryHandler]` | `CommandBusInterface::handle()` | routage YAML |
 | **WordPress** | `add_action()`, `add_filter()` | `do_action()`, `apply_filters()` | |
@@ -185,16 +187,41 @@ phpgraph check --generate-baseline   # accepte les violations actuelles dans php
 phpgraph check                       # échoue seulement sur les nouvelles
 ```
 
+Les règles propres au projet vont dans `phpgraph.yaml`, vérifiées par la même commande, avec la même baseline. Les motifs sont des globs sur les noms de classes (`*` dans un segment de namespace, `**` à travers les segments), et un namespace terminé par `\` désigne tout ce qu'il contient :
+
+```yaml
+rules:
+  dependencies:                       # qui peut dépendre de quoi
+    - name: doctrine-in-infrastructure
+      dependency: 'Doctrine\'
+      allow-from: ['App\*\Infrastructure\']  # ou deny-from, qui l'emporte
+      reason: Only infrastructure talks to the database.
+  structure:                          # ce que doivent être les classes qu'un motif sélectionne
+    - on: 'App\**\Controller\*'
+      not-on: 'App\Legacy\**'
+      target: class                   # class, interface, trait ou enum
+      must-be-final: true             # must-be-abstract, must-be-readonly : true ou false
+      must-be-named: '*Controller'
+      must-implement: ['App\Shared\Http\Controller']   # must-extend, must-use-trait
+      only-public-methods: [__construct, __invoke]
+  handlers:                           # un handler envoie les messages de son propre bounded context
+    own-context: true
+    shared: [Shared]                  # contextes que tout handler peut utiliser
+```
+
+Les dépendances prises en compte sont les dépendances certaines (EXTRACTED et INFERRED : types, attributs, `new`, appels, héritage) du code applicatif ; l'héritage est lu dans le graphe, donc les parents d'une classe de `vendor/` ne sont pas connus. Le bounded context d'un handler et d'un message se lit dans leurs namespaces, comme pour les couches.
+
 </details>
 
 <details>
 <summary><b>Microservices</b></summary>
 
-Un dépôt qui contient au moins deux applications Composer indépendantes est découpé en services. Les paquets d'un monorepo restent dans leur projet : un paquet que la racine autoload, déclare en dépôt `path` ou `replace` en fait partie, ce n'est pas un service. Les identifiants portent alors leur service, `billing@App\Domain\Order`, et un nom ne se résout jamais dans un autre service : les services se rencontrent par des contrats.
+Un dépôt qui contient au moins deux applications Composer indépendantes est découpé en services. Les paquets d'un monorepo restent dans leur projet : un paquet que la racine autoload, déclare en dépôt `path` ou `replace` en fait partie, ce n'est pas un service ; une bibliothèque que les services requièrent (un dépôt `path`, ou son nom de paquet) est leur code commun. Les identifiants portent alors leur service, `billing@App\Domain\Order`, et un nom ne se résout jamais dans un autre service : les services se rencontrent par des contrats.
 
 - même classe de message envoyée par un service et traitée par un autre : `contract` ;
 - clé de routage (`sendWithRouting('order.place', …)`, `#[CommandHandler('ticket.create')]`, événement nommé) : un nœud `channel:` partagé par tous les services ;
-- appel HTTP vers une route d'un autre service : `requests`. Un appel dont le chemin correspond à une route déclarée pour d'autres méthodes HTTP seulement est signalé : il échouerait tel quel.
+- appel HTTP vers une route d'un autre service : `requests`. Un appel dont le chemin correspond à une route déclarée pour d'autres méthodes HTTP seulement est signalé : il échouerait tel quel ;
+- schéma d'API : les nœuds `operation:` d'un document OpenAPI (`GET /api/hotels/{hotel}`) ou d'un service protobuf (`CinemaService.Reserve`), `implemented_by` les routes ou les classes qui les servent. Un document à la racine du dépôt décrit tous les services (une API gateway), un document dans un service ce service seulement.
 
 Un `phpgraph.yaml` facultatif nomme les services quand la détection ne convient pas :
 
@@ -253,7 +280,7 @@ phpgraph est développé sur un corpus de projets open source figés à un commi
 | [BookStack](https://github.com/BookStackApp/BookStack) | Laravel | 1 513 | 5,6 s | 97,3 % |
 | [WordPress](https://github.com/WordPress/WordPress) | sans framework, hooks | 1 899 | 10,9 s | 96,0 % |
 
-Deux petits projets microservices complètent le corpus : [deux services Laravel reliés par RabbitMQ](https://github.com/mostafaaminflakes/Using-RabbitMQ-in-Microservices), avec 4 contrats de messages, et [quatre services Laravel reliés par HTTP](https://github.com/omarihab99/Art-Gallery), où phpgraph a trouvé un `POST` envoyé vers une route `GET` seulement. Aucun échec d'analyse sur environ 26 000 fichiers. Le détail par projet, messages, routes et services compris, est dans [`corpus/RESULTS.md`](https://github.com/hbenabdallah/phpgraph/blob/main/corpus/RESULTS.md).
+Quatre projets microservices complètent le corpus : [deux services Laravel reliés par RabbitMQ](https://github.com/mostafaaminflakes/Using-RabbitMQ-in-Microservices), avec 4 contrats de messages ; [quatre services Laravel reliés par HTTP](https://github.com/omarihab99/Art-Gallery), où phpgraph a trouvé un `POST` envoyé vers une route `GET` seulement ; le [ticket booking de Spiral](https://github.com/spiral/ticket-booking), des services qui s'appellent par des services gRPC déclarés dans des fichiers `.proto` ; et [StayHub](https://github.com/ahmedibrahimyassindev/StayHub), sept services Laravel derrière une API gateway décrite par un fichier OpenAPI. Les deux derniers mesurent les schémas d'API comme contrats : les 45 opérations du document de StayHub et les 14 rpcs de ticket-booking sont toutes reliées à ce qui les implémente. Aucun échec d'analyse sur environ 26 600 fichiers. Le détail par projet, messages, routes et services compris, est dans [`corpus/RESULTS.md`](https://github.com/hbenabdallah/phpgraph/blob/main/corpus/RESULTS.md).
 
 ### Avec un agent
 
@@ -313,16 +340,19 @@ Sylius (le commit du corpus), octobre 2026, sans LLM : phpgraph 1.0.2, [codebase
 
 ## Limites
 
-- Les appels de fonctions globales et les appels dynamiques (`$this->$name()`, `__call`) ne sont pas résolus.
-- Les génériques ne sont lus que pour les collections : un `foreach` sur un paramètre ou une propriété documentés `Foo[]`, `array<Foo>`, `list<Foo>` ou `iterable<Foo>` est typé ; `Collection<Foo>` et les autres classes génériques sont lues comme `Collection`.
-- Les chaînes s'arrêtent aux méthodes magiques, aux classes internes de PHP et aux dépendances sans type de retour exploitable.
+- Seul le PHP est lu : `overview` nomme les autres langages d'un dépôt mixte (leurs appels vers la partie PHP ne sont pas reliés), et les instructions MCP disent d'emblée quand un projet ne contient aucun PHP.
+- Les appels de fonctions globales ne sont pas des arêtes du graphe, mais ce qu'une fonction retourne type les appels faits dessus (`now()->addDay()`, `response()->json()`) ; les appels dynamiques (`$this->$name()`, `__call`) ne sont résolus que par les méthodes qu'une classe documente (`@method`, `@mixin`).
+- Les docblocks sont lus par phpstan/phpdoc-parser : un type peut s'écrire sur plusieurs lignes, un tag peut en suivre un autre sur la même ligne d'un docblock d'une ligne, et les formes qu'écrit le code ancien bien que PHPDoc ne les autorise pas sont lues comme elles l'entendent (`callable(Foo $x)` sans type de retour, `?A|B`, `@method static NAME(): Type`). Les génériques sont lus dans les docblocks (`@template`, `@extends Repository<Order>`, `@return Collection<int, Item>`, `ScalarNodeDefinition<$this>`), dans le projet et dans `vendor/` : un template est lié par le type du récepteur et par les parents qui le transmettent, et un `foreach` parcourt les éléments de toute collection typée. Une union (`Response|ResponseFactory`) ou une intersection (`Countable&Named`), documentée ou déclarée, est appelée sur chaque membre qui déclare la méthode ; une closure passée à une méthode reçoit les paramètres que la méthode documente lui passer (`@param callable($this): mixed`, le `when(fn ($query) => ...)` de Laravel) ; `@use HasFactory<HotelFactory>` sur l'utilisation d'un trait lie ses templates. Un template de méthode est lié par les arguments de chaque appel : la classe qu'un argument nomme (`getRepository(Order::class)` avec `@param class-string<T>`), le type d'une valeur (`@param T $value`), ce que retourne une closure (`@param callable(): T`, ses `return` ou son type natif). `@phpstan-return` et `@psalm-return` sont lus avant `@return` ; une condition que les arguments ne tranchent pas (`TAsync is false ? Response : PromiseInterface`) donne l'union de ses branches. Les propriétés magiques documentées par `@property` et `@property-read` prolongent les chaînes ; sur un modèle Eloquent, les casts aussi (`'paid_at' => 'datetime'` est un Carbon, un enum, le `TGet` d'une classe de cast), les timestamps et les relations lues comme propriétés (`$page->book`, ce que retourne `book()->getResults()`). Une méthode sans type de retour déclaré retourne ce que déclare la méthode qu'elle redéfinit (`@inheritDoc`). Les conditions sur un type (`$id is array ? Collection : Model`) ne sont pas évaluées, et une méthode de façade documentée `mixed` (`DB::transaction()`) reste inconnue.
+- Les variables locales suivent les branches d'une fonction : là où se rejoignent `if`/`elseif`/`else`, `switch`, `match`, `try`/`catch`, un ternaire, `??` ou une boucle, une variable contient ce que toute branche atteignant ce point lui a assigné (une branche terminée par `return`, `throw`, `exit`, `break` ou `continue` ne l'atteint pas, `null` et les scalaires n'ajoutent rien). `instanceof`, `is_a()`, `assert()`, `&&`/`||` et `match (true)` restreignent une variable là où ils sont vrais, un test négatif suivi d'une sortie (`if (!$x instanceof Foo) { return; }`) restreint le code qui suit. Un appel sur une telle variable est relié à la méthode de chaque classe qu'elle peut contenir : INFERRED quand chaque branche l'a typée, AMBIGUOUS quand l'une l'a laissée de type inconnu. Un appel restreint ses arguments comme son callable le documente, dans le projet ou dans `vendor/` : `@phpstan-assert`, `@psalm-assert` et leurs formes `-if-true`/`-if-false`, y compris un template lié par un argument `class-string` (le `is_wp_error()` de WordPress, `Webmozart\Assert\Assert::isInstanceOf($x, Order::class)`, le `assertInstanceOf()` de PHPUnit) ; seuls les appels nommés comme une assertion sont recherchés (`is…`, `assert…`, `ensure…`, `check…`, `expect…`, `validate…`, `verify…`, toute méthode statique d'une classe `…Assert` ou `…Assertion`). Seules les variables sont restreintes, pas les propriétés (`$this->x instanceof Foo`), et le corps d'une boucle est lu une fois (un type assigné à sa fin n'est pas vu à son début).
+- Ce qu'une bibliothèque fait d'un appel que ses signatures ne disent pas vient de son provider (`src/Builder/Libraries`) : un conteneur PSR-11 à qui l'on demande une classe en donne une instance (`$container->get(Mailer::class)`), les attributs d'un modèle Eloquent ont les types de leurs casts, timestamps et relations.
+- Les chaînes s'arrêtent aux méthodes magiques et aux dépendances sans type de retour exploitable. Les classes propres à PHP (`DateTime`, `ArrayObject`, `SplObjectStorage`, `PDO`...) sont connues par des signatures générées une fois (`tools/internal-classes.php`) ; celles des extensions `intl` et `mysqli` ne le sont pas.
 - Sans `vendor/` installé, les chaînes d'appels s'arrêtent à la première dépendance.
-- Les services construits à l'exécution (passes de compilation, extensions de bundle, identifiants calculés à partir de valeurs connues seulement à l'exécution), les routes en XML (sauf les fichiers d'actions décrits dans `phpgraph.yaml`), les ressources API Platform déclarées en XML ou YAML et les schémas d'API (OpenAPI, protobuf) ne sont pas lus ; les injections non reliées sont listées par `overview`.
+- Les services construits à l'exécution (passes de compilation, extensions de bundle, identifiants calculés à partir de valeurs connues seulement à l'exécution), les routes en XML (sauf les fichiers d'actions décrits dans `phpgraph.yaml`), les ressources API Platform déclarées en XML ou YAML et les schémas d'API autres qu'OpenAPI et protobuf (GraphQL, AsyncAPI) ne sont pas lus ; un chemin OpenAPI réécrit par une gateway n'est pas suivi ; les injections non reliées sont listées par `overview`.
 - Deux services qui déclarent une classe de message du même nom sont supposés la partager.
 
 ## Contribuer
 
-Les issues et les pull requests sont les bienvenues. Voir [CONTRIBUTING.md](https://github.com/hbenabdallah/phpgraph/blob/main/CONTRIBUTING.md) : `composer check` doit passer (php-cs-fixer, PHPStan niveau 8, PHPUnit), et les évolutions de l'analyse se jugent sur le corpus. Sans PHP installé, `bin/dev composer check` lance tout dans Docker.
+Les issues et les pull requests sont les bienvenues. Voir [CONTRIBUTING.md](https://github.com/hbenabdallah/phpgraph/blob/main/CONTRIBUTING.md) : `composer check` doit passer (php-cs-fixer, PHPStan niveau max, PHPUnit), et les évolutions de l'analyse se jugent sur le corpus. Sans PHP installé, `bin/dev composer check` lance tout dans Docker.
 
 Ce qui reste stable d'une version à l'autre (commandes, outils MCP, format de `graph.json`) est listé dans [docs/STABILITY.md](https://github.com/hbenabdallah/phpgraph/blob/main/docs/STABILITY.md) ; les changements sont dans le [changelog](https://github.com/hbenabdallah/phpgraph/blob/main/CHANGELOG.md).
 

@@ -1,13 +1,22 @@
 # Changelog
 
-phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
-[docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
+phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stays stable is listed in
+[docs/STABILITY.md](docs/STABILITY.md), and changes only in a major version (2.0.0), announced here.
 
 ## Unreleased
 
 ### Changed
 - phpgraph is now distributed under the MIT License, in place of the PolyForm Shield License 1.0.0: any use is
   allowed, including in a competing product, as long as the copyright notice and the license text are kept.
+  Contributions are received under the same license (`CONTRIBUTING.md`); `composer.json` and the Docker image label
+  declare `MIT`. Releases up to 1.5.7 stay under PolyForm Shield.
+- The French README follows the English one again: API schemas (OpenAPI, protobuf) and `implemented_by`, the rules
+  of `phpgraph.yaml`, `supports()` guards in dependency injection, Laravel subscribers, union listeners, `view` routes
+  and `baseUrl()`, the shared library of microservices, the ticket-booking and StayHub corpus projects, and the
+  current limitations (generics, branch narrowing, library providers, PHP's internal classes). It said PHPStan level 8;
+  the project runs level max.
+- This changelog's header no longer says any version may change what `docs/STABILITY.md` lists: from 1.0.0 it changes
+  only in a major version.
 
 ## 1.5.7 (2026-10-23)
 
