@@ -28,12 +28,12 @@ Downloads are counted on the Packagist package page (Composer installs), on the 
 
 ## License of contributions
 
-phpgraph is distributed under the PolyForm Shield License 1.0.0 (see `LICENSE`): free to use, modify and redistribute for any purpose that does not compete with phpgraph.
+phpgraph is distributed under the MIT License (see `LICENSE`).
 
 By submitting a contribution (code, documentation, tests or other material) to this repository, you agree that:
 
 1. you wrote it, or you have the right to submit it under these terms;
-2. you grant Houssem Eddine BENABDALLAH, the maintainer of phpgraph, and anyone the maintainer licenses phpgraph to, a perpetual, worldwide, non-exclusive, royalty-free, irrevocable license to use, reproduce, modify, distribute and sublicense your contribution, under the license of phpgraph or any other license the maintainer chooses;
+2. your contribution is licensed under the MIT License, as the rest of phpgraph;
 3. you keep the copyright of your contribution.
 
 If you cannot agree to these terms, open an issue to discuss your change instead of a pull request.

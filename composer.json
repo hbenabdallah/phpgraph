@@ -18,7 +18,7 @@
         "cursor"
     ],
     "homepage": "https://github.com/hbenabdallah/phpgraph",
-    "license": "LicenseRef-PolyForm-Shield-1.0.0",
+    "license": "MIT",
     "authors": [
         {
             "name": "Houssem Eddine BENABDALLAH",

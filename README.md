@@ -15,7 +15,7 @@
   <a href="https://packagist.org/packages/hbenabdallah/phpgraph"><img src="https://img.shields.io/packagist/v/hbenabdallah/phpgraph" alt="Packagist version"></a>
   <a href="https://packagist.org/packages/hbenabdallah/phpgraph"><img src="https://img.shields.io/packagist/dt/hbenabdallah/phpgraph" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/php-%3E%3D8.2-777bb4" alt="PHP 8.2+">
-  <a href="https://github.com/hbenabdallah/phpgraph/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20Shield%201.0.0-blue" alt="License: PolyForm Shield 1.0.0"></a>
+  <a href="https://github.com/hbenabdallah/phpgraph/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
   <a href="https://mcpservers.org/servers/hbenabdallah/phpgraph"><img src="https://mcpservers.org/badge.svg" alt="Listed on mcpservers.org"></a>
 </p>
 
@@ -360,4 +360,4 @@ Releases are published by pushing a version tag: the [release workflow](https://
 
 ## License
 
-phpgraph is source-available under the [PolyForm Shield License 1.0.0](https://github.com/hbenabdallah/phpgraph/blob/main/LICENSE): you may use, modify and redistribute it, including in a company, for any purpose that does not compete with phpgraph. Providing a competing product from this code is not allowed. This is not an OSI-approved open-source license.
+phpgraph is open source under the [MIT License](https://github.com/hbenabdallah/phpgraph/blob/main/LICENSE): you may use, copy, modify, merge, publish, distribute, sublicense and sell it, for any purpose, as long as the copyright notice and the license text are kept with it.

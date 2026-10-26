@@ -21,7 +21,7 @@ RUN printf 'opcache.enable_cli=1\nopcache.jit=tracing\nopcache.jit_buffer_size=1
 LABEL org.opencontainers.image.title="phpgraph" \
       org.opencontainers.image.description="Knowledge graph of a PHP project, for AI agents over MCP" \
       org.opencontainers.image.source="https://github.com/hbenabdallah/phpgraph" \
-      org.opencontainers.image.licenses="LicenseRef-PolyForm-Shield-1.0.0" \
+      org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="$PHPGRAPH_VERSION" \
       io.modelcontextprotocol.server.name="io.github.hbenabdallah/phpgraph"
 COPY --from=build /src/build/phpgraph.phar /usr/local/bin/phpgraph

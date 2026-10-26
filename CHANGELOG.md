@@ -3,6 +3,12 @@
 phpgraph follows [semantic versioning](https://semver.org); what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md). Before 1.0.0, any version could change it.
 
+## Unreleased
+
+### Changed
+- phpgraph is now distributed under the MIT License, in place of the PolyForm Shield License 1.0.0: any use is
+  allowed, including in a competing product, as long as the copyright notice and the license text are kept.
+
 ## 1.5.7 (2026-10-23)
 
 ### Added
