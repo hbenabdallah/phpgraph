@@ -3,7 +3,7 @@
 phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md), and changes only in a major version (2.0.0), announced here.
 
-## Unreleased
+## 1.5.8 (2026-10-27)
 
 ### Added
 - A global variable has the class its function documents: `global $wpdb;` under `@global wpdb $wpdb` types
@@ -12,8 +12,16 @@ phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stay
 Corpus, receiver type unknown in application code: WordPress 4.0 → 2.3 % (456 call sites, 945 new INFERRED edges,
 650 of them AMBIGUOUS guesses before, all right; a sample checked in the code). No INFERRED edge lost; the 10
 other projects do not change.
+- What PHP's array functions return is read from their array argument, whose elements their signatures do not
+  give (`array` or `mixed`): `array_filter()`, `array_values()`, `array_slice()`, `array_diff*()`, `array_intersect*()`
+  or `iterator_to_array()` keep its elements in an array, `array_merge()` and `array_replace()` hold those of every
+  argument (a call on them is AMBIGUOUS when one argument's elements are unknown), `reset()`, `end()`, `current()`,
+  `array_shift()` or `array_pop()` give one of them. A project function of the same name wins.
 
-## 1.5.8 (2026-10-27)
+Corpus, application code: call sites with an unknown receiver −2 on Sylius, Akeneo and WordPress, −4 on PrestaShop
+(+3 to +5 INFERRED on the last three); in tests, −5 on Sylius, −3 on PrestaShop. Two wrong AMBIGUOUS guesses gone on Sylius
+(`reset($attributes)->getText()` over Mink's `NodeElement[]`), 5 new edges on PrestaShop, all right. No INFERRED edge
+lost on the 11 projects.
 
 ### Changed
 - phpgraph is now distributed under the MIT License, in place of the PolyForm Shield License 1.0.0: any use is
