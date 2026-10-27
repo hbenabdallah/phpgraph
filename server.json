@@ -7,11 +7,11 @@
     "url": "https://github.com/hbenabdallah/phpgraph",
     "source": "github"
   },
-  "version": "1.5.7",
+  "version": "1.5.8",
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/hbenabdallah/phpgraph:1.5.7",
+      "identifier": "ghcr.io/hbenabdallah/phpgraph:1.5.8",
       "transport": {
         "type": "stdio"
       },
