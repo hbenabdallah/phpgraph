@@ -268,19 +268,19 @@ Les reconstructions sont incrémentales : l'extraction de chaque fichier est mis
 
 ## Mesuré sur de vrais projets
 
-phpgraph est développé sur un corpus de projets open source figés à un commit, et chaque évolution se juge sur leurs chiffres (`composer corpus:measure`). Code applicatif seulement ; *récepteur typé* est la part des appels de méthodes dont phpgraph a pu déterminer le type du récepteur. Build mesuré par `corpus:measure`, projet par projet, dans Docker (PHP 8.5, sans opcache), version 1.5.0.
+phpgraph est développé sur un corpus de projets open source figés à un commit, et chaque évolution se juge sur leurs chiffres (`composer corpus:measure`). Code applicatif seulement ; *récepteur typé* est la part des appels de méthodes dont phpgraph a pu déterminer le type du récepteur. Build mesuré par `corpus:measure`, projet par projet, dans Docker (PHP 8.5, sans opcache), version 1.5.8.
 
 | Projet | Type | Fichiers PHP | Build | Récepteur typé |
 |---|---|---:|---:|---:|
 | [php-ddd-example](https://github.com/CodelyTV/php-ddd-example) | DDD, CQRS | 304 | 0,8 s | 99,1 % |
-| [Sylius](https://github.com/Sylius/Sylius) | e-commerce Symfony | 4 946 | 13,9 s | 98,3 % |
-| [Akeneo PIM](https://github.com/akeneo/pim-community-dev) | hexagonal, bounded contexts | 8 416 | 21,9 s | 92,9 % |
-| [PrestaShop](https://github.com/PrestaShop/PrestaShop) | CQRS et legacy | 7 850 | 21,1 s | 96,6 % |
-| [Ecotone quickstart](https://github.com/ecotoneframework/quickstart-examples) | 47 services, messagerie | 583 | 1,3 s | 94,5 % |
-| [BookStack](https://github.com/BookStackApp/BookStack) | Laravel | 1 513 | 5,6 s | 97,3 % |
-| [WordPress](https://github.com/WordPress/WordPress) | sans framework, hooks | 1 899 | 10,9 s | 96,0 % |
+| [Sylius](https://github.com/Sylius/Sylius) | e-commerce Symfony | 4 946 | 12,7 s | 98,6 % |
+| [Akeneo PIM](https://github.com/akeneo/pim-community-dev) | hexagonal, bounded contexts | 8 416 | 18,7 s | 92,9 % |
+| [PrestaShop](https://github.com/PrestaShop/PrestaShop) | CQRS et legacy | 7 850 | 20,4 s | 96,5 % |
+| [Ecotone quickstart](https://github.com/ecotoneframework/quickstart-examples) | 47 services, messagerie | 583 | 1,1 s | 92,7 % |
+| [BookStack](https://github.com/BookStackApp/BookStack) | Laravel | 1 513 | 6,6 s | 97,4 % |
+| [WordPress](https://github.com/WordPress/WordPress) | sans framework, hooks | 1 899 | 9,7 s | 97,7 % |
 
-Quatre projets microservices complètent le corpus : [deux services Laravel reliés par RabbitMQ](https://github.com/mostafaaminflakes/Using-RabbitMQ-in-Microservices), avec 4 contrats de messages ; [quatre services Laravel reliés par HTTP](https://github.com/omarihab99/Art-Gallery), où phpgraph a trouvé un `POST` envoyé vers une route `GET` seulement ; le [ticket booking de Spiral](https://github.com/spiral/ticket-booking), des services qui s'appellent par des services gRPC déclarés dans des fichiers `.proto` ; et [StayHub](https://github.com/ahmedibrahimyassindev/StayHub), sept services Laravel derrière une API gateway décrite par un fichier OpenAPI. Les deux derniers mesurent les schémas d'API comme contrats : les 45 opérations du document de StayHub et les 14 rpcs de ticket-booking sont toutes reliées à ce qui les implémente. Aucun échec d'analyse sur environ 26 600 fichiers. Le détail par projet, messages, routes et services compris, est dans [`corpus/RESULTS.md`](https://github.com/hbenabdallah/phpgraph/blob/main/corpus/RESULTS.md).
+Quatre projets microservices complètent le corpus : [deux services Laravel reliés par RabbitMQ](https://github.com/mostafaaminflakes/Using-RabbitMQ-in-Microservices), avec 4 contrats de messages ; [quatre services Laravel reliés par HTTP](https://github.com/omarihab99/Art-Gallery), où phpgraph a trouvé un `POST` envoyé vers une route `GET` seulement ; le [ticket booking de Spiral](https://github.com/spiral/ticket-booking), des services qui s'appellent par des services gRPC déclarés dans des fichiers `.proto` ; et [StayHub](https://github.com/ahmedibrahimyassindev/StayHub), sept services Laravel derrière une API gateway décrite par un fichier OpenAPI. Les deux derniers mesurent les schémas d'API comme contrats : les 45 opérations du document de StayHub et les 14 rpcs de ticket-booking sont toutes reliées à ce qui les implémente. Aucun échec d'analyse sur environ 26 500 fichiers. Le détail par projet, messages, routes et services compris, est dans [`corpus/RESULTS.md`](https://github.com/hbenabdallah/phpgraph/blob/main/corpus/RESULTS.md).
 
 ### Avec un agent
 

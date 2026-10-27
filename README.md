@@ -268,19 +268,19 @@ Rebuilds are incremental: a file's extraction is cached by content, and the MCP 
 
 ## Measured on real projects
 
-phpgraph is developed against a corpus of open-source projects pinned to a commit, and every change is judged on their numbers (`composer corpus:measure`). Application code only; *receiver typed* is the share of method calls whose receiver type phpgraph could determine. Builds measured by `corpus:measure`, one project at a time, in Docker (PHP 8.5, no opcache), version 1.5.0.
+phpgraph is developed against a corpus of open-source projects pinned to a commit, and every change is judged on their numbers (`composer corpus:measure`). Application code only; *receiver typed* is the share of method calls whose receiver type phpgraph could determine. Builds measured by `corpus:measure`, one project at a time, in Docker (PHP 8.5, no opcache), version 1.5.8.
 
 | Project | Kind | PHP files | Build | Receiver typed |
 |---|---|---:|---:|---:|
 | [php-ddd-example](https://github.com/CodelyTV/php-ddd-example) | DDD, CQRS | 304 | 0.8 s | 99.1 % |
-| [Sylius](https://github.com/Sylius/Sylius) | Symfony e-commerce | 4,946 | 13.9 s | 98.3 % |
-| [Akeneo PIM](https://github.com/akeneo/pim-community-dev) | hexagonal, bounded contexts | 8,416 | 21.9 s | 92.9 % |
-| [PrestaShop](https://github.com/PrestaShop/PrestaShop) | CQRS and legacy | 7,850 | 21.1 s | 96.6 % |
-| [Ecotone quickstart](https://github.com/ecotoneframework/quickstart-examples) | 47 services, messaging | 583 | 1.3 s | 94.5 % |
-| [BookStack](https://github.com/BookStackApp/BookStack) | Laravel | 1,513 | 5.6 s | 97.3 % |
-| [WordPress](https://github.com/WordPress/WordPress) | no framework, hooks | 1,899 | 10.9 s | 96.0 % |
+| [Sylius](https://github.com/Sylius/Sylius) | Symfony e-commerce | 4,946 | 12.7 s | 98.6 % |
+| [Akeneo PIM](https://github.com/akeneo/pim-community-dev) | hexagonal, bounded contexts | 8,416 | 18.7 s | 92.9 % |
+| [PrestaShop](https://github.com/PrestaShop/PrestaShop) | CQRS and legacy | 7,850 | 20.4 s | 96.5 % |
+| [Ecotone quickstart](https://github.com/ecotoneframework/quickstart-examples) | 47 services, messaging | 583 | 1.1 s | 92.7 % |
+| [BookStack](https://github.com/BookStackApp/BookStack) | Laravel | 1,513 | 6.6 s | 97.4 % |
+| [WordPress](https://github.com/WordPress/WordPress) | no framework, hooks | 1,899 | 9.7 s | 97.7 % |
 
-Four microservices projects complete the corpus: [two Laravel services over RabbitMQ](https://github.com/mostafaaminflakes/Using-RabbitMQ-in-Microservices), linked by 4 message contracts; [four Laravel services over HTTP](https://github.com/omarihab99/Art-Gallery), where phpgraph found a `POST` sent to a `GET`-only route; [Spiral's ticket booking](https://github.com/spiral/ticket-booking), services calling each other through gRPC services declared in `.proto` files; and [StayHub](https://github.com/ahmedibrahimyassindev/StayHub), seven Laravel services behind an API gateway described by an OpenAPI file. The last two measure API schemas as contracts: all 45 operations of StayHub's document and all 14 rpcs of ticket-booking are linked to what implements them. Zero parse failures on about 26,600 files. The details per project, including messages, routes and services, are in [`corpus/RESULTS.md`](https://github.com/hbenabdallah/phpgraph/blob/main/corpus/RESULTS.md).
+Four microservices projects complete the corpus: [two Laravel services over RabbitMQ](https://github.com/mostafaaminflakes/Using-RabbitMQ-in-Microservices), linked by 4 message contracts; [four Laravel services over HTTP](https://github.com/omarihab99/Art-Gallery), where phpgraph found a `POST` sent to a `GET`-only route; [Spiral's ticket booking](https://github.com/spiral/ticket-booking), services calling each other through gRPC services declared in `.proto` files; and [StayHub](https://github.com/ahmedibrahimyassindev/StayHub), seven Laravel services behind an API gateway described by an OpenAPI file. The last two measure API schemas as contracts: all 45 operations of StayHub's document and all 14 rpcs of ticket-booking are linked to what implements them. Zero parse failures on about 26,500 files. The details per project, including messages, routes and services, are in [`corpus/RESULTS.md`](https://github.com/hbenabdallah/phpgraph/blob/main/corpus/RESULTS.md).
 
 ### With an agent
 
