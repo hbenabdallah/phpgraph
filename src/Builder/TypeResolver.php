@@ -26,6 +26,20 @@ use PhpGraph\Vendor\VendorSignatures;
  */
 final class TypeResolver
 {
+    /**
+     * PHP's functions returning the elements of their array argument (internal signatures say only `array` or
+     * `mixed`): kept in an array (`array`), with those of every argument (`all`), or one of them (`element`).
+     */
+    private const ARRAY_FUNCTIONS = [
+        'array_filter' => 'array', 'array_values' => 'array', 'array_reverse' => 'array', 'array_slice' => 'array',
+        'array_splice' => 'array', 'array_unique' => 'array', 'array_diff' => 'array', 'array_diff_key' => 'array',
+        'array_diff_assoc' => 'array', 'array_diff_ukey' => 'array', 'array_udiff' => 'array', 'array_intersect' => 'array',
+        'array_intersect_key' => 'array', 'array_intersect_assoc' => 'array', 'array_uintersect' => 'array',
+        'iterator_to_array' => 'array', 'array_merge' => 'all', 'array_replace' => 'all',
+        'current' => 'element', 'reset' => 'element', 'end' => 'element', 'next' => 'element', 'prev' => 'element',
+        'array_shift' => 'element', 'array_pop' => 'element', 'array_first' => 'element', 'array_last' => 'element',
+    ];
+
     /** @var array<string, ?string> */
     private array $methods = [];
 
@@ -568,6 +582,10 @@ final class TypeResolver
     {
         foreach ($call->functions as $name) {
             $id = $this->names->canonical($name);
+            $kept = self::ARRAY_FUNCTIONS[strtolower($name)] ?? null;
+            if ($kept !== null && !isset($this->returnTypes[$id]) && !isset($this->generics->returns[$id])) {
+                return $this->arrayFunction($kept, $call);
+            }
             [$returned, $generic, $conditional, $binders] = isset($this->returnTypes[$id]) || isset($this->generics->conditionals[$id]) || isset($this->generics->returns[$id])
                 ? [$this->returnTypes[$id] ?? null, $this->generics->returns[$id] ?? null, $this->generics->conditionals[$id] ?? null, $this->generics->binders[$id] ?? []]
                 : ($this->vendor?->function($name) ?? [null, null, null, []]);
@@ -588,6 +606,32 @@ final class TypeResolver
         }
 
         return null;
+    }
+
+    /**
+     * What one of PHP's array functions returns: the elements of its array argument, in an array (`array_filter()`)
+     * or one of them (`reset()`). `array_merge()` and `array_replace()` hold the elements of every argument: one of
+     * unknown elements leaves a member unknown, the call on them AMBIGUOUS.
+     *
+     * @param 'array'|'all'|'element' $kept
+     */
+    private function arrayFunction(string $kept, TypeExpr $call): ?string
+    {
+        $elements = [];
+        foreach ($kept === 'all' ? array_keys($call->arguments) : [0] as $position) {
+            $argument = $call->argumentTypes[$position] ?? null;
+            $left = false;
+            $resolved = $argument === null ? null : $this->resolveGeneric($argument, $left);
+            foreach ($resolved === null ? [GenericType::UNKNOWN] : GenericType::members($resolved) as $member) {
+                $elements[] = $this->elementOf($member) ?? GenericType::UNKNOWN;
+            }
+        }
+        $element = $this->simplified($elements, true);
+        if ($element === null || $kept === 'element') {
+            return $element;
+        }
+
+        return GenericType::format(GenericType::ARRAY, [GenericType::UNKNOWN, $element]);
     }
 
     /**
