@@ -207,6 +207,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<string, string> parameters of the current callable => their class in `@param` */
     private array $documentedParameters = [];
 
+    /** @var array<string, string> global variables of the current callable => their class in `@global` */
+    private array $documentedGlobals = [];
+
     /** @var array<string, true> variables of the current callable assigned after its start */
     private array $reassigned = [];
 
@@ -509,6 +512,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->keepUsefulPasses();
             $this->parameterElements = [];
             $this->documentedParameters = [];
+            $this->documentedGlobals = [];
             $this->reassigned = [];
             $this->visibleParameters = [];
             $this->parameters = [];
@@ -706,6 +710,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
         $documented = $node->getAttribute(DocTypeResolver::PARAM_TYPES);
         $this->documentedParameters = array_map(fn (string $type): string => (string) $this->documentedClass($type), self::stringMap($documented));
+        $this->documentedGlobals = self::stringMap($node->getAttribute(DocTypeResolver::GLOBAL_TYPES));
         $this->reassigned = [];
         $this->configuration->enterCallable($id, $node->params, array_values(array_map(fn (AstNode\Param $param): ?string => $this->singleType($param->type), $node->params)));
         $this->localTypes = [];
@@ -1062,10 +1067,12 @@ final class ExtractionVisitor extends NodeVisitorAbstract
 
             return false;
         }
+        // A global holds what the whole program assigns it: its `@global` class when the function documents one.
         if ($node instanceof Stmt\Global_) {
             foreach ($node->vars as $variable) {
                 if ($variable instanceof Expr\Variable && \is_string($variable->name)) {
-                    $this->assignLocal($variable->name, null);
+                    $class = $this->documentedGlobals[$variable->name] ?? null;
+                    $this->assignLocal($variable->name, $class === null ? null : TypeExpr::named($class));
                 }
             }
 
