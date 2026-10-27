@@ -714,27 +714,27 @@
         "classLike": 840,
         "methods": 7580,
         "external": 117,
-        "edges": 43078,
+        "edges": 43373,
         "vendorFilesRead": 0,
         "edgesByConfidence": {
             "EXTRACTED": 19124,
-            "INFERRED": 22793,
-            "AMBIGUOUS": 1161
+            "INFERRED": 23739,
+            "AMBIGUOUS": 510
         },
         "calls": {
             "total": 27019,
-            "inferred": 23462,
-            "ambiguous": 1734,
-            "outsideProject": 751,
-            "unknownReceiver": 1072,
+            "inferred": 24906,
+            "ambiguous": 745,
+            "outsideProject": 752,
+            "unknownReceiver": 616,
             "chainOutsideProject": 63
         },
         "applicationCalls": {
             "total": 27019,
-            "inferred": 23462,
-            "ambiguous": 1734,
-            "outsideProject": 751,
-            "unknownReceiver": 1072,
+            "inferred": 24906,
+            "ambiguous": 745,
+            "outsideProject": 752,
+            "unknownReceiver": 616,
             "chainOutsideProject": 63
         },
         "testCalls": {
@@ -821,8 +821,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 10.1,
-        "peakMemoryMb": 183
+        "seconds": 13.42,
+        "peakMemoryMb": 187
     },
     {
         "name": "laravel-rabbitmq-microservices",

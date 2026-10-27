@@ -78,6 +78,11 @@ final class DocTypeResolver extends NodeVisitorAbstract
     public const PARAM_TYPES = 'phpgraph.paramTypes';
 
     /**
+     * array<string, string>: the class of a global variable the function uses, by name (`@global wpdb $wpdb`).
+     */
+    public const GLOBAL_TYPES = 'phpgraph.globalTypes';
+
+    /**
      * string: the class of the elements of the collection a method returns (`@return list<Violation>`).
      */
     public const RETURN_ELEMENT = 'phpgraph.returnElement';
@@ -402,6 +407,16 @@ final class DocTypeResolver extends NodeVisitorAbstract
         if ($types !== []) {
             $node->setAttribute(self::PARAM_TYPES, $types);
         }
+        $globals = [];
+        foreach ($this->globals($doc) as [$name, $type]) {
+            $class = $this->resolve($type, $templates) ?? $this->single($type, $templates);
+            if ($class !== null && $class !== TypeExpr::STATIC) {
+                $globals[$name] = $class;
+            }
+        }
+        if ($globals !== []) {
+            $node->setAttribute(self::GLOBAL_TYPES, $globals);
+        }
     }
 
     /**
@@ -585,6 +600,27 @@ final class DocTypeResolver extends NodeVisitorAbstract
         }
 
         return $params;
+    }
+
+    /**
+     * The `@global` tags, which the parser leaves as text (`@global wpdb $wpdb WordPress database object.`): name and
+     * type.
+     *
+     * @return list<array{string, TypeNode}>
+     */
+    private function globals(PhpDocNode $doc): array
+    {
+        $globals = [];
+        foreach ($doc->getTagsByName('@global') as $tag) {
+            if ($tag->value instanceof GenericTagValueNode && preg_match('/^(\S+)\s+\$(\w+)/', $tag->value->value, $match) === 1) {
+                $type = $this->typeIn($match[1]);
+                if ($type !== null) {
+                    $globals[] = [$match[2], $type];
+                }
+            }
+        }
+
+        return $globals;
     }
 
     /**
