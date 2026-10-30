@@ -69,16 +69,24 @@ final class Edge
     }
 
     /**
-     * @return array<string, string>
+     * @return array{source: string, target: string, relation: string, confidence: string, lines?: string, via?: string}
      */
     public function toArray(): array
     {
-        return [
+        $data = [
             'source' => $this->source,
             'target' => $this->target,
             'relation' => $this->relation->value,
             'confidence' => $this->confidence->value,
-        ] + ($this->lines === '' ? [] : ['lines' => $this->lines]) + ($this->via === '' ? [] : ['via' => $this->via]);
+        ];
+        if ($this->lines !== '') {
+            $data['lines'] = $this->lines;
+        }
+        if ($this->via !== '') {
+            $data['via'] = $this->via;
+        }
+
+        return $data;
     }
 
     /**

@@ -244,9 +244,13 @@ final readonly class TypeExpr
             return new self(null, null, null, false, false, null, array_map($map, $this->functions), $arguments, null, $argumentTypes);
         }
 
-        return $this->receiver === null
-            ? new self($this->className === null ? null : $map($this->className), null, null, false, false, $this->generic === null ? null : GenericType::mapNames($this->generic, $map))
-            : new self(null, $this->receiver->map($map), $this->member, $this->isProperty, $this->isElement, null, [], $arguments, $this->closure, $argumentTypes);
+        if ($this->receiver !== null) {
+            return new self(null, $this->receiver->map($map), $this->member, $this->isProperty, $this->isElement, null, [], $arguments, $this->closure, $argumentTypes);
+        }
+        $className = $this->className === null ? null : $map($this->className);
+        $generic = $this->generic === null ? null : GenericType::mapNames($this->generic, $map);
+
+        return new self($className, null, null, false, false, $generic);
     }
 
     public function key(): string
@@ -256,7 +260,7 @@ final readonly class TypeExpr
         }
         if ($this->test !== null) {
             $call = $this->test[3] ?? null;
-            $tested = $call === null ? strtolower(implode('|', $this->test[1])) : $call[0]->key() . '#' . $call[1] . ($call[2] ? ';' : '');
+            $tested = $call === null ? strtolower(implode('|', $this->test[1])) : self::assertionKey($call);
 
             return '(' . $this->test[0]->key() . ($this->test[2] ? ')!is(' : ')is(') . $tested . ')';
         }
@@ -274,6 +278,16 @@ final readonly class TypeExpr
         }
 
         return $this->receiver->key() . ($this->isProperty ? '->$' : '->') . $this->member . ($this->isProperty ? '' : '(' . $this->argumentsKey() . ')') . ($this->isElement ? '[]' : '');
+    }
+
+    /**
+     * @param array{self, int, bool} $call the asserting call, the position of the argument, whether it is a statement
+     */
+    private static function assertionKey(array $call): string
+    {
+        $statement = $call[2] ? ';' : '';
+
+        return $call[0]->key() . '#' . $call[1] . $statement;
     }
 
     private function argumentsKey(): string

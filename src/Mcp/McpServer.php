@@ -84,6 +84,9 @@ class McpServer
     }
 
     /**
+     * The response to a request, null for a notification: one of the shapes of initialize(), tools(), callTool() or
+     * error(). Open, as run() sends whatever a subclass answers (a test answers what JSON cannot encode).
+     *
      * @param array<mixed> $request
      *
      * @return array<string, mixed>|null
@@ -133,20 +136,22 @@ class McpServer
     /**
      * @param array<mixed> $params
      *
-     * @return array<string, mixed>
+     * @return array{protocolVersion: string, capabilities: array{tools: \stdClass}, serverInfo: array{name: string, version: string}, instructions: string}
      */
     private function initialize(array $params): array
     {
+        $note = $this->provider->projectNote();
+
         return [
             'protocolVersion' => \in_array($params['protocolVersion'] ?? null, self::PROTOCOLS, true) ? $params['protocolVersion'] : self::PROTOCOLS[\count(self::PROTOCOLS) - 1],
             'capabilities' => ['tools' => new \stdClass()],
             'serverInfo' => ['name' => self::NAME, 'version' => $this->version],
-            'instructions' => ($note = $this->provider->projectNote()) === null ? self::INSTRUCTIONS : $note . "\n\n" . self::INSTRUCTIONS,
+            'instructions' => $note === null ? self::INSTRUCTIONS : $note . "\n\n" . self::INSTRUCTIONS,
         ];
     }
 
     /**
-     * @return list<array<string, mixed>>
+     * @return list<array{name: string, description: string, inputSchema: array{type: string, properties: \stdClass|array<string, array{type: string, description: string, enum?: list<string>}>, required?: list<string>}}>
      */
     private function tools(): array
     {
@@ -303,7 +308,7 @@ class McpServer
     /**
      * @param array<mixed> $params
      *
-     * @return array<string, mixed>
+     * @return array{content: list<array{type: string, text: string}>, isError: bool}
      */
     private function callTool(array $params): array
     {
@@ -395,7 +400,7 @@ class McpServer
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{jsonrpc: string, id: mixed, error: array{code: int, message: string}}
      */
     private function error(mixed $id, int $code, string $message): array
     {

@@ -247,16 +247,23 @@ final class SourceFacts
             $type = $this->type($param->type);
             // A parameter named after its type says nothing more: `Notification`, not `Notification $notification`.
             $named = $type === null || strcasecmp(ltrim($type, '?'), $name) !== 0 || $param->variadic || $param->default !== null;
-            $parameters[] = trim(implode(' ', array_filter([
-                $type,
-                // An optional parameter, its default left out: `$path?`.
-                $named ? ($param->variadic ? '...' : '') . '$' . $name . ($param->default === null ? '' : '?') : null,
-            ])));
+            $parameters[] = trim(implode(' ', array_filter([$type, $named ? self::parameterName($param, $name) : null])));
         }
         $return = $this->documentedReturn($method->getDocComment()?->getText()) ?? $this->type($method->returnType);
 
         return ($method->isStatic() ? 'static ' : '') . ($method->isProtected() ? 'protected ' : '')
             . $method->name->toString() . '(' . implode(', ', $parameters) . ')' . ($return === null ? '' : ': ' . $return);
+    }
+
+    /**
+     * An optional parameter, its default left out: `$path?`.
+     */
+    private static function parameterName(AstNode\Param $param, string $name): string
+    {
+        $variadic = $param->variadic ? '...' : '';
+        $optional = $param->default === null ? '' : '?';
+
+        return $variadic . '$' . $name . $optional;
     }
 
     /**

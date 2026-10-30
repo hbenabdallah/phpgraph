@@ -42,7 +42,7 @@ final readonly class InjectionStats
     }
 
     /**
-     * @return array<string, int|list<string>>
+     * @return array{injections: int, linked: int, edges: int, unlinkedCount: int, unlinked: list<string>}
      */
     public function toArray(): array
     {

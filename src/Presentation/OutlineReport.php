@@ -59,6 +59,8 @@ final class OutlineReport
         $this->prefix = self::commonDirectory(array_values($files));
         // A section alone lists everything, each line still compact; full also spells out every line.
         $all = $full || $section !== null;
+        // The methods a flow line names, 0 for all.
+        $named = $full ? 0 : 4;
         $more = static fn (array $all, array $shown): string => \count($all) > \count($shown) ? \sprintf(' (+%d)', \count($all) - \count($shown)) : '';
 
         $lines = [
@@ -83,15 +85,7 @@ final class OutlineReport
                 $class,
                 $large['methods'],
                 $example === null ? $class . '::<method>' : $class . '::' . substr($example, (int) strrpos($example, ':') + 1),
-                $large['entries'] === [] ? '' : ' Its entry points: ' . implode(', ', array_map(
-                    static fn (string $method, array $entry): string => substr($method, (int) strrpos($method, ':') + 1) . '() ('
-                        . implode(', ', array_filter([
-                            $entry['routes'] > 0 ? \sprintf('%d route%s', $entry['routes'], $entry['routes'] > 1 ? 's' : '') : null,
-                            $entry['callers'] > 0 ? \sprintf('called by %d class%s', $entry['callers'], $entry['callers'] > 1 ? 'es' : '') : null,
-                        ])) . ')',
-                    array_keys($large['entries']),
-                    $large['entries'],
-                )) . '.',
+                $large['entries'] === [] ? '' : ' Its entry points: ' . implode(', ', array_map(self::entryPoint(...), array_keys($large['entries']), $large['entries'])) . '.',
             );
         }
 
@@ -168,7 +162,7 @@ final class OutlineReport
             $lines[] = 'Core, by namespace' . ($common === '' ? '' : ' (under ' . rtrim($common, '\\') . ')') . ':';
             foreach ($byNamespace as $namespace => $classes) {
                 $layer = Layers::of(explode('\\', (string) $namespace));
-                $lines[] = '  ' . ((string) $namespace === '' ? '(no namespace)' : (substr((string) $namespace, \strlen($common)) ?: (string) $namespace)) . ($layer === null ? '' : ' [' . $layer['segment'] . ']');
+                $lines[] = '  ' . self::namespaceLabel((string) $namespace, $common) . ($layer === null ? '' : ' [' . $layer['segment'] . ']');
                 foreach ($classes as $class) {
                     array_push($lines, ...$this->classLines($class, $outline->facts[$class] ?? null, $all));
                 }
@@ -200,12 +194,16 @@ final class OutlineReport
                 }
                 arsort($modules);
                 $shown = self::limited($all, $modules, \count($modules) > 3 ? 2 : 3);
+                $inModules = '';
+                if ($modules !== []) {
+                    $hidden = \count($modules) > \count($shown) ? \sprintf(' +%d modules', \count($modules) - \count($shown)) : '';
+                    $inModules = ' in ' . implode(', ', array_map(static fn (string $module, int $count): string => $module . ' ' . $count, array_keys($shown), $shown)) . $hidden;
+                }
                 $lines[] = \sprintf(
                     '  %s: %s%s%s',
                     $this->query->label($family['head']),
                     $family['members'] === 0 ? '0 implementations' : $family['members'],
-                    $modules === [] ? '' : ' in ' . implode(', ', array_map(static fn (string $module, int $count): string => $module . ' ' . $count, array_keys($shown), $shown))
-                        . (\count($modules) > \count($shown) ? \sprintf(' +%d modules', \count($modules) - \count($shown)) : ''),
+                    $inModules,
                     $family['receivers'] === [] ? '' : '; received by ' . implode(', ', array_map(fn (string $receiver): string => $this->query->label(explode(' ', $receiver, 2)[0]) . ' ' . (explode(' ', $receiver, 2)[1] ?? ''), $family['receivers'])),
                 );
             }
@@ -242,7 +240,7 @@ final class OutlineReport
                     $classes = array_unique(array_map(static fn (string $caller): string => explode('::', $caller)[0], $callers));
                     $from = [];
                     if ($callers !== []) {
-                        $from[] = \count($classes) > 8 && !$full ? \sprintf('%d classes', \count($classes)) : $this->methodList($callers, $full ? 0 : 4);
+                        $from[] = \count($classes) > 8 && !$full ? \sprintf('%d classes', \count($classes)) : $this->methodList($callers, $named);
                     }
                     // The members of a family by name when few, else counted under the family.
                     foreach ($outline->fromFamilies[$method] ?? [] as $head => $members) {
@@ -253,12 +251,12 @@ final class OutlineReport
                     }
                     // The callers from the core too, else the line reads as every caller while "Inside" is cut.
                     $fromCore = array_keys(array_filter($outline->inside, static fn (array $callees): bool => \in_array($method, $callees, true)));
-                    $lines[] = \sprintf(
-                        '    %s ← %s%s',
-                        $this->query->label($method),
-                        implode(', ', $from),
-                        $fromCore === [] ? '' : ($from === [] ? 'from the core: ' : '; from the core: ') . $this->methodList(array_map('strval', $fromCore), $full ? 0 : 4),
-                    );
+                    $coreCallers = '';
+                    if ($fromCore !== []) {
+                        $separator = $from === [] ? '' : '; ';
+                        $coreCallers = $separator . 'from the core: ' . $this->methodList(array_map('strval', $fromCore), $named);
+                    }
+                    $lines[] = \sprintf('    %s ← %s%s', $this->query->label($method), implode(', ', $from), $coreCallers);
                 }
                 if (!$all && \count($called) > self::ENTRIES) {
                     $lines[] = \sprintf('    +%d more: section flow', \count($called) - self::ENTRIES);
@@ -281,8 +279,8 @@ final class OutlineReport
                         '    %s → %s',
                         $this->query->label($method),
                         implode('; ', array_filter([
-                            $sure === [] ? '' : $this->methodList($sure, $full ? 0 : 4),
-                            $guessed === [] ? '' : 'guessed: ' . $this->methodList($guessed, $full ? 0 : 4),
+                            $sure === [] ? '' : $this->methodList($sure, $named),
+                            $guessed === [] ? '' : 'guessed: ' . $this->methodList($guessed, $named),
                         ])),
                     );
                 }
@@ -593,13 +591,49 @@ final class OutlineReport
     }
 
     /**
+     * `save() (2 routes, called by 3 classes)`: an entry point of a large class.
+     *
+     * @param array{routes: int, callers: int} $entry
+     */
+    private static function entryPoint(string $method, array $entry): string
+    {
+        $uses = [];
+        if ($entry['routes'] > 0) {
+            $uses[] = \sprintf('%d route%s', $entry['routes'], $entry['routes'] > 1 ? 's' : '');
+        }
+        if ($entry['callers'] > 0) {
+            $uses[] = \sprintf('called by %d class%s', $entry['callers'], $entry['callers'] > 1 ? 'es' : '');
+        }
+
+        return substr($method, (int) strrpos($method, ':') + 1) . '() (' . implode(', ', $uses) . ')';
+    }
+
+    /**
+     * A namespace of the core below the one common to all, or whole when it is the common one.
+     */
+    private static function namespaceLabel(string $namespace, string $common): string
+    {
+        if ($namespace === '') {
+            return '(no namespace)';
+        }
+        $below = substr($namespace, \strlen($common));
+
+        return $below === '' ? $namespace : $below;
+    }
+
+    /**
      * `GET /orders openapi.yaml:3`
      */
     private function operationLabel(string $operation): string
     {
+        $label = $this->query->label($operation);
         $node = $this->query->graph()->node($operation);
+        if ($node?->file === null) {
+            return $label;
+        }
+        $line = $node->line === null ? '' : ':' . $node->line;
 
-        return $this->query->label($operation) . ($node?->file === null ? '' : ' ' . $node->file . ($node->line === null ? '' : ':' . $node->line));
+        return $label . ' ' . $node->file . $line;
     }
 
     /**
@@ -652,23 +686,13 @@ final class OutlineReport
     private function json(): string
     {
         $outline = $this->outline;
-
-        return (string) json_encode([
+        $data = [
             'topic' => $outline->topic,
             'seeds' => $outline->seeds,
-            'core' => array_map(static fn (string $class): array => array_filter([
-                'id' => $class,
-                'kind' => $outline->facts[$class]->kind ?? null,
-                'modifiers' => $outline->facts[$class]->modifiers ?? null,
-                'summary' => $outline->facts[$class]->summary ?? null,
-                'signatures' => $outline->facts[$class]->signatures ?? null,
-                'constants' => $outline->facts[$class]->constants ?? null,
-                'cases' => $outline->facts[$class]->cases ?? null,
-                'properties' => ($properties = array_map(static fn (array $property): string => $property['type'], $outline->facts[$class]->properties ?? [])) === [] ? null : $properties,
-            ], static fn (mixed $value): bool => $value !== null), $outline->core),
+            'core' => array_map($this->coreClassData(...), $outline->core),
             'sourcesRead' => $outline->sourcesRead,
             'families' => $outline->families,
-            'routes' => array_map(fn (array $route): array => ['route' => $this->query->label($route['route']), 'id' => $route['route'], 'chain' => $route['chain']] + (($operations = $this->operations($route['route'])) === [] ? [] : ['operations' => $operations]), $outline->routes),
+            'routes' => array_map($this->routeData(...), $outline->routes),
             'operations' => $this->rpcs($outline->core),
             'entries' => $outline->entries,
             'fromFamilies' => $outline->fromFamilies,
@@ -682,9 +706,60 @@ final class OutlineReport
             'topTests' => $outline->topTests,
             'uncovered' => $outline->uncovered,
             'unused' => array_keys($outline->unused),
-        ] + ($outline->method === null ? [] : ['method' => $outline->method, 'depths' => $outline->depths, 'hubs' => $outline->hubs, 'guesses' => $outline->guesses, 'guessed' => $outline->guessed])
-            + ($outline->large === null ? [] : ['large' => $outline->large])
-            + ($outline->left === [] ? [] : ['left' => $outline->left]), \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+        ];
+        if ($outline->method !== null) {
+            $data['method'] = $outline->method;
+            $data['depths'] = $outline->depths;
+            $data['hubs'] = $outline->hubs;
+            $data['guesses'] = $outline->guesses;
+            $data['guessed'] = $outline->guessed;
+        }
+        if ($outline->large !== null) {
+            $data['large'] = $outline->large;
+        }
+        if ($outline->left !== []) {
+            $data['left'] = $outline->left;
+        }
+
+        return (string) json_encode($data, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * A class of the core with the facts its source gave, those it gave none of left out.
+     *
+     * @return array{id: string, kind?: string, modifiers?: list<string>, summary?: string, signatures?: list<string>, constants?: array<string, string>, cases?: array<string, string>, properties?: array<string, string>}
+     */
+    private function coreClassData(string $class): array
+    {
+        $facts = $this->outline->facts[$class] ?? null;
+        $properties = array_map(static fn (array $property): string => $property['type'], $facts->properties ?? []);
+
+        return array_filter([
+            'id' => $class,
+            'kind' => $facts?->kind,
+            'modifiers' => $facts?->modifiers,
+            'summary' => $facts?->summary,
+            'signatures' => $facts?->signatures,
+            'constants' => $facts?->constants,
+            'cases' => $facts?->cases,
+            'properties' => $properties === [] ? null : $properties,
+        ], static fn (mixed $value): bool => $value !== null);
+    }
+
+    /**
+     * @param array{route: string, chain: list<string>} $route
+     *
+     * @return array{route: string, id: string, chain: list<string>, operations?: list<string>}
+     */
+    private function routeData(array $route): array
+    {
+        $data = ['route' => $this->query->label($route['route']), 'id' => $route['route'], 'chain' => $route['chain']];
+        $operations = $this->operations($route['route']);
+        if ($operations !== []) {
+            $data['operations'] = $operations;
+        }
+
+        return $data;
     }
 
     /**

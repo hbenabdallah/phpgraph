@@ -20,12 +20,9 @@ use PhpParser\Node\Scalar;
  *     }
  *     Wiring::wire($services, 'sales_order', 'App\SalesOrder');
  *
- * The facts of a helper are recorded as templates of its parameters, and the calls with their arguments; the builder
- * evaluates them (ConfigurationEvaluator). Nothing is run: a template is a string expression, and the conditions of
- * the helper are ignored.
- *
- * A template is a nested array: ['lit', 'text'], ['param', 'prefix'], ['dir'] (`__DIR__`), ['const', 'Class::NAME'],
- * ['concat', [...]], ['call', 'str_replace', [...]].
+ * The facts of a helper are recorded as templates of its parameters (Template), and the calls with their arguments;
+ * the builder evaluates them (ConfigurationEvaluator). Nothing is run: a template is a string expression, and the
+ * conditions of the helper are ignored.
  */
 final class ConfigurationHelpers
 {
@@ -34,10 +31,13 @@ final class ConfigurationHelpers
      */
     public const FUNCTIONS = ['str_replace', 'sprintf', 'trim', 'ltrim', 'rtrim', 'strtolower', 'strtoupper', 'ucfirst', 'lcfirst', 'dirname', 'basename', 'implode'];
 
-    /** @var array<string, array{params: list<string>, facts: list<array<string, mixed>>}> helper id => what it declares */
-    private array $helpers = [];
+    /** @var array<string, list<string>> helper id => its parameters */
+    private array $helperParams = [];
 
-    /** @var list<array{caller: ?string, callee: string, args: list<array{?string, ?array<mixed>}>, line: int}> */
+    /** @var array<string, list<ServiceDefinitionFact|ServiceTagFact|ServiceArgumentFact>> helper id => what it declares */
+    private array $helperFacts = [];
+
+    /** @var list<PendingHelperCall> */
     private array $calls = [];
 
     private ?string $helper = null;
@@ -72,7 +72,8 @@ final class ConfigurationHelpers
         foreach ($params as $param) {
             $this->params[] = $param->var instanceof Expr\Variable && \is_string($param->var->name) ? $param->var->name : '';
         }
-        $this->helpers[$id] = ['params' => $this->params, 'facts' => []];
+        $this->helperParams[$id] = $this->params;
+        $this->helperFacts[$id] = [];
     }
 
     public function leaveCallable(): void
@@ -92,18 +93,18 @@ final class ConfigurationHelpers
             return;
         }
         // A helper is passed the configurator: a call without any variable argument is not one.
-        $variables = array_filter($args, static fn ($argument): bool => $argument instanceof AstNode\Arg && $argument->value instanceof Expr\Variable);
+        $variables = array_filter($args, static fn (AstNode\Arg|AstNode\ArgPlaceholder|AstNode\VariadicPlaceholder $argument): bool => $argument instanceof AstNode\Arg && $argument->value instanceof Expr\Variable);
         if ($variables === []) {
             return;
         }
 
-        $templates = [];
+        $arguments = [];
         foreach ($args as $argument) {
             if ($argument instanceof AstNode\Arg && !$argument->unpack) {
-                $templates[] = [$argument->name?->toString(), $this->template($argument->value)];
+                $arguments[] = new HelperArgument($argument->name?->toString(), $this->template($argument->value));
             }
         }
-        $this->calls[] = ['caller' => $this->helper, 'callee' => $callee, 'args' => $templates, 'line' => $line];
+        $this->calls[] = new PendingHelperCall($this->helper, $callee, $arguments, $line);
     }
 
     /**
@@ -122,46 +123,48 @@ final class ConfigurationHelpers
 
         $template = $first === null ? null : $this->template($first);
         if ($name === 'set' && $template !== null) {
-            $this->fact(['kind' => 'set', 'id' => $template, 'class' => $second === null ? null : $this->template($second)]);
+            $this->fact(new ServiceDefinitionFact($template, $second === null ? null : $this->template($second)));
         } elseif ($name === 'tag' && $template !== null && $definition !== null) {
-            $this->fact(['kind' => 'tag', 'definition' => $definition, 'name' => $template]);
-        } elseif (($name === 'args' || $name === 'arg') && $definition !== null && $definition[0] === 'set') {
-            foreach ($this->injections($name === 'args' ? $first : $second) as $injection) {
-                $this->fact(['kind' => 'argument', 'id' => $definition[1]] + $injection);
+            $this->fact(new ServiceTagFact($definition[0], $definition[1], $template));
+        } elseif (($name === 'args' || $name === 'arg') && $definition !== null && $definition[0] === DefinitionKind::Set) {
+            foreach ($this->injections($definition[1], $name === 'args' ? $first : $second) as $injection) {
+                $this->fact($injection);
             }
         }
     }
 
     /**
-     * @return array<string, array{params: list<string>, facts: list<array<string, mixed>>}>
+     * @return array<string, ConfigurationHelper> helper id => what it declares
      */
     public function helpers(): array
     {
-        return $this->helpers;
+        $helpers = [];
+        foreach ($this->helperParams as $id => $params) {
+            $helpers[$id] = new ConfigurationHelper($params, $this->helperFacts[$id] ?? []);
+        }
+
+        return $helpers;
     }
 
     /**
-     * @return list<array{caller: ?string, callee: string, args: list<array{?string, ?array<mixed>}>, line: int}>
+     * @return list<PendingHelperCall>
      */
     public function calls(): array
     {
         return $this->calls;
     }
 
-    /**
-     * @param array<string, mixed> $fact
-     */
-    private function fact(array $fact): void
+    private function fact(ServiceDefinitionFact|ServiceTagFact|ServiceArgumentFact $fact): void
     {
         if ($this->helper !== null) {
-            $this->helpers[$this->helper]['facts'][] = $fact;
+            $this->helperFacts[$this->helper][] = $fact;
         }
     }
 
     /**
-     * The definition a chain configures: ['set', id], ['load', namespace] or ['instanceof', type], as templates.
+     * The definition a chain configures: a service id, a namespace or a type, as a template.
      *
-     * @return array{string, array<mixed>}|null
+     * @return array{DefinitionKind, Template}|null
      */
     private function definition(Expr $chain): ?array
     {
@@ -169,11 +172,11 @@ final class ConfigurationHelpers
             if (!$chain->name instanceof Identifier) {
                 continue;
             }
-            $name = strtolower($chain->name->toString());
+            $kind = DefinitionKind::tryFrom(strtolower($chain->name->toString()));
             $first = $this->argument($chain->args, 0);
             $template = $first === null ? null : $this->template($first);
-            if ($template !== null && \in_array($name, ['set', 'load', 'instanceof'], true)) {
-                return [$name, $template];
+            if ($template !== null && $kind !== null) {
+                return [$kind, $template];
             }
         }
 
@@ -181,16 +184,16 @@ final class ConfigurationHelpers
     }
 
     /**
-     * `tagged_iterator(...)`, `tagged_locator(...)`, `service(...)`, alone or in an array.
+     * `tagged_iterator(...)`, `tagged_locator(...)`, `service(...)`, alone or in an array, injected into a service.
      *
-     * @return list<array{tag: ?array<mixed>, service: ?array<mixed>, locator?: bool}>
+     * @return list<ServiceArgumentFact>
      */
-    private function injections(?Expr $value): array
+    private function injections(Template $id, ?Expr $value): array
     {
         if ($value instanceof Expr\Array_) {
             $injections = [];
             foreach ($value->items as $item) {
-                array_push($injections, ...$this->injections($item->value));
+                array_push($injections, ...$this->injections($id, $item->value));
             }
 
             return $injections;
@@ -206,29 +209,29 @@ final class ConfigurationHelpers
         }
 
         return match (strtolower($value->name->getLast())) {
-            'tagged_iterator' => [['tag' => $template, 'service' => null]],
-            'tagged_locator' => [['tag' => $template, 'service' => null, 'locator' => true]],
-            'service' => [['tag' => null, 'service' => $template]],
+            'tagged_iterator' => [new ServiceArgumentFact($id, $template, null)],
+            'tagged_locator' => [new ServiceArgumentFact($id, $template, null, locator: true)],
+            'service' => [new ServiceArgumentFact($id, null, $template)],
             default => [],
         };
     }
 
     /**
-     * @return array<mixed>|null null for an expression a template cannot hold
+     * @return ?Template null for an expression a template cannot hold
      */
-    private function template(Expr $expr): ?array
+    private function template(Expr $expr): ?Template
     {
         if ($expr instanceof Scalar\String_) {
-            return ['lit', $expr->value];
+            return Template::literal($expr->value);
         }
         if ($expr instanceof Scalar\Int_) {
-            return ['lit', (string) $expr->value];
+            return Template::literal((string) $expr->value);
         }
         if ($expr instanceof Scalar\MagicConst\Dir) {
-            return ['dir'];
+            return Template::directory();
         }
         if ($expr instanceof Expr\Variable && \is_string($expr->name) && \in_array($expr->name, $this->params, true)) {
-            return ['param', $expr->name];
+            return Template::parameter($expr->name);
         }
         if ($expr instanceof Expr\ClassConstFetch && $expr->class instanceof Name && $expr->name instanceof Identifier) {
             $class = ($this->resolve)($expr->class);
@@ -236,21 +239,25 @@ final class ConfigurationHelpers
                 return null;
             }
 
-            return strtolower($expr->name->toString()) === 'class' ? ['lit', ltrim($class, '\\')] : ['const', $class . '::' . $expr->name->toString()];
+            return strtolower($expr->name->toString()) === 'class' ? Template::literal(ltrim($class, '\\')) : Template::constant($class . '::' . $expr->name->toString());
         }
         if ($expr instanceof Expr\BinaryOp\Concat) {
             $left = $this->template($expr->left);
             $right = $this->template($expr->right);
 
-            return $left === null || $right === null ? null : ['concat', [$left, $right]];
+            return $left === null || $right === null ? null : Template::concat([$left, $right]);
         }
         if ($expr instanceof Scalar\InterpolatedString) {
             $parts = [];
             foreach ($expr->parts as $part) {
-                $parts[] = $part instanceof AstNode\InterpolatedStringPart ? ['lit', $part->value] : $this->template($part);
+                $template = $part instanceof AstNode\InterpolatedStringPart ? Template::literal($part->value) : $this->template($part);
+                if ($template === null) {
+                    return null;
+                }
+                $parts[] = $template;
             }
 
-            return \in_array(null, $parts, true) ? null : ['concat', $parts];
+            return Template::concat($parts);
         }
         if ($expr instanceof Expr\FuncCall && $expr->name instanceof Name && \in_array(strtolower($expr->name->getLast()), self::FUNCTIONS, true)) {
             $arguments = [];
@@ -258,28 +265,34 @@ final class ConfigurationHelpers
                 if (!$argument instanceof AstNode\Arg || $argument->unpack || $argument->name !== null) {
                     return null;
                 }
-                $arguments[] = $argument->value instanceof Expr\Array_ ? $this->listTemplate($argument->value) : $this->template($argument->value);
+                $template = $argument->value instanceof Expr\Array_ ? $this->listTemplate($argument->value) : $this->template($argument->value);
+                if ($template === null) {
+                    return null;
+                }
+                $arguments[] = $template;
             }
 
-            return \in_array(null, $arguments, true) ? null : ['call', strtolower($expr->name->getLast()), $arguments];
+            return Template::call(strtolower($expr->name->getLast()), $arguments);
         }
 
         return null;
     }
 
     /**
-     * An array of strings, for str_replace() and implode(): ['list', [...]].
-     *
-     * @return array<mixed>|null
+     * An array of strings, for str_replace() and implode().
      */
-    private function listTemplate(Expr\Array_ $array): ?array
+    private function listTemplate(Expr\Array_ $array): ?Template
     {
         $items = [];
         foreach ($array->items as $item) {
-            $items[] = $item->key === null ? $this->template($item->value) : null;
+            $template = $item->key === null ? $this->template($item->value) : null;
+            if ($template === null) {
+                return null;
+            }
+            $items[] = $template;
         }
 
-        return \in_array(null, $items, true) ? null : ['list', $items];
+        return Template::list($items);
     }
 
     /**

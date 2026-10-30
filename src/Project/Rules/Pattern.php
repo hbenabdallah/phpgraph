@@ -23,7 +23,9 @@ final class Pattern
             $pattern .= '**';
         }
 
-        return preg_match(self::$compiled[$pattern] ??= self::compile($pattern), $name) === 1;
+        $regex = self::$compiled[$pattern] ??= self::compile($pattern);
+
+        return preg_match($regex, $name) === 1;
     }
 
     /**

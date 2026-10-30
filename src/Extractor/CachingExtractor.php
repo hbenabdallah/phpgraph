@@ -22,6 +22,9 @@ final class CachingExtractor implements FileExtractor
     private const ALLOWED_CLASSES = [
         FileExtraction::class, Node::class, Edge::class, PendingCall::class, TypeExpr::class, HandlerFact::class,
         PendingDispatch::class, RouteFact::class, PendingRequest::class, NodeKind::class, Relation::class, Confidence::class,
+        ConditionalReturn::class, ConditionalTest::class, ConditionalClass::class, ConditionalArgument::class,
+        ConfigurationHelper::class, ServiceDefinitionFact::class, ServiceTagFact::class, ServiceArgumentFact::class,
+        DefinitionKind::class, Template::class, TemplateKind::class, PendingHelperCall::class, HelperArgument::class,
     ];
 
     /** @var array<string, FileExtraction> loaded from the previous build */

@@ -26,18 +26,28 @@ final readonly class Node
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{id: string, label: string, kind: string, file: ?string, line: ?int, service?: string, modifiers?: list<string>, alias?: string}
      */
     public function toArray(): array
     {
-        return [
+        $data = [
             'id' => $this->id,
             'label' => $this->label,
             'kind' => $this->kind->value,
             'file' => $this->file,
             'line' => $this->line,
-        ] + ($this->service === null ? [] : ['service' => $this->service]) + ($this->modifiers === [] ? [] : ['modifiers' => $this->modifiers])
-            + ($this->alias === null ? [] : ['alias' => $this->alias]);
+        ];
+        if ($this->service !== null) {
+            $data['service'] = $this->service;
+        }
+        if ($this->modifiers !== []) {
+            $data['modifiers'] = $this->modifiers;
+        }
+        if ($this->alias !== null) {
+            $data['alias'] = $this->alias;
+        }
+
+        return $data;
     }
 
     /**

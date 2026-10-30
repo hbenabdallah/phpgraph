@@ -180,7 +180,11 @@ final class YamlRoutes
      */
     private function methods(mixed $methods): array
     {
-        $list = \is_string($methods) ? explode('|', $methods) : (\is_array($methods) ? $methods : []);
+        $list = match (true) {
+            \is_string($methods) => explode('|', $methods),
+            \is_array($methods) => $methods,
+            default => [],
+        };
 
         return array_values(array_map(static fn (mixed $method): string => strtoupper((string) $method), array_filter($list, 'is_string')));
     }

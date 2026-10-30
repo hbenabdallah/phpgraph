@@ -49,7 +49,7 @@ final readonly class CallStats
     }
 
     /**
-     * @return array<string, int>
+     * @return array{total: int, inferred: int, ambiguous: int, outsideProject: int, unknownReceiver: int, chainOutsideProject: int}
      */
     public function toArray(): array
     {

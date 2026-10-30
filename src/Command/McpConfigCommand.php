@@ -53,11 +53,21 @@ final class McpConfigCommand extends Command
         $image = $input->getOption('docker');
         // In Docker, as the current user: graph.json and the cache belong to them, not to root.
         $user = \function_exists('posix_getuid') && \function_exists('posix_getgid') ? ['-u', posix_getuid() . ':' . posix_getgid()] : [];
-        [$command, $arguments] = \is_string($image)
-            ? ['docker', ['run', '--rm', '-i', ...$user, '-v', $project . ':/project', $image, 'serve', '/project']]
-            : [$this->runner()[0], [...$this->runner()[1], 'serve', ...($everyProject ? [] : [$project])]];
+        if (\is_string($image)) {
+            $command = 'docker';
+            $arguments = ['run', '--rm', '-i', ...$user, '-v', $project . ':/project', $image, 'serve', '/project'];
+        } else {
+            [$command, $arguments] = $this->runner();
+            $arguments[] = 'serve';
+            if (!$everyProject) {
+                $arguments[] = $project;
+            }
+        }
 
-        $server = ($agent === 'cursor' ? ['type' => 'stdio'] : []) + ['command' => $command, 'args' => $arguments];
+        $server = ['command' => $command, 'args' => $arguments];
+        if ($agent === 'cursor') {
+            $server = ['type' => 'stdio', ...$server];
+        }
         $json = json_encode(['mcpServers' => ['phpgraph' => $server]], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
 
         $lines = match ($agent) {

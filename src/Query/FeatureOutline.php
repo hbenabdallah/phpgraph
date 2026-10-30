@@ -89,8 +89,14 @@ final class FeatureOutline
         }
         // Most seeds classes about the question: a method elsewhere named after it uses the feature, it is not it
         // (PageContent::base64ImageUriToUploadedImageUrl() beside ImageService). Few: the feature lives in methods.
-        $about = array_filter(array_keys($seeds), fn (int|string $class): bool => isset($routed[$class])
-            || (($node = $this->graph->node((string) $class)) !== null && $this->relevance->score($node, $subgraph->terms) > 0));
+        $about = array_filter(array_keys($seeds), function (int|string $class) use ($routed, $subgraph): bool {
+            if (isset($routed[$class])) {
+                return true;
+            }
+            $node = $this->graph->node((string) $class);
+
+            return $node !== null && $this->relevance->score($node, $subgraph->terms) > 0;
+        });
         // A route named after the question is the application's own word for it: then too.
         if (2 * \count($about) > \count($seeds) || $routed !== []) {
             $seeds = array_fill_keys($about, true);

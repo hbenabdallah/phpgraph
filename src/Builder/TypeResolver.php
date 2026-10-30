@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace PhpGraph\Builder;
 
 use PhpGraph\Builder\Libraries\Libraries;
+use PhpGraph\Extractor\ConditionalArgument;
+use PhpGraph\Extractor\ConditionalClass;
+use PhpGraph\Extractor\ConditionalReturn;
+use PhpGraph\Extractor\ConditionalTest;
 use PhpGraph\Extractor\GenericType;
 use PhpGraph\Extractor\TypeExpr;
 use PhpGraph\Graph\Graph;
 use PhpGraph\Graph\NodeKind;
 use PhpGraph\Graph\Relation;
-use PhpGraph\Values;
 use PhpGraph\Vendor\ClassSignature;
 use PhpGraph\Vendor\VendorSignatures;
 
@@ -590,9 +593,7 @@ final class TypeResolver
                 ? [$this->returnTypes[$id] ?? null, $this->generics->returns[$id] ?? null, $this->generics->conditionals[$id] ?? null, $this->generics->binders[$id] ?? []]
                 : ($this->vendor?->function($name) ?? [null, null, null, []]);
             if ($conditional !== null) {
-                $decided = json_decode($conditional, true);
-
-                return \is_array($decided) ? $this->decide($decided, $call->arguments) : null;
+                return $this->decide($conditional, $call->arguments);
             }
             if ($generic !== null) {
                 $bound = GenericType::substitute($generic, $this->methodBindings($binders, $call), null);
@@ -664,32 +665,35 @@ final class TypeResolver
     }
 
     /**
-     * @param array<mixed> $tree      a conditional return type (DocTypeResolver::RETURN_CONDITIONAL)
+     * The class a branch of a conditional return type gives to a call, by the arguments it passes.
+     *
      * @param list<string> $arguments
      */
-    private function decide(array $tree, array $arguments, int $depth = 0): ?string
+    private function decide(ConditionalReturn|ConditionalClass|ConditionalArgument $branch, array $arguments, int $depth = 0): ?string
     {
         if ($depth > 5) {
             return null;
         }
-        if (\array_key_exists('type', $tree)) {
-            return \is_string($tree['type']) && $tree['type'] !== TypeExpr::STATIC ? $this->names->canonical($tree['type']) : null;
+        if ($branch instanceof ConditionalClass) {
+            return $branch->class !== null && $branch->class !== TypeExpr::STATIC ? $this->names->canonical($branch->class) : null;
         }
-        if (isset($tree['arg'])) {
-            $argument = $arguments[Values::number($tree['arg'])] ?? '';
+        if ($branch instanceof ConditionalArgument) {
+            $argument = $arguments[$branch->position] ?? '';
 
             return str_starts_with($argument, 'class:') ? $this->names->canonical(substr($argument, 6)) : null;
         }
         // Absent, the parameter takes its default: null for the functions written so.
-        $argument = $arguments[Values::number($tree['param'] ?? 0)] ?? 'null';
-        $holds = match ($tree['test'] ?? null) {
-            'null' => $argument === 'null' ? true : ($argument === '?' ? null : false),
-            'class' => str_starts_with($argument, 'class:') ? true : ($argument === '?' ? null : false),
-            default => null,
+        $argument = $arguments[$branch->parameter] ?? 'null';
+        // An argument of unknown type decides nothing.
+        if ($argument === '?') {
+            return null;
+        }
+        $holds = match ($branch->test) {
+            ConditionalTest::IsNull => $argument === 'null',
+            ConditionalTest::IsClass => str_starts_with($argument, 'class:'),
         };
-        $branch = $holds === null ? null : ($holds ? $tree['then'] ?? null : $tree['else'] ?? null);
 
-        return \is_array($branch) ? $this->decide($branch, $arguments, $depth + 1) : null;
+        return $this->decide($holds ? $branch->then : $branch->else, $arguments, $depth + 1);
     }
 
     /**
@@ -704,7 +708,10 @@ final class TypeResolver
             return null;
         }
         $binders = $this->generics->binders[$method] ?? $this->vendorSignature($owner)->templateBinders[$method] ?? [];
-        $bindings = $this->bindings($receiverType, $owner) + ($binders === [] ? [] : $this->methodBindings($binders, $call));
+        $bindings = $this->bindings($receiverType, $owner);
+        if ($binders !== []) {
+            $bindings += $this->methodBindings($binders, $call);
+        }
         $returned = GenericType::substitute($generic, $bindings, $receiverType);
 
         return $returned === null ? null : $this->canonicalType($returned);

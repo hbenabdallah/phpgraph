@@ -70,7 +70,11 @@ final readonly class ApiSchemaStats
     }
 
     /**
-     * @return array<string, int|list<string>>
+     * @return array{
+     *     documents: int, operations: int, implemented: int, notImplemented: list<string>, routesCovered: int,
+     *     undocumentedCount: int, undocumented: list<string>, rpcs: int, rpcsImplemented: int,
+     *     rpcsNotImplemented: list<string>, otherApis: int, requests: int,
+     * }
      */
     public function toArray(): array
     {
