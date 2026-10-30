@@ -73,12 +73,27 @@ final class FeatureOutline
         $subgraph = $this->query->subgraph($topic, 1, 10, false);
         // A class named exactly is the seed, not every class sharing a word of its name (ReservationCTRL, not each *CTRL).
         $seeds = array_fill_keys($this->namedClasses($topic), true);
+        $routed = [];
         foreach ($seeds !== [] ? [] : $subgraph->seeds as $seed) {
-            $class = explode('::', $seed->id)[0];
-            $node = $this->graph->node($class);
-            if ($node !== null && $node->kind->isClassLike() && $node->file !== null) {
-                $seeds[$class] = true;
+            // A route named after the question (`home` for GET /) opens it through its handler's class.
+            $classes = $seed->kind === NodeKind::Route ? $this->handlerClasses($seed->id) : [explode('::', $seed->id)[0]];
+            foreach ($classes as $class) {
+                $node = $this->graph->node($class);
+                if ($node !== null && $node->kind->isClassLike() && $node->file !== null) {
+                    $seeds[$class] = true;
+                    if ($seed->kind === NodeKind::Route) {
+                        $routed[$class] = true;
+                    }
+                }
             }
+        }
+        // Most seeds classes about the question: a method elsewhere named after it uses the feature, it is not it
+        // (PageContent::base64ImageUriToUploadedImageUrl() beside ImageService). Few: the feature lives in methods.
+        $about = array_filter(array_keys($seeds), fn (int|string $class): bool => isset($routed[$class])
+            || (($node = $this->graph->node((string) $class)) !== null && $this->relevance->score($node, $subgraph->terms) > 0));
+        // A route named after the question is the application's own word for it: then too.
+        if (2 * \count($about) > \count($seeds) || $routed !== []) {
+            $seeds = array_fill_keys($about, true);
         }
         if ($seeds === []) {
             return null;
@@ -88,7 +103,7 @@ final class FeatureOutline
         $cluster = new FeatureCluster($this->graph, $this->relevance);
         $named = $this->namedClasses($topic);
         $terms = $named === [] ? $subgraph->terms : $this->distinctive($subgraph->terms);
-        ['core' => $core, 'families' => $families] = $cluster->grow($seeds, $terms, $named);
+        ['core' => $core, 'families' => $families, 'hubs' => $hubs, 'left' => $left] = $cluster->grow($seeds, $terms, $named);
         $inCore = array_fill_keys($core, true);
         // The members of an interface family are the family's: counted with it, not as users of the core.
         $members = [];
@@ -102,11 +117,13 @@ final class FeatureOutline
 
         // The parent of what is asked, shared by many (the parent of every controller), is in the core for what the
         // core uses of it only: those methods, not its sixty others, its callers nor the actions of other controllers.
-        // A base class of the feature itself (the problem details of every response) stays whole.
+        // A base class of the feature itself (the problem details of every response) stays whole. A class used by many
+        // that joined the core (the User model), no parent class, is narrowed the same way: its users are not the feature's.
         $ancestors = $this->ancestors($seeds);
         $shared = [];
         foreach ($core as $class) {
-            if (isset($ancestors[$class]) && !\in_array($class, $seeds, true) && \count($cluster->membersOf($class)) >= MethodCone::HUB) {
+            if ((isset($ancestors[$class]) && !\in_array($class, $seeds, true) && \count($cluster->membersOf($class)) >= MethodCone::HUB)
+                || (\in_array($class, $hubs, true) && \count($cluster->membersOf($class)) < 2)) {
                 $shared[$class] = $this->usedBy($class, $inCore);
             }
         }
@@ -118,7 +135,8 @@ final class FeatureOutline
             $found = $this->facts($class);
             $sourcesRead = $sourcesRead && $found !== null;
             if ($found !== null) {
-                $facts[$class] = isset($shared[$class]) ? $this->narrowed($found, $shared[$class], false) : $found;
+                // Its properties naming the feature's own classes: not another class used by many (`$stars: Collection<int, User>`).
+                $facts[$class] = isset($shared[$class]) ? $this->narrowed($found, $shared[$class], false, array_diff_key($inCore, array_flip($hubs))) : $found->withProperties([]);
             }
         }
         $methodsShown = [];
@@ -132,7 +150,8 @@ final class FeatureOutline
         }
 
         [$entries, $closures, $inside, $fromFamilies] = $this->calls($own, $inCore, $members);
-        [$routes, $routeEntries] = $this->routes($entries, $inside, $members, $own, $core);
+        // The actions a parent class used by many handles are its subclasses' (every controller's), not the feature's.
+        [$routes, $routeEntries] = $this->routes($entries, $inside, $members, $own, array_values(array_diff($core, $hubs)));
         // The entries followed to the routes first, then those called by the most classes.
         uksort($entries, fn (string $a, string $b): int => [!\in_array($a, $routeEntries, true), -\count($this->classesOf($entries[$a]))]
             <=> [!\in_array($b, $routeEntries, true), -\count($this->classesOf($entries[$b]))]);
@@ -223,7 +242,7 @@ final class FeatureOutline
             $closures,
             $inside,
             $hints,
-            $this->wiring($core, $shared === [] ? null : $methodsShown),
+            $this->wiring(array_values(array_diff($core, $hubs)), $shared === [] ? null : $methodsShown),
             $consumers,
             $consumerFiles,
             $tests,
@@ -231,7 +250,25 @@ final class FeatureOutline
             $uncovered,
             $unused,
             large: \count($named) === 1 ? $this->large($named[0]) : null,
+            left: $left,
         );
+    }
+
+    /**
+     * The classes handling a route: its controller method's class, or the class itself.
+     *
+     * @return list<string>
+     */
+    private function handlerClasses(string $route): array
+    {
+        $classes = [];
+        foreach ($this->graph->incident($route) as $item) {
+            if ($item['forward'] && $item['edge']->relation === Relation::HandledBy) {
+                $classes[] = explode('::', $item['other'])[0];
+            }
+        }
+
+        return array_values(array_unique($classes));
     }
 
     /**
@@ -376,7 +413,7 @@ final class FeatureOutline
             $found = $this->facts($class);
             $sourcesRead = $sourcesRead && $found !== null;
             if ($found !== null) {
-                $facts[$class] = $this->narrowed($found, $byClass[$class] ?? [], $class === $startClass);
+                $facts[$class] = $this->narrowed($found, $byClass[$class] ?? [], $class === $startClass, []);
             }
         }
 
@@ -449,10 +486,17 @@ final class FeatureOutline
      * What a class's source says of the methods a method runs only: their signatures (the private ones too) and
      * their hints; its constants for the class of the method itself.
      *
-     * @param array<string, int> $methods lowercase name => calls away from the method
+     * @param array<string, int>  $methods lowercase name => calls away from the method
+     * @param array<string, true> $inCore  the core's classes: the properties naming one of them are kept
      */
-    private function narrowed(ClassFacts $facts, array $methods, bool $own): ClassFacts
+    private function narrowed(ClassFacts $facts, array $methods, bool $own, array $inCore): ClassFacts
     {
+        // What the core finds on it besides its methods: the User model's `$log: Log`, the feed's tab.
+        $properties = array_filter($facts->properties, static fn (array $property): bool => array_filter(
+            $property['classes'],
+            static fn (string $class): bool => isset($inCore[$class]) && $class !== $facts->id,
+        ) !== []);
+
         $signatures = [];
         foreach ($methods as $name => $depth) {
             $found = array_values(array_filter($facts->signatures, static fn (string $signature): bool => str_starts_with(strtolower($signature), $name . '(')));
@@ -468,6 +512,7 @@ final class FeatureOutline
             $own || str_starts_with($facts->kind, 'enum') ? $facts->constants : [],
             $facts->cases,
             array_values(array_filter($facts->hints, static fn (Hint $hint): bool => isset($methods[strtolower($hint->method)]))),
+            $properties,
         );
     }
 
@@ -846,7 +891,9 @@ final class FeatureOutline
                     }
                     $owner = explode('::', $item['other'])[0];
                     $other = $this->graph->node($owner);
-                    if (isset($inCore[$owner]) || $other === null || !$other->kind->isClassLike() || $other->file === null) {
+                    // A test may be a script (Pest): the file calls the core.
+                    if (isset($inCore[$owner]) || $other === null || $other->file === null
+                        || !($other->kind->isClassLike() || ($other->kind === NodeKind::File && TestFiles::isTest($other->file)))) {
                         continue;
                     }
                     $files[$other->file] = true;
@@ -898,8 +945,10 @@ final class FeatureOutline
                     continue;
                 }
                 foreach ($this->graph->incident($method) as $item) {
+                    // A Pest test is a script too: its calls are the tests', not configuration.
                     $caller = $this->graph->node($item['other']);
-                    if ($item['forward'] || $item['edge']->relation !== Relation::Calls || $caller?->kind !== NodeKind::File) {
+                    if ($item['forward'] || $item['edge']->relation !== Relation::Calls || $caller?->kind !== NodeKind::File
+                        || $caller->file === null || TestFiles::isTest($caller->file)) {
                         continue;
                     }
                     foreach ($item['edge']->lines() as $line) {

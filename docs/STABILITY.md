@@ -45,7 +45,8 @@ Format 2: `{"version": 2, "meta": {...}, "nodes": [...], "edges": [...]}`.
 
 - A node: `id`, `label`, `kind`, `file` (relative path or null), `line` (or null), `service` in a multi-service
   repository, and `modifiers` when it has some: `final`, `abstract`, `readonly` on a class; `protected` or `private`
-  (public otherwise), `static`, `abstract`, `final` on a method (since 1.5.0).
+  (public otherwise), `static`, `abstract`, `final` on a method (since 1.5.0), and `alias` on a route the code names
+  (`home`, `order_show`; since 1.6.0).
 - Node kinds: `file`, `class`, `interface`, `trait`, `enum`, `method`, `function`, `external`, `channel`, `route`,
   `operation` (since 1.2.0).
 - Node ids: `App\Domain\Order` for a class, `App\Domain\Order::place` for a method, `file:src/Order.php` for a file,

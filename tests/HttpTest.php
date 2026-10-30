@@ -185,6 +185,33 @@ final class HttpTest extends TestCase
         self::assertContains('GET /v2/categories', $this->routes((new \PhpGraph\Builder\GraphBuilder())->build($this->root)->graph), 'the prefix of a YAML import');
     }
 
+    public function testRoutesKeepTheNameTheCodeGivesThem(): void
+    {
+        $graph = $this->buildProject([
+            'app/Http/Controllers/LogController.php' => 'namespace App\Http\Controllers; class LogController { public function index(): void {} }',
+            'app/Http/Controllers/PhotoController.php' => 'namespace App\Http\Controllers; class PhotoController { public function index(): void {} }',
+            'routes/web.php' => 'use App\Http\Controllers\LogController; use App\Http\Controllers\PhotoController; use Illuminate\Support\Facades\Route;'
+                . ' Route::get("/", [LogController::class, "index"])->middleware("web")->name("home");'
+                . ' Route::name("admin.")->prefix("admin")->group(function () { Route::name("logs")->get("/logs", [LogController::class, "index"]); });'
+                . ' Route::group(["as" => "api.", "prefix" => "api"], function () { Route::resource("photos", PhotoController::class); });'
+                . ' Route::get("/about", [LogController::class, "index"]);',
+            'src/OrderController.php' => 'namespace App; use Symfony\Component\Routing\Attribute\Route; #[Route("/orders", name: "order_")] class OrderController { #[Route("/{id}", name: "show", methods: ["GET"])] public function show(int $id): void {} #[Route("/new", "new")] public function create(): void {} }',
+            'config/routes.yaml' => "cart_checkout:\n    path: /checkout\n    controller: App\\OrderController::show\n",
+            'config/routes/health.php' => 'use App\OrderController; use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;'
+                . ' return static function (RoutingConfigurator $routes): void { $routes->add("order_list", "/orders")->controller([OrderController::class, "show"]); };',
+        ])->graph;
+
+        $alias = static fn (string $id): ?string => $graph->node($id)?->alias;
+        self::assertSame('home', $alias('route:routes/web.php#GET /'), 'chained after the middleware');
+        self::assertSame('admin.logs', $alias('route:routes/web.php#GET /admin/logs'), 'the group\'s name, then the route\'s written before its call');
+        self::assertSame('api.photos.index', $alias('route:routes/web.php#GET /api/photos'), 'as Laravel names a resource');
+        self::assertNull($alias('route:routes/web.php#GET /about'));
+        self::assertSame('order_show', $alias('route:src/OrderController.php#GET /orders/{id}'), 'the class\'s name first, as Symfony does');
+        self::assertSame('order_new', $alias('route:src/OrderController.php#ANY /orders/new'));
+        self::assertSame('cart_checkout', $alias('route:config/routes.yaml#ANY /checkout'));
+        self::assertSame('order_list', $alias('route:config/routes/health.php#ANY /orders'));
+    }
+
     public function testRoutesOfPhpRoutingFilesAndPathsHeldInConstants(): void
     {
         $graph = $this->buildProject([

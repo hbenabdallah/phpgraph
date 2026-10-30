@@ -48,6 +48,7 @@ final class YamlRoutes
                     continue;
                 }
                 $definition['line'] = $this->line($content, (string) $name);
+                $definition['name'] = (string) $name;
                 // `api_platform: { resource: ., type: api_platform, prefix: /api }`: a loader of routes declared elsewhere.
                 if (\is_string($definition['type'] ?? null) && $definition['type'] !== 'attribute' && $definition['type'] !== 'annotation') {
                     $this->loaderPrefixes[$file][$definition['type']][] = \is_string($definition['prefix'] ?? null) ? $definition['prefix'] : '';
@@ -82,6 +83,7 @@ final class YamlRoutes
                         $file,
                         Values::optionalNumber($definition['line'] ?? null),
                         $serviceId,
+                        name: Values::optionalText($definition['name'] ?? null),
                     );
                 }
             }

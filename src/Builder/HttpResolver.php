@@ -64,7 +64,7 @@ final class HttpResolver
         foreach ($routes as [$route, $service]) {
             $id = NameCanonicalizer::qualify($route->id(), $service);
             if (!$this->graph->hasNode($id)) {
-                $this->graph->addNode(new Node($id, $route->label(), NodeKind::Route, $route->file, $route->line, $service === '' ? null : $service));
+                $this->graph->addNode(new Node($id, $route->label(), NodeKind::Route, $route->file, $route->line, $service === '' ? null : $service, alias: $route->name));
                 $this->routes[$id] = [$route->methods, $this->segments($route->path), $service];
                 $this->hosts[$id] = $route->host;
             }

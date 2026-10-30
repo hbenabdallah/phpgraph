@@ -140,6 +140,8 @@ final class Relevance
         $id = str_contains($node->id, '@') ? substr($node->id, (int) strpos($node->id, '@') + 1) : $node->id;
         if ($node->kind === NodeKind::Route || $node->kind === NodeKind::Operation) {
             $add($node->label, self::NAME);
+            // The name the code calls it by: `home` for GET /.
+            $add((string) $node->alias, self::NAME);
             $add((string) $node->file, self::NAMESPACE);
 
             return $words;

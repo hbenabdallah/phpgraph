@@ -89,7 +89,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var list<int> object ids of the Laravel route groups pushing a path prefix */
     private array $routeGroups = [];
 
-    /** @var list<array{name: string, handles: ?string, method: ?string, key: ?string, path: ?string, methods: list<string>}> */
+    /** @var array<int, string> object id of a Laravel route's call => the name chained around it, `->name('home')` */
+    private array $routeNames = [];
+
+    /** @var list<array{name: string, handles: ?string, method: ?string, key: ?string, path: ?string, methods: list<string>, routeName: ?string}> */
     private array $classAttributes = [];
 
     /** @var array<string, string> */
@@ -2379,9 +2382,21 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         $name = strtolower($node->name->toString());
+        // ->name('home') around the route's call, Route::get(...)->middleware('auth')->name('home'): kept for it.
+        if ($name === 'name' && $node instanceof Expr\MethodCall && ($this->argumentNode($node->args, 0)?->value) instanceof AstNode\Scalar\String_) {
+            for ($call = $node->var; $call instanceof Expr\MethodCall || $call instanceof Expr\StaticCall; $call = $call instanceof Expr\MethodCall ? $call->var : null) {
+                if ($call->name instanceof Identifier && RouteExtractor::isLaravelVerb($call->name->toString())) {
+                    $this->routeNames[spl_object_id($call)] = $this->argumentNode($node->args, 0)->value->value;
+                    break;
+                }
+            }
+
+            return;
+        }
         if ($name === 'group') {
             $prefix = '';
             $host = null;
+            $namePrefix = '';
             $first = $this->argumentNode($node->args, 0);
             if ($first !== null && $first->value instanceof Expr\Array_) {
                 foreach ($first->value->items as $item) {
@@ -2390,6 +2405,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                     }
                     if ($item->key instanceof AstNode\Scalar\String_ && $item->key->value === 'domain') {
                         $host = $item->value instanceof AstNode\Scalar\String_ ? strtolower($item->value->value) : '*';
+                    }
+                    if ($item->key instanceof AstNode\Scalar\String_ && $item->key->value === 'as' && $item->value instanceof AstNode\Scalar\String_) {
+                        $namePrefix = $item->value->value;
                     }
                 }
             }
@@ -2402,14 +2420,25 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                 if ($call->name instanceof Identifier && strtolower($call->name->toString()) === 'domain' && $argument !== null) {
                     $host = $argument->value instanceof AstNode\Scalar\String_ ? strtolower($argument->value->value) : '*';
                 }
+                if ($call->name instanceof Identifier && strtolower($call->name->toString()) === 'name' && $argument?->value instanceof AstNode\Scalar\String_) {
+                    $namePrefix = $argument->value->value . $namePrefix;
+                }
             }
             $this->routeGroups[] = spl_object_id($node);
-            $this->http->pushPrefix(trim($prefix, '/'), $host);
+            $this->http->pushPrefix(trim($prefix, '/'), $host, $namePrefix);
 
             return;
         }
 
-        $this->http->onLaravelRoute($name, $node->args, $node->getStartLine(), fn (Name $class): ?string => $this->resolveName($class));
+        // Route::name('home')->get(...): the name written before the route's call.
+        $routeName = $this->routeNames[spl_object_id($node)] ?? null;
+        for ($call = $node instanceof Expr\MethodCall ? $node->var : null; $routeName === null && ($call instanceof Expr\MethodCall || $call instanceof Expr\StaticCall); $call = $call instanceof Expr\MethodCall ? $call->var : null) {
+            $argument = $this->argumentNode($call->args, 0);
+            if ($call->name instanceof Identifier && strtolower($call->name->toString()) === 'name' && $argument?->value instanceof AstNode\Scalar\String_) {
+                $routeName = $argument->value->value;
+            }
+        }
+        $this->http->onLaravelRoute($name, $node->args, $node->getStartLine(), fn (Name $class): ?string => $this->resolveName($class), $routeName);
     }
 
     /**
@@ -2495,7 +2524,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /**
      * @param array<AstNode\AttributeGroup> $groups
      *
-     * @return list<array{name: string, path: ?string, methods: list<string>}>
+     * @return list<array{name: string, path: ?string, methods: list<string>, routeName: ?string}>
      */
     private function routeAttributes(array $groups): array
     {
@@ -2561,19 +2590,22 @@ final class ExtractionVisitor extends NodeVisitorAbstract
      *
      * @param array<AstNode\AttributeGroup> $groups
      *
-     * @return list<array{name: string, handles: ?string, method: ?string, key: ?string, path: ?string, methods: list<string>}>
+     * @return list<array{name: string, handles: ?string, method: ?string, key: ?string, path: ?string, methods: list<string>, routeName: ?string}>
      */
     private function attributes(array $groups): array
     {
         $attributes = [];
         foreach ($groups as $group) {
             foreach ($group->attrs as $attribute) {
-                $handles = $method = $key = $path = null;
+                $handles = $method = $key = $path = $routeName = null;
                 $methods = [];
                 foreach ($attribute->args as $position => $argument) {
                     $name = $argument->name?->toString();
                     if (($name === null && $position === 0) || $name === 'path') {
                         $path = $this->pathValue($argument->value) ?? $path;
+                    }
+                    if ((($name === null && $position === 1) || $name === 'name') && $argument->value instanceof AstNode\Scalar\String_) {
+                        $routeName = $argument->value->value;
                     }
                     if ($name === 'methods') {
                         $values = $argument->value instanceof Expr\Array_ ? array_map(static fn ($item) => $item->value, $argument->value->items) : [$argument->value];
@@ -2597,6 +2629,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                     'key' => $key,
                     'path' => $path,
                     'methods' => $methods,
+                    'routeName' => $routeName,
                 ];
             }
         }

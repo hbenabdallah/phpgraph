@@ -15,6 +15,9 @@ final readonly class ClassFacts
      * @param array<string, string> $constants  name => value as written
      * @param array<string, string> $cases      enum case => value as written, or ''
      * @param list<Hint>            $hints      what its methods check, throw and return early
+     * @param array<string, array{type: string, classes: list<string>}> $properties property => its type as written
+     *                                          and the classes it names: typed, documented (`@property-read Log $log`)
+     *                                          or cast (Eloquent `casts()`)
      */
     public function __construct(
         public string $id,
@@ -25,6 +28,15 @@ final readonly class ClassFacts
         public array $constants,
         public array $cases,
         public array $hints,
+        public array $properties = [],
     ) {
+    }
+
+    /**
+     * @param array<string, array{type: string, classes: list<string>}> $properties
+     */
+    public function withProperties(array $properties): self
+    {
+        return new self($this->id, $this->kind, $this->modifiers, $this->summary, $this->signatures, $this->constants, $this->cases, $this->hints, $properties);
     }
 }
