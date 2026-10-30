@@ -3,7 +3,7 @@
 phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md), and changes only in a major version (2.0.0), announced here.
 
-## Unreleased
+## 1.6.0 (2026-10-30)
 
 ### Added
 - Route names: Laravel `->name()` (written before or after the route's call, after the names of its groups,
