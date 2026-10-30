@@ -16,6 +16,8 @@ ARG PHPGRAPH_VERSION=dev
 # image has it. 8.5.12: CVE-2026-109618, remote code execution after an out-of-memory error (GHSA-w8hw-w9fx-j79w).
 ARG PHP_MINIMUM=8.5.12
 RUN php -r 'if (version_compare(PHP_VERSION, getenv("PHP_MINIMUM"), "<")) { fwrite(STDERR, "PHP " . PHP_VERSION . " is older than " . getenv("PHP_MINIMUM") . "\n"); exit(1); }'
+# pcntl: the files are parsed by one worker process per processor (ParallelExtraction).
+RUN apk add --no-cache --virtual .build-deps $PHPIZE_DEPS && docker-php-ext-install pcntl && apk del .build-deps
 # Opcache with its JIT: builds about 20% faster, the same graph (measured on Sylius and Akeneo).
 RUN printf 'opcache.enable_cli=1\nopcache.jit=tracing\nopcache.jit_buffer_size=128M\n' > /usr/local/etc/php/conf.d/phpgraph-opcache.ini
 LABEL org.opencontainers.image.title="phpgraph" \

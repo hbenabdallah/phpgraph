@@ -22,4 +22,23 @@ final readonly class PendingCall
         public ?array $closure = null,
     ) {
     }
+
+    /**
+     * Its properties in order, without their names: unserialize() then fills the declared properties instead of
+     * building a table of them for each object (5 times the memory, 3 times the time on 200 000 objects).
+     *
+     * @return array{string, ?TypeExpr, string, bool, ?int, list<string>, array{int, int|string}|null}
+     */
+    public function __serialize(): array
+    {
+        return [$this->source, $this->receiver, $this->method, $this->referenceOnMiss, $this->line, $this->named, $this->closure];
+    }
+
+    /**
+     * @param array{string, ?TypeExpr, string, bool, ?int, list<string>, array{int, int|string}|null} $data
+     */
+    public function __unserialize(array $data): void
+    {
+        [$this->source, $this->receiver, $this->method, $this->referenceOnMiss, $this->line, $this->named, $this->closure] = $data;
+    }
 }

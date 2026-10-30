@@ -7,6 +7,7 @@ namespace PhpGraph\Tests;
 use PhpGraph\Builder\BuildResult;
 use PhpGraph\Builder\GraphBuilder;
 use PhpGraph\Extractor\PhpFileExtractor;
+use PhpGraph\Extractor\SignatureExtractor;
 use PhpGraph\Graph\Confidence;
 use PhpGraph\Graph\Relation;
 use PHPUnit\Framework\TestCase;
@@ -90,6 +91,28 @@ final class VendorSignaturesTest extends TestCase
         $result = $this->build('namespace Acme\Orm; class Query { public function where(): self { return $this; } public function count(): int { return 0; } } class Report { public function run(Query $q): int { return $q->where()->count(); } }');
 
         self::assertTrue($this->hasCall($result, 'Acme\Orm\Report::run', 'Acme\Orm\Query::count'));
+    }
+
+    public function testSignaturesAreReadWithoutWhatTheMethodsDo(): void
+    {
+        $code = "<?php\nnamespace Acme\\Orm;\n"
+            . "/** @template T of object */\nabstract class Repository {\n"
+            . "    /** @return T|null */ public function find(int \$id): ?object { \$query = \$this->query(); return \$query->first(); }\n"
+            . "    abstract protected function query(): Query;\n"
+            . "    public function __construct(private Connection \$connection) { \$this->connection->open(); }\n"
+            . "}\n"
+            . "function repository(): Repository { return make(Repository::class)->fresh(); }\n";
+
+        $full = (new PhpFileExtractor())->extract($code, 'vendor/acme/orm/src/Repository.php');
+        $signatures = (new SignatureExtractor())->extract($code, 'vendor/acme/orm/src/Repository.php');
+
+        self::assertEquals($full->nodes, $signatures->nodes, 'the same declarations, the abstract method still abstract');
+        self::assertSame($full->returnTypes, $signatures->returnTypes);
+        self::assertSame($full->genericReturns, $signatures->genericReturns);
+        self::assertSame($full->templates, $signatures->templates);
+        self::assertSame($full->propertyTypes, $signatures->propertyTypes, 'promoted constructor parameters');
+        self::assertNotSame([], $full->pendingCalls);
+        self::assertSame([], $signatures->pendingCalls, 'the bodies are not read');
     }
 
     private function build(string $code, bool $readVendor = true): BuildResult

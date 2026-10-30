@@ -645,7 +645,7 @@ final class DocTypeResolver extends NodeVisitorAbstract
         if ($type instanceof ArrayTypeNode && !$type->type instanceof GenericTypeNode) {
             return $this->resolve($type->type, $templates);
         }
-        if (!$type instanceof GenericTypeNode || !\in_array(strtolower(ltrim($type->type->name, '\\')), self::COLLECTIONS, true) || $type->genericTypes === []) {
+        if (!$type instanceof GenericTypeNode || !($type->type instanceof IdentifierTypeNode) || !\in_array(strtolower(ltrim($type->type->name, '\\')), self::COLLECTIONS, true) || $type->genericTypes === []) {
             return null;
         }
 
@@ -679,8 +679,8 @@ final class DocTypeResolver extends NodeVisitorAbstract
         }
         $name = match (true) {
             $type instanceof IdentifierTypeNode => $type->name,
-            $type instanceof GenericTypeNode => $type->type->name,
-            $type instanceof CallableTypeNode => $type->identifier->name,
+            $type instanceof GenericTypeNode => (string) $type->type,
+            $type instanceof CallableTypeNode => (string) $type->identifier,
             default => null,
         };
         if ($name === null) {
@@ -745,12 +745,12 @@ final class DocTypeResolver extends NodeVisitorAbstract
 
         $arguments = [];
         if ($type instanceof GenericTypeNode) {
-            $name = $type->type->name;
+            $name = (string) $type->type;
             foreach ($type->genericTypes as $argument) {
                 $arguments[] = $this->generic($argument, $methodTemplates, $bound) ?? GenericType::UNKNOWN;
             }
-        } elseif ($type instanceof CallableTypeNode && strtolower(ltrim($type->identifier->name, '\\')) === 'closure') {
-            $name = $type->identifier->name;
+        } elseif ($type instanceof CallableTypeNode && strtolower(ltrim((string) $type->identifier, '\\')) === 'closure') {
+            $name = (string) $type->identifier;
         } elseif ($type instanceof IdentifierTypeNode) {
             $name = $type->name;
         } else {
@@ -854,12 +854,12 @@ final class DocTypeResolver extends NodeVisitorAbstract
                 continue;
             }
             $member = $members[0];
-            if ($member instanceof GenericTypeNode && $member->type->name === 'class-string' && \count($member->genericTypes) === 1
+            if ($member instanceof GenericTypeNode && $member->type instanceof IdentifierTypeNode && $member->type->name === 'class-string' && \count($member->genericTypes) === 1
                 && $member->genericTypes[0] instanceof IdentifierTypeNode && \in_array($member->genericTypes[0]->name, $templates, true)) {
                 $binders[$member->genericTypes[0]->name] = ['class', $position];
             } elseif ($member instanceof IdentifierTypeNode && \in_array($member->name, $templates, true)) {
                 $binders[$member->name] ??= ['value', $position];
-            } elseif ($member instanceof CallableTypeNode && \in_array(strtolower(ltrim($member->identifier->name, '\\')), ['callable', 'closure'], true)
+            } elseif ($member instanceof CallableTypeNode && \in_array(strtolower(ltrim((string) $member->identifier, '\\')), ['callable', 'closure'], true)
                 && $member->returnType instanceof IdentifierTypeNode && \in_array($member->returnType->name, $templates, true)) {
                 $binders[$member->returnType->name] ??= ['closure', $position];
             }
@@ -943,7 +943,7 @@ final class DocTypeResolver extends NodeVisitorAbstract
             $member = array_shift($members);
             if ($member instanceof UnionTypeNode) {
                 array_push($members, ...$member->types);
-            } elseif ($member instanceof CallableTypeNode && \in_array(strtolower(ltrim($member->identifier->name, '\\')), ['callable', 'closure'], true)) {
+            } elseif ($member instanceof CallableTypeNode && \in_array(strtolower(ltrim((string) $member->identifier, '\\')), ['callable', 'closure'], true)) {
                 $callable = $member;
             }
         }
@@ -1016,7 +1016,7 @@ final class DocTypeResolver extends NodeVisitorAbstract
         }
         $position = $parameters[substr($type->parameterName, 1)];
         $target = $type->targetType;
-        $template = $target instanceof GenericTypeNode && $target->type->name === 'class-string' && \count($target->genericTypes) === 1
+        $template = $target instanceof GenericTypeNode && $target->type instanceof IdentifierTypeNode && $target->type->name === 'class-string' && \count($target->genericTypes) === 1
             && $target->genericTypes[0] instanceof IdentifierTypeNode ? $target->genericTypes[0]->name : null;
         $test = match (true) {
             $target instanceof IdentifierTypeNode && strtolower($target->name) === 'null' => ConditionalTest::IsNull,

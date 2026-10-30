@@ -3,6 +3,20 @@
 phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md), and changes only in a major version (2.0.0), announced here.
 
+## 2.0.0 (2026-10-31)
+
+### Changed
+- **PHP 8.5 or newer** is needed to run phpgraph from Composer or its PHAR (8.2 before): `composer require` no longer
+  installs it on PHP 8.2 to 8.4. The binaries and the Docker image bring their own PHP and change nothing for their
+  users; a project on an older PHP keeps being analysed, whatever PHP it is written for. Nothing else changes: the
+  commands, the MCP tools and `graph.json` are those of 1.6.0, and every graph of the corpus is identical.
+- Builds are faster. The files are parsed by one worker process per processor, with PHP's `pcntl` extension (in the
+  binaries and the Docker image; not on Windows, where they are parsed one after the other); `PHPGRAPH_WORKERS` sets
+  the number of workers, `1` parses in one process. The dependencies' signatures are read without the bodies of their
+  methods, a chain of calls is typed once instead of once per call in it, and the extraction cache reads back only
+  the files a build reuses. Docker image, 12-thread laptop: Sylius 28 → 10 s, Akeneo 26 → 17 s; with the cache of
+  the previous build, Sylius 14 → 8 s. Peak memory +12 to +20 % with workers, −4 to −28 % without.
+
 ## 1.6.0 (2026-10-30)
 
 ### Added
