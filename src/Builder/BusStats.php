@@ -56,7 +56,11 @@ final readonly class BusStats
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{
+     *     handlers: array<string, int>, sends: array<string, int>, untypedSends: int,
+     *     messagesWithoutHandlerCount: int, messagesWithoutHandler: list<string>,
+     *     messagesNeverSentCount: int, messagesNeverSent: list<string>, contracts: int,
+     * }
      */
     public function toArray(): array
     {

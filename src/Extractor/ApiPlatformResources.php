@@ -132,7 +132,7 @@ final class ApiPlatformResources
             [$method],
             RouteFact::normalizePath($path),
             $controller ?? $state,
-            $controller !== null ? null : ($state === null ? null : $handler[1]),
+            $controller === null && $state !== null ? $handler[1] : null,
             $this->file,
             $line,
             references: array_values(array_unique($references)),
@@ -239,7 +239,7 @@ final class ApiPlatformResources
             )),
             $expr instanceof Expr\New_ => array_map(
                 static fn (AstNode\Arg $argument): Expr => $argument->value,
-                array_values(array_filter($expr->args, static fn ($argument): bool => $argument instanceof AstNode\Arg)),
+                array_values(array_filter($expr->args, static fn (AstNode\Arg|AstNode\ArgPlaceholder|AstNode\VariadicPlaceholder $argument): bool => $argument instanceof AstNode\Arg)),
             ),
             default => [],
         };

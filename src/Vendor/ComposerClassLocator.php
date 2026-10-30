@@ -112,9 +112,8 @@ final class ComposerClassLocator
             if (!\is_array($package) || !\is_array($package['autoload'] ?? null)) {
                 continue;
             }
-            $installPath = \is_string($package['install-path'] ?? null)
-                ? $vendor . '/composer/' . $package['install-path']
-                : $vendor . '/' . (\is_string($package['name'] ?? null) ? $package['name'] : '');
+            $name = \is_string($package['name'] ?? null) ? $package['name'] : '';
+            $installPath = \is_string($package['install-path'] ?? null) ? $vendor . '/composer/' . $package['install-path'] : $vendor . '/' . $name;
 
             // Files loaded on every request: the helper functions of the packages (Laravel's `response()`, `now()`).
             foreach (\is_array($package['autoload']['files'] ?? null) ? $package['autoload']['files'] : [] as $file) {

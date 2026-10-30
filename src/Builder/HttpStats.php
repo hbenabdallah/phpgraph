@@ -58,7 +58,11 @@ final readonly class HttpStats
     }
 
     /**
-     * @return array<string, int|list<string>>
+     * @return array{
+     *     routes: int, routesWithHandler: int, requests: int, requestsToProject: int, requestsToServices: int,
+     *     routesToDependencies: int, methodMismatchCount: int, methodMismatches: list<string>,
+     *     routesToMissingControllers: int, missingControllers: list<string>,
+     * }
      */
     public function toArray(): array
     {

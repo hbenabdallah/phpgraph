@@ -73,7 +73,11 @@ final readonly class ActionStats
     }
 
     /**
-     * @return array<string, int|list<string>>
+     * @return array{
+     *     actions: int, linked: int, toClass: int, unlinkedCount: int, unlinked: list<string>, forwards: int,
+     *     forwardsLinked: int, templates: int, unresolvedTargetCount: int, unresolvedTargets: list<string>,
+     *     citations: int, citingFiles: int, unreadable: list<string>,
+     * }
      */
     public function toArray(): array
     {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpGraph\Builder;
 
+use PhpGraph\Extractor\ConditionalReturn;
 use PhpGraph\Extractor\FileExtractor;
 use PhpGraph\Extractor\GenericType;
 use PhpGraph\Extractor\HandlerFact;
@@ -154,7 +155,7 @@ final class GraphBuilder
         $documentedMethods = [];
         /** @var array<string, list<string>> $mixins */
         $mixins = [];
-        /** @var array<string, string> $conditionals */
+        /** @var array<string, ConditionalReturn> $conditionals */
         $conditionals = [];
         /** @var array<string, array<int|string, list<string>>> $callables */
         $callables = [];
@@ -291,7 +292,7 @@ final class GraphBuilder
                 $configuration->addHelper($member((string) $helper), $definition, (string) $path);
             }
             foreach ($extraction->configurationCalls as $call) {
-                $configuration->addCall(['caller' => $call['caller'] === null ? null : $member($call['caller']), 'callee' => $member($call['callee'])] + $call, (string) $path, $service);
+                $configuration->addCall($call->withNames($call->caller === null ? null : $member($call->caller), $member($call->callee)), (string) $path, $service);
             }
             foreach ($extraction->routePrefixes as $loader => $prefixes) {
                 $routePrefixes[$service][$loader] = [...$routePrefixes[$service][$loader] ?? [], ...$prefixes];
@@ -738,9 +739,11 @@ final class GraphBuilder
             }
         }
         if ($found !== []) {
+            $confidence = $complete ? Confidence::Inferred : Confidence::Ambiguous;
+            $outcome = $complete ? 'inferred' : 'ambiguous';
             foreach ($found as $index => $method) {
-                $outcome = $index > 0 ? '' : ($complete ? 'inferred' : 'ambiguous');
-                $results[] = [new Edge($call->source, $method, Relation::Calls, $complete ? Confidence::Inferred : Confidence::Ambiguous, (string) $call->line, self::named($call)), $outcome, $call->method];
+                // The call is counted once, on its first edge.
+                $results[] = [new Edge($call->source, $method, Relation::Calls, $confidence, (string) $call->line, self::named($call)), $index > 0 ? '' : $outcome, $call->method];
             }
 
             return;
@@ -759,9 +762,12 @@ final class GraphBuilder
         }
 
         $candidates = $methodsByName[$name] ?? [];
-        $results[] = \count($candidates) === 1
-            ? [new Edge($call->source, $candidates[0], Relation::Calls, Confidence::Ambiguous, (string) $call->line, self::named($call)), 'ambiguous', $call->method]
-            : [null, $leftProject ? 'chainOutsideProject' : 'unknownReceiver', $call->method];
+        if (\count($candidates) === 1) {
+            $results[] = [new Edge($call->source, $candidates[0], Relation::Calls, Confidence::Ambiguous, (string) $call->line, self::named($call)), 'ambiguous', $call->method];
+
+            return;
+        }
+        $results[] = [null, $leftProject ? 'chainOutsideProject' : 'unknownReceiver', $call->method];
     }
 
     private static function namespaceOf(string $class): string

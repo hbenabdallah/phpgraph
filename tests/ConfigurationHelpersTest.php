@@ -66,4 +66,18 @@ final class ConfigurationHelpersTest extends TestCase
 
         self::assertFalse($this->hasEdge($result->graph, 'App\Shared\Validator', 'App\Sales\Rules\StockRule', Relation::Receives), 'the prefix is unknown');
     }
+
+    public function testALiteralArgumentSpelledLikeAParameterIsStillALiteral(): void
+    {
+        $result = $this->buildProject([
+            'src/Shared/Wiring.php' => self::WIRING,
+            'src/Shared/Validator.php' => 'namespace App\Shared; class Validator { public function __construct(iterable $rules) {} }',
+            'src/Shared/Pipeline.php' => 'namespace App\Shared; class Pipeline {}',
+            'src/Sales/Rules/StockRule.php' => 'namespace App\Sales\Rules; class StockRule {}',
+            'config/services.php' => 'use App\Shared\Wiring; return static function ($container): void { $services = $container->services();'
+                . ' Wiring::wire($services, "param", __DIR__ . "/../src/Sales", "App\\\\Sales"); };',
+        ]);
+
+        self::assertTrue($this->hasEdge($result->graph, 'App\Shared\Validator', 'App\Sales\Rules\StockRule', Relation::Receives), 'the prefix "param" is a value, not a parameter of a caller');
+    }
 }

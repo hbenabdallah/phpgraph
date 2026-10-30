@@ -92,7 +92,10 @@ final class Graph
     }
 
     /**
-     * @return array{nodes: list<array<string, mixed>>, edges: list<array<string, string>>}
+     * @return array{
+     *     nodes: list<array{id: string, label: string, kind: string, file: ?string, line: ?int, service?: string, modifiers?: list<string>, alias?: string}>,
+     *     edges: list<array{source: string, target: string, relation: string, confidence: string, lines?: string, via?: string}>,
+     * }
      */
     public function toArray(): array
     {

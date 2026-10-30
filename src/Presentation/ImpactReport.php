@@ -59,7 +59,7 @@ final class ImpactReport
         $modules = array_fill_keys(array_map(static fn (ImpactedClass $class): string => $module($class->class), $this->groups['direct']), true);
         $rank = static fn (ImpactedClass $class): int => $class->confidence === Confidence::Ambiguous ? 1 : 0;
         foreach (['state', 'quietState', 'stateTests', 'quietStateTests'] as $key) {
-            usort($this->groups[$key], static fn ($a, $b): int => [$rank($a), isset($modules[$module($b->class)]), $a->depth] <=> [$rank($b), isset($modules[$module($a->class)]), $b->depth]);
+            usort($this->groups[$key], static fn (ImpactedClass $a, ImpactedClass $b): int => [$rank($a), isset($modules[$module($b->class)]), $a->depth] <=> [$rank($b), isset($modules[$module($a->class)]), $b->depth]);
         }
 
         $files = [];
@@ -116,16 +116,21 @@ final class ImpactReport
         if ($wanted('routes') && $g['routes'] !== []) {
             $lines[] = '';
             $lines[] = 'Routes reaching it, ← from their handler:';
-            foreach ($shown = self::sliced($g['routes'], $limit, 0) as $route) {
+            $shown = self::sliced($g['routes'], $limit, 0);
+            foreach ($shown as $route) {
                 $marked = $route->confidence === Confidence::Inferred ? '' : ' [' . $route->confidence->value . ']';
                 $also = \array_slice($route->otherChains, 0, $limit === 0 ? 5 : self::CHAINS);
                 $others = \count($route->otherChains) - \count($also);
+                $hidden = '';
+                if ($others > 0 && $limit !== 0) {
+                    $hidden = \sprintf(' (+%d other chain%s: limit 0)', $others, $others > 1 ? 's' : '');
+                }
                 $lines[] = \sprintf(
                     '  %s%s ← %s%s',
                     $this->query->label($route->class),
                     $marked,
                     $this->chain($route->chain),
-                    $others === 0 || $limit === 0 ? '' : \sprintf(' (+%d other chain%s: limit 0)', $others, $others > 1 ? 's' : ''),
+                    $hidden,
                 );
                 foreach ($also as $chain) {
                     $lines[] = '    also ← ' . $this->chain($chain);
@@ -146,7 +151,8 @@ final class ImpactReport
         if ($wanted('operations') && $g['operations'] !== []) {
             $lines[] = '';
             $lines[] = 'API operations behind it (OpenAPI, .proto: the contract its clients rely on), ← what implements them:';
-            foreach ($shown = self::sliced($g['operations'], $limit, 0) as $operation) {
+            $shown = self::sliced($g['operations'], $limit, 0);
+            foreach ($shown as $operation) {
                 $marked = $operation->confidence === Confidence::Inferred ? '' : ' [' . $operation->confidence->value . ']';
                 $implementation = $this->query->graph()->node($operation->chain[0] ?? $operation->node ?? $operation->edge->target);
                 $lines[] = \sprintf(
@@ -168,7 +174,8 @@ final class ImpactReport
                 }
                 $lines[] = '';
                 $lines[] = $level === 1 ? 'Direct dependents:' : \sprintf('%d relations away:', $level);
-                foreach ($shown = self::sliced($atDepth, $limit, 0) as $class) {
+                $shown = self::sliced($atDepth, $limit, 0);
+                foreach ($shown as $class) {
                     $lines[] = '  ' . $this->classLine($class, $limit);
                 }
                 $more($atDepth, $shown);
@@ -184,7 +191,8 @@ final class ImpactReport
         if ($wanted('state') && $state !== []) {
             $lines[] = '';
             $lines[] = 'Through the state it changes (they call a method reading what it writes and filter on it, compare before and after, or use what it writes):';
-            foreach ($shown = self::sliced($state, $limit, 0) as $class) {
+            $shown = self::sliced($state, $limit, 0);
+            foreach ($shown as $class) {
                 $lines[] = '  ' . $this->classLine($class, $limit);
             }
             $more($state, $shown);
@@ -214,7 +222,8 @@ final class ImpactReport
             $lines[] = $title;
             // One test per line, its path below its module: what PHPUnit takes, and unique where names repeat.
             $byModule = [];
-            foreach ($shown = self::sliced($tests, $limit, self::TESTS) as $test) {
+            $shown = self::sliced($tests, $limit, self::TESTS);
+            foreach ($shown as $test) {
                 $file = (string) $this->file($test->class);
                 $module = $this->module($file);
                 $base = $this->prefix . ($module === '' ? '' : $module . '/');
@@ -245,28 +254,12 @@ final class ImpactReport
 
     private function json(?string $section): string
     {
-        $class = fn (ImpactedClass $class): array => [
-            'class' => $class->class,
-            'file' => $this->file($class->class),
-            'depth' => $class->depth,
-            'confidence' => $class->confidence->value,
-        ] + ($class->comparesState ? ['comparesState' => true] : []) + ($class->followed ? [] : ['followed' => false]) + [
-            'sites' => array_map(static fn (Edge $edge): array => [
-                'source' => $edge->source,
-                'relation' => $edge->relation->value,
-                'target' => $edge->target,
-            ] + ($edge->lines() === [] ? [] : ['lines' => $edge->lines()]) + ($edge->via() === '' ? [] : ['via' => $edge->via()]), $class->sites),
-        ];
+        $class = $this->classData(...);
         $data = [
             'changed' => ['id' => $this->changed->id, 'kind' => $this->changed->kind->value, 'file' => $this->changed->file, 'line' => $this->changed->line],
             'maxDepth' => $this->impact->maxDepth,
             'truncated' => $this->impact->truncated,
-            'routes' => array_map(fn (ImpactedClass $route): array => [
-                'route' => $this->query->label($route->class),
-                'id' => $route->class,
-                'confidence' => $route->confidence->value,
-                'chain' => $route->chain,
-            ] + (($screens = $this->query->screens($route->class)) === [] ? [] : ['screens' => $screens]), $this->groups['routes']),
+            'routes' => array_map($this->routeData(...), $this->groups['routes']),
             'operations' => array_map(fn (ImpactedClass $operation): array => [
                 'operation' => $this->query->label($operation->class),
                 'id' => $operation->class,
@@ -292,6 +285,67 @@ final class ImpactReport
         }
 
         return (string) json_encode($data, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * @return array{class: string, file: ?string, depth: int, confidence: string, comparesState?: true, followed?: false, sites: list<array<string, string|list<int>>>}
+     */
+    private function classData(ImpactedClass $class): array
+    {
+        $data = [
+            'class' => $class->class,
+            'file' => $this->file($class->class),
+            'depth' => $class->depth,
+            'confidence' => $class->confidence->value,
+        ];
+        if ($class->comparesState) {
+            $data['comparesState'] = true;
+        }
+        if (!$class->followed) {
+            $data['followed'] = false;
+        }
+        $data['sites'] = array_map(self::siteData(...), $class->sites);
+
+        return $data;
+    }
+
+    /**
+     * @return array<string, string|list<int>>
+     */
+    private static function siteData(Edge $edge): array
+    {
+        $data = [
+            'source' => $edge->source,
+            'relation' => $edge->relation->value,
+            'target' => $edge->target,
+        ];
+        if ($edge->lines() !== []) {
+            $data['lines'] = $edge->lines();
+        }
+        if ($edge->via() !== '') {
+            $data['via'] = $edge->via();
+        }
+
+        return $data;
+    }
+
+    /**
+     * @return array{route: string, id: string, confidence: string, chain: list<string>, screens?: array<string, list<int>>}
+     */
+    private function routeData(ImpactedClass $route): array
+    {
+        $data = [
+            'route' => $this->query->label($route->class),
+            'id' => $route->class,
+            'confidence' => $route->confidence->value,
+            'chain' => $route->chain,
+        ];
+        $screens = $this->query->screens($route->class);
+        if ($screens !== []) {
+            $data['screens'] = $screens;
+        }
+
+        return $data;
     }
 
     /**
@@ -363,13 +417,18 @@ final class ImpactReport
         }
 
         $where = $this->where($class->class);
+        $listed = '';
+        if ($shown !== []) {
+            $more = \count($sites) > \count($shown) ? \sprintf('; +%d', \count($sites) - \count($shown)) : '';
+            $listed = ': ' . implode('; ', $shown) . $more;
+        }
 
         return \sprintf(
             '%s%s%s%s',
             $this->query->label($class->class),
             $where === '' || $where === '.' ? '' : ' (' . $where . ')',
             $notes === [] ? '' : ' [' . implode(', ', $notes) . ']',
-            $shown === [] ? '' : ': ' . implode('; ', $shown) . (\count($sites) > \count($shown) ? \sprintf('; +%d', \count($sites) - \count($shown)) : ''),
+            $listed,
         );
     }
 

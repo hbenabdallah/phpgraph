@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace PhpGraph\Builder;
 
-use PhpGraph\Values;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Tag\TaggedValue;
 use Symfony\Component\Yaml\Yaml;
@@ -32,7 +31,7 @@ final class ContainerServices
     /** @var list<array{service: string, id: string, tag: ?string, target: ?string, locator: bool}> */
     private array $arguments = [];
 
-    /** @var array<string, array{int, int, array<mixed>}> file => [modification time, size, what it declares] */
+    /** @var array<string, array{int, int, array{definitions: array<string, string>, parameters: array<string, string>, tags: list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>, arguments: list<array{id: string, tag: ?string, service: ?string, locator?: bool}>}}> file => [modification time, size, what it declares] */
     private array $cache = [];
 
     /** @var array<string, string> while reading a file: id => class or `@alias` */
@@ -52,7 +51,7 @@ final class ContainerServices
      * @param array<string, array<string, string>>    $declared definitions collected from PHP, by application service
      * @param array<string, list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>> $declaredTags
      *                                                         tags collected from PHP, by application service
-     * @param array<string, array{int, int, array<mixed>}> $cache files read by the last build of this process
+     * @param array<string, array{int, int, array{definitions: array<string, string>, parameters: array<string, string>, tags: list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>, arguments: list<array{id: string, tag: ?string, service: ?string, locator?: bool}>}}> $cache files read by the last build of this process
      * @param array<string, list<array{id: string, tag: ?string, service: ?string, locator?: bool}>> $declaredArguments
      *                                                         injections collected from PHP, by application service
      */
@@ -90,7 +89,7 @@ final class ContainerServices
     /**
      * What each configuration file declared, for the next build of this process.
      *
-     * @return array<string, array{int, int, array<mixed>}>
+     * @return array<string, array{int, int, array{definitions: array<string, string>, parameters: array<string, string>, tags: list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>, arguments: list<array{id: string, tag: ?string, service: ?string, locator?: bool}>}}>
      */
     public function cache(): array
     {
@@ -98,7 +97,7 @@ final class ContainerServices
     }
 
     /**
-     * @return array{definitions: array<string, string>, parameters: array<string, string>, tags: list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>}
+     * @return array{definitions: array<string, string>, parameters: array<string, string>, tags: list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>, arguments: list<array{id: string, tag: ?string, service: ?string, locator?: bool}>}
      */
     private function read(string $file, string $content): array
     {
@@ -113,22 +112,20 @@ final class ContainerServices
     }
 
     /**
-     * @param array<mixed> $declared as returned by read()
+     * @param array{definitions: array<string, string>, parameters: array<string, string>, tags: list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>, arguments: list<array{id: string, tag: ?string, service: ?string, locator?: bool}>} $declared as returned by read()
      */
     private function merge(array $declared, string $service): void
     {
-        foreach (\is_array($declared['definitions'] ?? null) ? $declared['definitions'] : [] as $id => $target) {
-            $this->definitions[$service][(string) $id] ??= Values::text($target);
+        foreach ($declared['definitions'] as $id => $target) {
+            $this->definitions[$service][(string) $id] ??= $target;
         }
-        foreach (\is_array($declared['parameters'] ?? null) ? $declared['parameters'] : [] as $name => $value) {
-            $this->parameters[$service][(string) $name] = Values::text($value);
+        foreach ($declared['parameters'] as $name => $value) {
+            $this->parameters[$service][(string) $name] = $value;
         }
-        foreach (\is_array($declared['tags'] ?? null) ? $declared['tags'] : [] as $tag) {
-            /** @var array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>} $tag */
+        foreach ($declared['tags'] as $tag) {
             $this->tags[] = ['service' => $service] + $tag;
         }
-        foreach (\is_array($declared['arguments'] ?? null) ? $declared['arguments'] : [] as $argument) {
-            /** @var array{id: string, tag: ?string, service: ?string, locator?: bool} $argument */
+        foreach ($declared['arguments'] as $argument) {
             $this->arguments[] = ['service' => $service, 'id' => $argument['id'], 'tag' => $argument['tag'], 'target' => $argument['service'], 'locator' => $argument['locator'] ?? false];
         }
     }

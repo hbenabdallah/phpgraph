@@ -157,7 +157,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<string, list<string>> */
     private array $mixins = [];
 
-    /** @var array<string, string> callable id => its conditional return type, as JSON (DocTypeResolver) */
+    /** @var array<string, ConditionalReturn> callable id => its conditional return type (DocTypeResolver) */
     private array $conditionalReturns = [];
 
     /** @var array<string, array<int|string, list<string>>> method id => the parameters of the closures it takes */
@@ -326,10 +326,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         );
     }
 
-    /**
-     * @return int|null
-     */
-    public function enterNode(AstNode $node)
+    public function enterNode(AstNode $node): ?int
     {
         if ($this->currentCallable !== null && $this->currentClass !== null && str_contains($this->currentCallable, '::')) {
             $this->onStateAccess($node, $this->currentCallable);
@@ -444,7 +441,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         return null;
     }
 
-    public function leaveNode(AstNode $node)
+    public function leaveNode(AstNode $node): ?int
     {
         if ($this->routeGroups !== [] && end($this->routeGroups) === spl_object_id($node)) {
             array_pop($this->routeGroups);
@@ -744,7 +741,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         $conditional = $node->getAttribute(DocTypeResolver::RETURN_CONDITIONAL);
-        if (\is_string($conditional)) {
+        if ($conditional instanceof ConditionalReturn) {
             $this->conditionalReturns[$id] = $conditional;
         }
         $assertions = $node->getAttribute(DocTypeResolver::ASSERTIONS);
@@ -991,7 +988,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             ) {
                 $name = $node->expr->var->name;
             }
-            $class = \is_string($type) ? $this->documentedClass($type === TypeExpr::STATIC ? 'self' : $type) : null;
+            if ($type === TypeExpr::STATIC) {
+                $type = 'self';
+            }
+            $class = \is_string($type) ? $this->documentedClass($type) : null;
             if (!\is_string($name) || $name === '' || $class === null) {
                 continue;
             }
@@ -1530,7 +1530,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
      */
     private function calledAssertions(Expr\FuncCall|Expr\StaticCall|Expr\MethodCall|Expr\NullsafeMethodCall $call, bool $failed, bool $statement): array
     {
-        $name = $call->name instanceof Name ? $call->name->getLast() : ($call->name instanceof Identifier ? $call->name->toString() : null);
+        $name = match (true) {
+            $call->name instanceof Name => $call->name->getLast(),
+            $call->name instanceof Identifier => $call->name->toString(),
+            default => null,
+        };
         if ($name === null || $this->currentCallable === null && $this->currentClass !== null) {
             return [];
         }
@@ -1818,7 +1822,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             } elseif ($name === 'tag' && ($id !== null || $instanceof !== null) && $first->value instanceof AstNode\Scalar\String_) {
                 $attributes = [];
                 foreach ($second?->value instanceof Expr\Array_ ? $second->value->items : [] as $item) {
-                    $value = $item->value instanceof AstNode\Scalar\String_ ? $item->value->value : $this->classConstant($item->value);
+                    $value = $this->literalOrClass($item->value);
                     if ($item->key instanceof AstNode\Scalar\String_ && $value !== null) {
                         $attributes[$item->key->value] = $value;
                     }
@@ -1852,8 +1856,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             return;
         }
 
-        $id = $first->value instanceof AstNode\Scalar\String_ ? $first->value->value : $this->classConstant($first->value);
-        $target = $second === null ? null : ($second->value instanceof AstNode\Scalar\String_ ? $second->value->value : $this->classConstant($second->value));
+        $id = $this->literalOrClass($first->value);
+        $target = $this->literalOrClass($second?->value);
         if ($id === null) {
             return;
         }
@@ -1925,7 +1929,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                     $short = substr($name, (int) strrpos('\\' . $name, '\\'));
                     foreach ($attribute->args as $position => $argument) {
                         $key = $argument->name?->toString();
-                        $value = $argument->value instanceof AstNode\Scalar\String_ ? $argument->value->value : $this->classConstant($argument->value);
+                        $value = $this->literalOrClass($argument->value);
                         if ($value === null) {
                             continue;
                         }
@@ -2106,7 +2110,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             }
             $arguments = array_values(array_map(
                 static fn (AstNode\Arg $argument): Expr => $argument->value,
-                array_filter($call->args, static fn ($argument): bool => $argument instanceof AstNode\Arg && !$argument->unpack),
+                array_filter($call->args, static fn (AstNode\Arg|AstNode\ArgPlaceholder|AstNode\VariadicPlaceholder $argument): bool => $argument instanceof AstNode\Arg && !$argument->unpack),
             ));
             array_unshift($calls, [strtolower($call->name->toString()), $arguments]);
             $root = $call->var;
@@ -2171,9 +2175,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     private function callable(Expr $callable): array
     {
         if (($callable instanceof Expr\MethodCall || $callable instanceof Expr\StaticCall) && $callable->isFirstClassCallable() && $callable->name instanceof Identifier) {
-            $class = $callable instanceof Expr\MethodCall
-                ? $this->typeOf($callable->var)?->className
-                : ($callable->class instanceof Name ? $this->resolveName($callable->class) : null);
+            $class = match (true) {
+                $callable instanceof Expr\MethodCall => $this->typeOf($callable->var)?->className,
+                $callable->class instanceof Name => $this->resolveName($callable->class),
+                default => null,
+            };
 
             return $class === null ? [null, null] : [$class, $class . '::' . $callable->name->toString()];
         }
@@ -2224,7 +2230,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                 continue;
             }
             $argument = $this->argumentNode($chain->args, 0)?->value;
-            $value = $argument instanceof AstNode\Scalar\String_ ? $argument->value : ($argument === null ? null : $this->classConstant($argument));
+            $value = $this->literalOrClass($argument);
             $name = strtolower($chain->name->toString());
             if ($name === 'set' || ($name === 'load' && $value !== null && str_ends_with($value, '\\'))) {
                 return [$value, null];
@@ -2317,7 +2323,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         for (; $chain instanceof Expr\MethodCall; $chain = $chain->var) {
             $argument = $this->argumentNode($chain->args, 0)?->value;
             if ($chain->name instanceof Identifier && strtolower($chain->name->toString()) === 'decorate' && $argument !== null) {
-                return $argument instanceof AstNode\Scalar\String_ ? $argument->value : $this->classConstant($argument);
+                return $this->literalOrClass($argument);
             }
         }
 
@@ -2608,7 +2614,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                         $routeName = $argument->value->value;
                     }
                     if ($name === 'methods') {
-                        $values = $argument->value instanceof Expr\Array_ ? array_map(static fn ($item) => $item->value, $argument->value->items) : [$argument->value];
+                        $values = $argument->value instanceof Expr\Array_ ? array_map(static fn (AstNode\ArrayItem $item): Expr => $item->value, $argument->value->items) : [$argument->value];
                         foreach ($values as $value) {
                             if ($value instanceof AstNode\Scalar\String_) {
                                 $methods[] = strtoupper($value->value);
@@ -2671,6 +2677,14 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         return $map;
     }
 
+    /**
+     * A string written as such or as a class name: `'app.mailer'`, `Mailer::class`.
+     */
+    private function literalOrClass(?Expr $expr): ?string
+    {
+        return $expr instanceof AstNode\Scalar\String_ ? $expr->value : $this->classConstant($expr);
+    }
+
     private function classConstant(?Expr $expr): ?string
     {
         return $expr instanceof Expr\ClassConstFetch && $expr->class instanceof Name && $expr->name instanceof Identifier
@@ -2705,7 +2719,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                 $isClosure => 'fn',
                 default => '?',
             };
-            $type = $isClosure ? $this->closureReturn($value) : ($class === null ? $this->typeOf($value) : null);
+            $type = match (true) {
+                $isClosure => $this->closureReturn($value),
+                $class === null => $this->typeOf($value),
+                default => null,
+            };
             // Bounded: `$html = apply_filters('x', $html, $html)` repeated would nest the type in itself, doubling it.
             if ($type !== null && \strlen($type->key()) <= self::ARGUMENT_KEY) {
                 $types[$position] = $type;
@@ -3191,12 +3209,26 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $expr instanceof AstNode\Scalar\String_ => $expr->value,
             $expr instanceof AstNode\Scalar\MagicConst\Dir => "\0" . \dirname($this->path),
             $expr instanceof AstNode\Scalar\MagicConst\File => "\0" . $this->path,
-            $expr instanceof Expr\BinaryOp\Concat => ($left = $this->includedPath($expr->left, $depth + 1)) === null
-                || ($right = $this->includedPath($expr->right, $depth + 1)) === null || str_starts_with($right, "\0") ? null : $left . $right,
+            $expr instanceof Expr\BinaryOp\Concat => $this->concatenatedPath($expr, $depth),
             $expr instanceof Expr\FuncCall && $expr->name instanceof Name && $expr->name->toLowerString() === 'dirname'
                 && ($expr->args[0] ?? null) instanceof AstNode\Arg => $this->dirnameOf($expr, $depth),
             default => null,
         };
+    }
+
+    private function concatenatedPath(Expr\BinaryOp\Concat $concat, int $depth): ?string
+    {
+        $left = $this->includedPath($concat->left, $depth + 1);
+        if ($left === null) {
+            return null;
+        }
+        $right = $this->includedPath($concat->right, $depth + 1);
+        // A location of its own on the right (`'x' . __DIR__`) is no path.
+        if ($right === null || str_starts_with($right, "\0")) {
+            return null;
+        }
+
+        return $left . $right;
     }
 
     private function dirnameOf(Expr\FuncCall $call, int $depth): ?string

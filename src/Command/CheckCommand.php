@@ -59,7 +59,10 @@ final class CheckCommand extends Command
         $ruleKeys = array_map(static fn (RuleViolation $violation): string => $violation->key(), $breaches);
 
         if ($input->getOption('generate-baseline')) {
-            $data = ['layerViolations' => $layers] + ($rules->isEmpty() ? [] : ['ruleViolations' => $ruleKeys]);
+            $data = ['layerViolations' => $layers];
+            if (!$rules->isEmpty()) {
+                $data['ruleViolations'] = $ruleKeys;
+            }
             file_put_contents($baseline, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
             $output->writeln(sprintf('%d violations written to %s.', \count($layers) + \count($ruleKeys), $baseline));
 

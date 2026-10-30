@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpGraph\Vendor;
 
+use PhpGraph\Extractor\ConditionalReturn;
 use PhpGraph\Extractor\FileExtractor;
 use PhpGraph\Extractor\PhpFileExtractor;
 use PhpGraph\Graph\NodeKind;
@@ -47,18 +48,18 @@ final class VendorSignatures
     /** @var array<string, string>|null lowercase function name => the autoloaded file declaring it */
     private ?array $functionFiles = null;
 
-    /** @var array<string, array{?string, ?string, ?string, array<string, array{string, int}>}> lowercase function name => return type, GenericType, conditional, template binders */
+    /** @var array<string, array{?string, ?string, ?ConditionalReturn, array<string, array{string, int}>}> lowercase function name => return type, GenericType, conditional, template binders */
     private array $functions = [];
 
     /** @var array<string, list<array{string, int, string}>> lowercase function name => what a call tells of its arguments */
     private array $functionAssertions = [];
 
     /**
-     * What a function of the packages returns: its class, its GenericType, its conditional return type (JSON), how a
+     * What a function of the packages returns: its class, its GenericType, its conditional return type, how a
      * call binds its templates. The autoloaded files are scanned for the names they declare; the file declaring it is
      * then read, never run.
      *
-     * @return array{?string, ?string, ?string, array<string, array{string, int}>}|null
+     * @return array{?string, ?string, ?ConditionalReturn, array<string, array{string, int}>}|null
      */
     public function function(string $name): ?array
     {

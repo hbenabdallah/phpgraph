@@ -125,7 +125,39 @@ final readonly class ProjectSummary
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{
+     *     generatedAt: string, filesParsed: int, filesFailed: int, duplicateCount: int, duplicates: list<string>,
+     *     vendorDirectories: int, vendorFilesRead: int,
+     *     options: array{excludes: list<string>, readVendor: bool, depth: int},
+     *     applicationCalls: array{total: int, inferred: int, ambiguous: int, outsideProject: int, unknownReceiver: int, chainOutsideProject: int},
+     *     testCalls: array{total: int, inferred: int, ambiguous: int, outsideProject: int, unknownReceiver: int, chainOutsideProject: int},
+     *     mostUnresolvedMethods: array<string, int>,
+     *     stack: list<array{directory: string, php: ?string, locked: bool, packages: array<string, array{version: string, role: string}>}>,
+     *     bus: array{
+     *         handlers: array<string, int>, sends: array<string, int>, untypedSends: int,
+     *         messagesWithoutHandlerCount: int, messagesWithoutHandler: list<string>,
+     *         messagesNeverSentCount: int, messagesNeverSent: list<string>, contracts: int,
+     *     },
+     *     services: list<string>,
+     *     http: array{
+     *         routes: int, routesWithHandler: int, requests: int, requestsToProject: int, requestsToServices: int,
+     *         routesToDependencies: int, methodMismatchCount: int, methodMismatches: list<string>,
+     *         routesToMissingControllers: int, missingControllers: list<string>,
+     *     },
+     *     phpFilesNotRead: int,
+     *     injections: array{injections: int, linked: int, edges: int, unlinkedCount: int, unlinked: list<string>},
+     *     otherLanguages: array<string, int>,
+     *     apiSchemas: array{
+     *         documents: int, operations: int, implemented: int, notImplemented: list<string>, routesCovered: int,
+     *         undocumentedCount: int, undocumented: list<string>, rpcs: int, rpcsImplemented: int,
+     *         rpcsNotImplemented: list<string>, otherApis: int, requests: int,
+     *     },
+     *     actions: array{
+     *         actions: int, linked: int, toClass: int, unlinkedCount: int, unlinked: list<string>, forwards: int,
+     *         forwardsLinked: int, templates: int, unresolvedTargetCount: int, unresolvedTargets: list<string>,
+     *         citations: int, citingFiles: int, unreadable: list<string>,
+     *     },
+     * }
      */
     public function toArray(): array
     {

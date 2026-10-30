@@ -88,6 +88,32 @@ final class CacheTest extends TestCase
         self::assertTrue($project->lastBuild()->graph()->hasNode('App\Cart::sum'), 'Unchanged files come from memory, not from the deleted cache file');
     }
 
+    public function testConditionalReturnsAndConfigurationHelpersAreReadBackFromTheCache(): void
+    {
+        $code = '<?php namespace App;'
+            . ' use Symfony\Component\DependencyInjection\Loader\Configurator\ServicesConfigurator;'
+            . ' use function Symfony\Component\DependencyInjection\Loader\Configurator\tagged_locator;'
+            . ' /** @template T @param class-string<T>|null $abstract @return ($abstract is class-string<T> ? T : Container) */'
+            . ' function app(?string $abstract = null) {}'
+            . ' final class Wiring { public const SUFFIX = "pipeline";'
+            . ' public static function wire(ServicesConfigurator $services, string $prefix): void {'
+            . ' $services->load(str_replace(["/"], ["\\\\"], $prefix) . "\\\\Rules\\\\", __DIR__)->tag("{$prefix}.rule");'
+            . ' $services->set(sprintf("%s.%s", $prefix, self::SUFFIX), Pipeline::class)->args([tagged_locator($prefix . ".rule")]);'
+            . ' self::wire($services, "other"); } }';
+        $fresh = (new PhpFileExtractor())->extract($code, 'src/Wiring.php');
+        self::assertNotSame([], $fresh->conditionalReturns, 'the source declares a conditional return');
+        self::assertNotSame([], $fresh->configurationHelpers, 'the source declares a configuration helper');
+
+        $writer = new CachingExtractor(new PhpFileExtractor(), $this->root . '/cache.bin');
+        $writer->extract($code, 'src/Wiring.php');
+        $writer->save();
+        $reader = new CachingExtractor(new PhpFileExtractor(), $this->root . '/cache.bin');
+        $cached = $reader->extract($code, 'src/Wiring.php');
+
+        self::assertSame(['parsed' => 0, 'reused' => 1], $reader->stats(), 'read from the cache, not parsed again');
+        self::assertEquals($fresh, $cached, 'every value class of the extraction is allowed back by unserialize()');
+    }
+
     /**
      * @return array{Graph, array{parsed: int, reused: int}}
      */

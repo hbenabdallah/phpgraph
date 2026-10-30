@@ -134,8 +134,6 @@ final class TextPresenter
      */
     private function connectionLine(Connection $connection, ?Node $other): string
     {
-        $lines = $connection->edge->lines();
-
         return rtrim(\sprintf(
             '  %s %s [%s%s] [%s]  %s%s',
             $connection->forward ? '-->' : '<--',
@@ -144,8 +142,32 @@ final class TextPresenter
             $connection->edge->via() === '' ? '' : ' ' . $connection->edge->via(),
             $connection->edge->confidence->value,
             $other?->file === null ? '' : $this->location($other),
-            $lines === [] ? '' : ', at L' . implode(', L', \array_slice($lines, 0, 8)) . (\count($lines) > 8 ? ', ...' : ''),
+            self::atLines(', ', $connection->edge->lines()),
         ));
+    }
+
+    /**
+     * `, at L12, L20, ...`: the first lines of a relation in the source, nothing when it has none.
+     *
+     * @param list<int> $lines
+     */
+    private static function atLines(string $separator, array $lines): string
+    {
+        if ($lines === []) {
+            return '';
+        }
+        $more = \count($lines) > 8 ? ', ...' : '';
+
+        return $separator . 'at L' . implode(', L', \array_slice($lines, 0, 8)) . $more;
+    }
+
+    private static function notFollowed(ImpactedClass $class): string
+    {
+        return match (true) {
+            $class->followed => '',
+            $class->edge->relation === Relation::Receives => ' (receives it among others: its users are not followed)',
+            default => ' (inherited code shared with other subclasses: its callers are not followed)',
+        };
     }
 
     public function path(string $from, string $to): string
@@ -592,29 +614,34 @@ final class TextPresenter
             $lines[] = 'Action codes the front end sends, mapped to controller methods by the routing files of phpgraph.yaml: route:<file>#ACTION <code> --handled_by--> method; '
                 . '--references--> the action or template it goes on to (via target, forward <result>); a file quoting the code --references--> the action (AMBIGUOUS). '
                 . 'query_graph("<code> routes") finds one; outline of its method starts its flow from it.';
+            $withoutController = $actions->unlinkedCount - $actions->toClass;
             $lines[] = \sprintf(
                 '- %d actions: %d handled by a controller method%s%s.',
                 $actions->actions,
                 $actions->linked,
                 $actions->toClass > 0 ? \sprintf(', %d by a controller lacking the method', $actions->toClass) : '',
-                $actions->unlinkedCount - $actions->toClass > 0 ? \sprintf(', %d without a controller', $actions->unlinkedCount - $actions->toClass) : '',
+                $withoutController > 0 ? \sprintf(', %d without a controller', $withoutController) : '',
             );
             if ($actions->unlinked !== []) {
                 $lines[] = \sprintf('  Not handled by a method: %s%s.', implode('; ', $actions->unlinked), $actions->unlinkedCount > \count($actions->unlinked) ? '; ...' : '');
             }
             if ($actions->forwards > 0) {
-                $lines[] = \sprintf(
-                    '- %d targets and forwards: %d lead to an action or a file of the project (%d files)%s.',
-                    $actions->forwards,
-                    $actions->forwardsLinked,
-                    $actions->templates,
-                    $actions->unresolvedTargetCount > 0 ? \sprintf(
+                $unresolved = '';
+                if ($actions->unresolvedTargetCount > 0) {
+                    $unresolved = \sprintf(
                         '; %d lead nowhere found, to %d distinct targets (a template of another name or in several places, a page outside the project): %s%s',
                         $actions->forwards - $actions->forwardsLinked,
                         $actions->unresolvedTargetCount,
                         implode(', ', $actions->unresolvedTargets),
                         $actions->unresolvedTargetCount > \count($actions->unresolvedTargets) ? ', ...' : '',
-                    ) : '',
+                    );
+                }
+                $lines[] = \sprintf(
+                    '- %d targets and forwards: %d lead to an action or a file of the project (%d files)%s.',
+                    $actions->forwards,
+                    $actions->forwardsLinked,
+                    $actions->templates,
+                    $unresolved,
                 );
             }
             if ($actions->citingFiles > 0) {
@@ -670,6 +697,16 @@ final class TextPresenter
 
         $injections = $summary?->injections;
         if ($injections !== null && $injections->injections > 0) {
+            $unlinked = '';
+            if ($injections->unlinkedCount > 0) {
+                $unlinked = \sprintf(
+                    ', %d name services the project\'s configuration does not define: framework or bundle services, or ids '
+                    . 'computed at runtime. Those that look like the project\'s own first: %s%s',
+                    $injections->unlinkedCount,
+                    implode('; ', $injections->unlinked),
+                    $injections->unlinkedCount > \count($injections->unlinked) ? '; ...' : '',
+                );
+            }
             $lines[] = '';
             $lines[] = '## Container injections';
             $lines[] = 'What the container configuration injects beyond constructor types: service --receives--> each service of a tag '
@@ -679,13 +716,7 @@ final class TextPresenter
                 $injections->injections,
                 $injections->linked,
                 $injections->edges,
-                $injections->unlinkedCount > 0 ? \sprintf(
-                    ', %d name services the project\'s configuration does not define: framework or bundle services, or ids '
-                    . 'computed at runtime. Those that look like the project\'s own first: %s%s',
-                    $injections->unlinkedCount,
-                    implode('; ', $injections->unlinked),
-                    $injections->unlinkedCount > \count($injections->unlinked) ? '; ...' : '',
-                ) : '',
+                $unlinked,
             );
         }
 
@@ -949,9 +980,7 @@ final class TextPresenter
                         $this->query->label($class->class),
                         $class->confidence->value,
                         $class->through === null ? '' : ' (calls it through ' . $this->query->label($class->through) . ')',
-                        $class->followed ? '' : ($class->edge->relation === \PhpGraph\Graph\Relation::Receives
-                            ? ' (receives it among others: its users are not followed)'
-                            : ' (inherited code shared with other subclasses: its callers are not followed)'),
+                        self::notFollowed($class),
                         $this->classLocation($class->class),
                     );
                     array_push($lines, ...$sites($class));
@@ -1167,9 +1196,8 @@ final class TextPresenter
     {
         $groups = [];
         foreach ($edges as $edge) {
-            $lines = $edge->lines();
             $groups[$edge->source . "\0" . $edge->relation->value . "\0" . $edge->confidence->value][] = $this->query->label($edge->target)
-                . ($lines === [] ? '' : ' at L' . implode(', L', \array_slice($lines, 0, 8)) . (\count($lines) > 8 ? ', ...' : ''));
+                . self::atLines(' ', $edge->lines());
         }
 
         $text = [];
@@ -1183,15 +1211,13 @@ final class TextPresenter
 
     private function formatEdge(Edge $edge): string
     {
-        $lines = $edge->lines();
-
         return \sprintf(
             '%s --%s--> %s [%s]%s',
             $this->query->label($edge->source),
             $edge->relation->value,
             $this->query->label($edge->target),
             $edge->confidence->value,
-            $lines === [] ? '' : ' at L' . implode(', L', \array_slice($lines, 0, 8)) . (\count($lines) > 8 ? ', ...' : ''),
+            self::atLines(' ', $edge->lines()),
         );
     }
 

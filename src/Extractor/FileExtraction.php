@@ -32,9 +32,9 @@ final readonly class FileExtraction
      * @param array<string, array{reads: list<string>, writes: list<string>, constants?: list<string>}> $stateAccess
      *                                             method id => the properties of `$this` it reads and changes, and the
      *                                             class constants it uses
-     * @param array<string, array{params: list<string>, facts: list<array<string, mixed>>}> $configurationHelpers
+     * @param array<string, ConfigurationHelper> $configurationHelpers
      *                                             service configuration written in helpers, as templates (ConfigurationHelpers)
-     * @param list<array{caller: ?string, callee: string, args: list<array{?string, ?array<mixed>}>, line: int}> $configurationCalls
+     * @param list<PendingHelperCall> $configurationCalls
      *                                             calls that may be to such helpers, with their arguments as templates
      * @param array<string, string> $returnElements method id => class of the elements of the collection it returns
      * @param list<array{string, TypeExpr}> $propertyReads method id => a property it reads on a typed object,
@@ -62,7 +62,7 @@ final readonly class FileExtraction
      * @param array<string, array<string, string>> $documentedMethods class => lowercase name => method id of the
      *                                             magic methods it documents (`@method`), not graph nodes
      * @param array<string, list<string>> $mixins class => the classes it forwards unknown calls to (`@mixin`)
-     * @param array<string, string> $conditionalReturns callable id => its conditional return type, as JSON
+     * @param array<string, ConditionalReturn> $conditionalReturns callable id => its conditional return type
      *                                             (DocTypeResolver::RETURN_CONDITIONAL)
      * @param array<string, array<int|string, list<string>>> $callableParameters method id => the parameters of the
      *                                             closures it takes, by position and name (DocTypeResolver::CALLABLE_PARAMETERS)

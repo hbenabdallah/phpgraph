@@ -24,7 +24,7 @@ final class BuildState
      * @param string                                                                               $names       ids every name resolved to
      * @param list<Edge>                                                                           $overrides
      * @param array<string, list<array{?Edge, string, string}>>                                     $calls       file => [edge added, outcome, method] per call site
-     * @param array<string, array{int, int, array<mixed>}>                                          $configuration parsed configuration files: [mtime, size, data]
+     * @param array<string, array{int, int, array{definitions: array<string, string>, parameters: array<string, string>, tags: list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>, arguments: list<array{id: string, tag: ?string, service: ?string, locator?: bool}>}}> $configuration parsed configuration files: [mtime, size, what each declares]
      */
     public function __construct(
         public readonly string $options,

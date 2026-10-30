@@ -99,9 +99,8 @@ final class DocTypeResolver extends NodeVisitorAbstract
     public const PARENT_ARGUMENTS = 'phpgraph.parentArguments';
 
     /**
-     * string: a conditional `@return` as JSON, `($content is null ? ResponseFactory : Response)`: a tree of
-     * `{"param": position, "test": "null"|"class", "then": tree, "else": tree}`, `{"type": class}` and
-     * `{"arg": position}` (the class an argument names, `app(Mailer::class)`), evaluated against the arguments of a call.
+     * ConditionalReturn: a conditional `@return`, `($content is null ? ResponseFactory : Response)`, evaluated against
+     * the arguments of a call.
      */
     public const RETURN_CONDITIONAL = 'phpgraph.returnConditional';
 
@@ -206,7 +205,7 @@ final class DocTypeResolver extends NodeVisitorAbstract
         $this->parser = new PhpDocParser($config, $this->typeParser, $expressions);
     }
 
-    public function enterNode(AstNode $node)
+    public function enterNode(AstNode $node): null
     {
         $text = $node->getDocComment()?->getText() ?? $this->inlineVar($node);
         $doc = $text === null ? null : $this->parse($text);
@@ -317,7 +316,7 @@ final class DocTypeResolver extends NodeVisitorAbstract
         return null;
     }
 
-    public function leaveNode(AstNode $node)
+    public function leaveNode(AstNode $node): null
     {
         if ($node instanceof Stmt\ClassLike) {
             array_pop($this->classTemplates);
@@ -361,9 +360,8 @@ final class DocTypeResolver extends NodeVisitorAbstract
             }
             $conditional = $this->conditional($returned, $positions);
             // A condition whose branches name no class says nothing: the plain `@return` is read instead.
-            $tree = $conditional === null ? '' : (string) json_encode($conditional);
-            if (str_contains($tree, '"type":"') || str_contains($tree, '"arg":')) {
-                $node->setAttribute(self::RETURN_CONDITIONAL, $tree);
+            if ($conditional?->namesAClass() === true) {
+                $node->setAttribute(self::RETURN_CONDITIONAL, $conditional);
             }
         }
 
@@ -504,7 +502,11 @@ final class DocTypeResolver extends NodeVisitorAbstract
             $open = $match[0][1] + \strlen($match[0][0]) - 1;
             $depth = 0;
             for ($close = $open, $length = \strlen($text); $close < $length; ++$close) {
-                $depth += $text[$close] === '(' ? 1 : ($text[$close] === ')' ? -1 : 0);
+                $depth += match ($text[$close]) {
+                    '(' => 1,
+                    ')' => -1,
+                    default => 0,
+                };
                 if ($depth === 0) {
                     break;
                 }
@@ -1006,10 +1008,8 @@ final class DocTypeResolver extends NodeVisitorAbstract
      * A conditional return type as a tree, null when the type is none: `($abstract is null ? Application : mixed)`.
      *
      * @param array<string, int> $parameters name => position
-     *
-     * @return array<string, mixed>|null
      */
-    private function conditional(TypeNode $type, array $parameters, int $depth = 0): ?array
+    private function conditional(TypeNode $type, array $parameters, int $depth = 0): ?ConditionalReturn
     {
         if ($depth > 5 || !$type instanceof ConditionalTypeForParameterNode || !isset($parameters[substr($type->parameterName, 1)])) {
             return null;
@@ -1019,23 +1019,23 @@ final class DocTypeResolver extends NodeVisitorAbstract
         $template = $target instanceof GenericTypeNode && $target->type->name === 'class-string' && \count($target->genericTypes) === 1
             && $target->genericTypes[0] instanceof IdentifierTypeNode ? $target->genericTypes[0]->name : null;
         $test = match (true) {
-            $target instanceof IdentifierTypeNode && strtolower($target->name) === 'null' => 'null',
-            $template !== null => 'class',
+            $target instanceof IdentifierTypeNode && strtolower($target->name) === 'null' => ConditionalTest::IsNull,
+            $template !== null => ConditionalTest::IsClass,
             default => null,
         };
         if ($test === null) {
             return null;
         }
-        $leaf = function (TypeNode $branch) use ($parameters, $depth, $position, $template): array {
+        $leaf = function (TypeNode $branch) use ($parameters, $depth, $position, $template): ConditionalReturn|ConditionalClass|ConditionalArgument {
             if ($template !== null && $branch instanceof IdentifierTypeNode && $branch->name === $template) {
-                return ['arg' => $position];
+                return new ConditionalArgument($position);
             }
 
-            return $this->conditional($branch, $parameters, $depth + 1) ?? ['type' => $this->resolve($branch)];
+            return $this->conditional($branch, $parameters, $depth + 1) ?? new ConditionalClass($this->resolve($branch));
         };
         [$then, $else] = $type->negated ? [$leaf($type->else), $leaf($type->if)] : [$leaf($type->if), $leaf($type->else)];
 
-        return ['param' => $position, 'test' => $test, 'then' => $then, 'else' => $else];
+        return new ConditionalReturn($position, $test, $then, $else);
     }
 
     /**

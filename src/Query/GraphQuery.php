@@ -321,9 +321,11 @@ final class GraphQuery
             // A namespace whose classes all sit in one sub-namespace reads as one: PrestaShop\PrestaShop.
             $name = (string) $name;
             $end = $depth + 1;
-            while (($next = $this->sharedSegment($members, $end)) !== null) {
+            $next = $this->sharedSegment($members, $end);
+            while ($next !== null) {
                 $name .= '\\' . $next;
                 ++$end;
+                $next = $this->sharedSegment($members, $end);
             }
 
             $layers = [];
