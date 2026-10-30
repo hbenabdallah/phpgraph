@@ -108,8 +108,8 @@
             "contextPairs": 14,
             "layerFirst": false
         },
-        "seconds": 0.77,
-        "peakMemoryMb": 30
+        "seconds": 0.62,
+        "peakMemoryMb": 34
     },
     {
         "name": "sylius",
@@ -239,8 +239,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 12.71,
-        "peakMemoryMb": 706
+        "seconds": 9.16,
+        "peakMemoryMb": 610
     },
     {
         "name": "akeneo-pim",
@@ -369,8 +369,8 @@
             "contextPairs": 13,
             "layerFirst": false
         },
-        "seconds": 18.74,
-        "peakMemoryMb": 724
+        "seconds": 14.29,
+        "peakMemoryMb": 892
     },
     {
         "name": "prestashop",
@@ -493,8 +493,8 @@
             "contextPairs": 293,
             "layerFirst": true
         },
-        "seconds": 20.43,
-        "peakMemoryMb": 654
+        "seconds": 12.67,
+        "peakMemoryMb": 766
     },
     {
         "name": "ecotone-quickstart",
@@ -604,8 +604,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 1.14,
-        "peakMemoryMb": 38
+        "seconds": 1.01,
+        "peakMemoryMb": 44
     },
     {
         "name": "bookstack",
@@ -701,8 +701,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 6.57,
-        "peakMemoryMb": 156
+        "seconds": 3.66,
+        "peakMemoryMb": 170
     },
     {
         "name": "wordpress",
@@ -821,8 +821,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 9.66,
-        "peakMemoryMb": 187
+        "seconds": 5.08,
+        "peakMemoryMb": 191
     },
     {
         "name": "laravel-rabbitmq-microservices",
@@ -920,8 +920,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.76,
-        "peakMemoryMb": 42
+        "seconds": 0.67,
+        "peakMemoryMb": 40
     },
     {
         "name": "art-gallery",
@@ -1015,7 +1015,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.98,
+        "seconds": 0.88,
         "peakMemoryMb": 48
     },
     {
@@ -1119,8 +1119,8 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 1.28,
-        "peakMemoryMb": 34
+        "seconds": 0.97,
+        "peakMemoryMb": 38
     },
     {
         "name": "stayhub",
@@ -1220,7 +1220,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 2.33,
-        "peakMemoryMb": 56
+        "seconds": 1.91,
+        "peakMemoryMb": 54
     }
 ]

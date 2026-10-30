@@ -53,6 +53,20 @@ final class MethodTemplatesTest extends TestCase
         self::assertFalse($this->hasEdge($graph, 'App\Checkout::either', 'App\Order::ship', Relation::Calls, Confidence::Inferred), 'returns of different types: unknown');
     }
 
+    public function testAChainIsTypedAgainOnceItsClosureIsRead(): void
+    {
+        $result = $this->buildProject(self::MANAGER + [
+            'src/Shipment.php' => 'namespace App; class Shipment { public function order(): Order { return new Order(); } }',
+            'src/Dispatch.php' => 'namespace App; use Lib\Manager; class Dispatch { public function __construct(private Manager $manager) {}'
+                . ' public function run(): void { $order = $this->manager->transaction(function () { return new Shipment(); })->order(); $order->ship(); } }',
+        ]);
+
+        self::assertTrue(
+            $this->hasEdge($result->graph, 'App\Dispatch::run', 'App\Order::ship', Relation::Calls, Confidence::Inferred),
+            'the chain is first typed before its closure is read, then again for the assignment, with what the closure returns',
+        );
+    }
+
     public function testTheTypeOfAValueBindsTheTemplateOfAFunction(): void
     {
         $result = $this->buildProject([

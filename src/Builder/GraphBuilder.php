@@ -13,6 +13,7 @@ use PhpGraph\Extractor\PendingDispatch;
 use PhpGraph\Extractor\PendingRequest;
 use PhpGraph\Extractor\PhpFileExtractor;
 use PhpGraph\Extractor\RouteFact;
+use PhpGraph\Extractor\SignatureExtractor;
 use PhpGraph\Extractor\TypeExpr;
 use PhpGraph\Graph\Confidence;
 use PhpGraph\Graph\Edge;
@@ -22,16 +23,17 @@ use PhpGraph\Graph\NodeKind;
 use PhpGraph\Graph\Relation;
 use PhpGraph\Vendor\ComposerClassLocator;
 use PhpGraph\Vendor\VendorSignatures;
-use PhpParser\Error;
 
 final class GraphBuilder
 {
     /**
-     * @param bool $readVendor read the signatures of dependency classes (vendor/) so call chains go through them
+     * @param bool     $readVendor read the signatures of dependency classes (vendor/) so call chains go through them
+     * @param int|null $workers    processes parsing the files, null for one per processor (ParallelExtraction)
      */
     public function __construct(
         private readonly FileExtractor $extractor = new PhpFileExtractor(),
         private readonly bool $readVendor = true,
+        private readonly ?int $workers = null,
     ) {
     }
 
@@ -60,6 +62,13 @@ final class GraphBuilder
         $routingFiles = [];
         $configurationFiles = [];
         $schemaFiles = [];
+        /** @var list<string> $phpFiles */
+        $phpFiles = [];
+        $unchanged = [];
+        /** @var array<string, string> $codes */
+        $codes = [];
+        /** @var array<string, array{mtime: int, size: int}> $stats */
+        $stats = [];
 
         foreach ($finder as $file) {
             $relativePath = str_replace('\\', '/', $file->getRelativePathname());
@@ -93,23 +102,34 @@ final class GraphBuilder
 
             // Same size and modification time as in the last build of this process: the same file.
             $known = $previous?->files[$relativePath] ?? null;
+            $phpFiles[] = $relativePath;
             if ($known !== null && $known['mtime'] === $file->getMTime() && $known['size'] === $file->getSize()) {
-                $extractions[$relativePath] = $known['extraction'];
-                $files[$relativePath] = $known;
+                $unchanged[$relativePath] = $known;
                 continue;
             }
+            $codes[$relativePath] = $file->getContents();
+            $stats[$relativePath] = ['mtime' => (int) $file->getMTime(), 'size' => (int) $file->getSize()];
+        }
+        $environment = hash_final($environment);
 
-            try {
-                $extraction = $this->extractor->extract($file->getContents(), $relativePath);
-            } catch (Error $error) {
-                $failures[$relativePath] = $error->getMessage();
+        // Parsed together, in worker processes, then taken in the order of the files: the first declaration wins.
+        $parsed = (new ParallelExtraction($this->extractor, $this->workers))->extract($codes);
+        unset($codes);
+        foreach ($phpFiles as $relativePath) {
+            if (isset($unchanged[$relativePath])) {
+                $extractions[$relativePath] = $unchanged[$relativePath]['extraction'];
+                $files[$relativePath] = $unchanged[$relativePath];
+                continue;
+            }
+            $extraction = $parsed[$relativePath];
+            if (\is_string($extraction)) {
+                $failures[$relativePath] = $extraction;
                 continue;
             }
             $extractions[$relativePath] = $extraction;
-            $files[$relativePath] = ['mtime' => (int) $file->getMTime(), 'size' => (int) $file->getSize(), 'extraction' => $extraction, 'signature' => BuildState::signature($extraction)];
+            $files[$relativePath] = $stats[$relativePath] + ['extraction' => $extraction, 'signature' => BuildState::signature($extraction)];
             $changed[$relativePath] = true;
         }
-        $environment = hash_final($environment);
 
         $serviceMap = ServiceMap::detect($root, $composerFiles, $services);
         $graph = new Graph();
@@ -199,18 +219,20 @@ final class GraphBuilder
             $service = $serviceMap->serviceOf((string) $path);
             // A name written in this file, as a project id: this service's class, the shared root code, or external.
             $id = static fn (string $name): string => $names->canonical($name, $service);
+            /** @var \WeakMap<TypeExpr, TypeExpr> $mapped shared by the calls of a chain: each holds the links below it */
+            $mapped = new \WeakMap();
 
             foreach ($extraction->edges as $edge) {
                 $graph->addEdge(new Edge($id($edge->source), $id($edge->target), $edge->relation, $edge->confidence));
             }
             foreach ($extraction->pendingCalls as $call) {
-                $pending[$path][] = new PendingCall($id($call->source), $call->receiver?->map($id), $call->method, $call->referenceOnMiss, $call->line, $call->named, $call->closure);
+                $pending[$path][] = new PendingCall($id($call->source), $call->receiver?->map($id, $mapped), $call->method, $call->referenceOnMiss, $call->line, $call->named, $call->closure);
             }
             foreach ($extraction->returnTypes as $method => $type) {
                 $returnTypes[$id($method)] ??= $type === TypeExpr::STATIC ? $type : $id($type);
             }
             if ($extraction->returned !== null) {
-                $fileReturns['file:' . $path] = $extraction->returned->map($id);
+                $fileReturns['file:' . $path] = $extraction->returned->map($id, $mapped);
             }
             foreach ($extraction->invokedParameters as $method => $parameters) {
                 $invokedParameters[$id($method)] = $parameters;
@@ -263,7 +285,7 @@ final class GraphBuilder
                 $callArguments[$id($caller)][] = [strtolower($method), $line, array_map(static fn (?string $class): ?string => $class === null || $class === '' ? $class : $id($class), $arguments), $parameters];
             }
             foreach ($extraction->parameterPasses as [$caller, $parameter, $receiver, $method, $argument]) {
-                $parameterPasses[$id($caller)][] = [$parameter, $receiver->map($id), $method, $argument];
+                $parameterPasses[$id($caller)][] = [$parameter, $receiver->map($id, $mapped), $method, $argument];
             }
             foreach ($extraction->propertyHolds as $class => $holds) {
                 $propertyHolds[$id($class)] = array_map($id, $holds);
@@ -284,7 +306,7 @@ final class GraphBuilder
                 $containerArguments[$service][] = $argument;
             }
             foreach ($extraction->propertyReads as [$reader, $property]) {
-                $propertyReads[] = [$id($reader), $property->map($id)];
+                $propertyReads[] = [$id($reader), $property->map($id, $mapped)];
             }
             $fileIds[(string) $path] = $id;
             $member = fn (string $name): string => str_contains($name, '::') ? $this->qualifiedMember($name, $id) : $id($name);
@@ -303,7 +325,7 @@ final class GraphBuilder
             foreach ($extraction->requests as $request) {
                 $requests[] = [new PendingRequest(
                     $id($request->source),
-                    $request->receiver?->map($id),
+                    $request->receiver?->map($id, $mapped),
                     $request->staticClass === null ? null : $id($request->staticClass),
                     $request->httpMethod,
                     $request->path,
@@ -334,11 +356,11 @@ final class GraphBuilder
                 $dispatches[] = [new PendingDispatch(
                     $id($dispatch->source),
                     $dispatch->method,
-                    $dispatch->receiver?->map($id),
+                    $dispatch->receiver?->map($id, $mapped),
                     $dispatch->receiverIsThis,
                     $dispatch->staticClass === null ? null : $id($dispatch->staticClass),
                     $dispatch->isFunction,
-                    $dispatch->message?->map($id),
+                    $dispatch->message?->map($id, $mapped),
                     $dispatch->hasArgument,
                     $key($dispatch->routingKey),
                     $dispatch->passesParameter,
@@ -360,7 +382,7 @@ final class GraphBuilder
         } else {
             $locator = new ComposerClassLocator($this->readVendor ? $vendorDirectories : []);
             // Without dependencies to read, PHP's own classes still are.
-            $vendor = new VendorSignatures($locator, $this->extractor);
+            $vendor = new VendorSignatures($locator, new SignatureExtractor());
         }
 
         $methodsByClass = $this->methodsByClass($graph);

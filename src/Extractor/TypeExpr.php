@@ -48,6 +48,25 @@ final readonly class TypeExpr
     }
 
     /**
+     * Its properties in order, without their names: unserialize() then fills the declared properties instead of
+     * building a table of them for each object (5 times the memory, 3 times the time on 200 000 objects).
+     *
+     * @return array{?string, ?self, ?string, bool, bool, ?string, list<string>, list<string>, array{int|string, int}|null, array<int, self>, list<self>, array{self, list<string>, bool, 3?: array{self, int, bool}}|null}
+     */
+    public function __serialize(): array
+    {
+        return [$this->className, $this->receiver, $this->member, $this->isProperty, $this->isElement, $this->generic, $this->functions, $this->arguments, $this->closure, $this->argumentTypes, $this->members, $this->test];
+    }
+
+    /**
+     * @param array{?string, ?self, ?string, bool, bool, ?string, list<string>, list<string>, array{int|string, int}|null, array<int, self>, list<self>, array{self, list<string>, bool, 3?: array{self, int, bool}}|null} $data
+     */
+    public function __unserialize(array $data): void
+    {
+        [$this->className, $this->receiver, $this->member, $this->isProperty, $this->isElement, $this->generic, $this->functions, $this->arguments, $this->closure, $this->argumentTypes, $this->members, $this->test] = $data;
+    }
+
+    /**
      * A type nothing is known of: a variable assigned an expression of unknown type, an untyped parameter. Where
      * branches meet, it makes the union partial.
      */
@@ -222,30 +241,46 @@ final readonly class TypeExpr
      * The same expression with every class name passed through $map: names written in a file, made project ids.
      *
      * @param \Closure(string): string $map
+     * @param \WeakMap<self, self>|null  $mapped the expressions already mapped with $map: the calls of a chain share its
+     *                                          lower links, mapped once
      */
-    public function map(\Closure $map): self
+    public function map(\Closure $map, ?\WeakMap $mapped = null): self
+    {
+        if ($mapped === null) {
+            /** @var \WeakMap<self, self> $mapped */
+            $mapped = new \WeakMap();
+        }
+
+        return $mapped[$this] ??= $this->mapOnce($map, $mapped);
+    }
+
+    /**
+     * @param \Closure(string): string $map
+     * @param \WeakMap<self, self>      $mapped
+     */
+    private function mapOnce(\Closure $map, \WeakMap $mapped): self
     {
         $arguments = array_map(
             static fn (string $argument): string => str_starts_with($argument, 'class:') ? 'class:' . $map(substr($argument, 6)) : $argument,
             $this->arguments,
         );
-        $argumentTypes = array_map(static fn (self $type): self => $type->map($map), $this->argumentTypes);
+        $argumentTypes = array_map(static fn (self $type): self => $type->map($map, $mapped), $this->argumentTypes);
         if ($this->members !== []) {
-            return new self(null, null, null, false, false, null, [], [], null, [], array_map(static fn (self $member): self => $member->map($map), $this->members));
+            return new self(null, null, null, false, false, null, [], [], null, [], array_map(static fn (self $member): self => $member->map($map, $mapped), $this->members));
         }
         if ($this->test !== null) {
             $call = $this->test[3] ?? null;
 
             return $call === null
-                ? self::narrowed($this->test[0]->map($map), array_map($map, $this->test[1]), $this->test[2])
-                : self::asserted($this->test[0]->map($map), $call[0]->map($map), $call[1], $this->test[2], $call[2]);
+                ? self::narrowed($this->test[0]->map($map, $mapped), array_map($map, $this->test[1]), $this->test[2])
+                : self::asserted($this->test[0]->map($map, $mapped), $call[0]->map($map, $mapped), $call[1], $this->test[2], $call[2]);
         }
         if ($this->functions !== []) {
             return new self(null, null, null, false, false, null, array_map($map, $this->functions), $arguments, null, $argumentTypes);
         }
 
         if ($this->receiver !== null) {
-            return new self(null, $this->receiver->map($map), $this->member, $this->isProperty, $this->isElement, null, [], $arguments, $this->closure, $argumentTypes);
+            return new self(null, $this->receiver->map($map, $mapped), $this->member, $this->isProperty, $this->isElement, null, [], $arguments, $this->closure, $argumentTypes);
         }
         $className = $this->className === null ? null : $map($this->className);
         $generic = $this->generic === null ? null : GenericType::mapNames($this->generic, $map);

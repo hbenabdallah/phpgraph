@@ -19,7 +19,8 @@ use PhpGraph\Graph\Relation;
  */
 final class CachingExtractor implements FileExtractor
 {
-    private const ALLOWED_CLASSES = [
+    /** The classes an extraction is made of: all that unserialize() may create when reading one back. */
+    public const ALLOWED_CLASSES = [
         FileExtraction::class, Node::class, Edge::class, PendingCall::class, TypeExpr::class, HandlerFact::class,
         PendingDispatch::class, RouteFact::class, PendingRequest::class, NodeKind::class, Relation::class, Confidence::class,
         ConditionalReturn::class, ConditionalTest::class, ConditionalClass::class, ConditionalArgument::class,
@@ -27,7 +28,12 @@ final class CachingExtractor implements FileExtractor
         DefinitionKind::class, Template::class, TemplateKind::class, PendingHelperCall::class, HelperArgument::class,
     ];
 
-    /** @var array<string, FileExtraction> loaded from the previous build */
+    /**
+     * The extractions of the cache file, each still serialized until a build reuses it: reading them all at once
+     * took half the build of a project whose files had not changed (9 s for Sylius).
+     *
+     * @var array<string, FileExtraction|string>
+     */
     private array $previous = [];
 
     /** @var array<string, FileExtraction> made or reused by this process */
@@ -60,16 +66,44 @@ final class CachingExtractor implements FileExtractor
 
     public function extract(string $code, string $relativePath): FileExtraction
     {
-        $key = hash('xxh128', $relativePath . "\0" . $code);
-        $extraction = $this->current[$key] ?? $this->previous[$key] ?? null;
+        return $this->reuse($code, $relativePath) ?? $this->keep($code, $relativePath, $this->extractor->extract($code, $relativePath));
+    }
 
+    /**
+     * The extraction kept for this content of the file, or null when it must be parsed.
+     */
+    public function reuse(string $code, string $relativePath): ?FileExtraction
+    {
+        $key = self::key($code, $relativePath);
+        $extraction = $this->current[$key] ?? $this->restored($key);
         if ($extraction === null) {
-            ++$this->misses;
-            $extraction = $this->extractor->extract($code, $relativePath);
-        } else {
-            ++$this->hits;
+            return null;
         }
+        ++$this->hits;
 
+        return $this->remember($key, $relativePath, $extraction);
+    }
+
+    /**
+     * Keeps an extraction parsed elsewhere, by a worker process, as if this extractor had parsed it.
+     */
+    public function keep(string $code, string $relativePath, FileExtraction $extraction): FileExtraction
+    {
+        ++$this->misses;
+
+        return $this->remember(self::key($code, $relativePath), $relativePath, $extraction);
+    }
+
+    /**
+     * What parses the files the cache does not hold.
+     */
+    public function inner(): FileExtractor
+    {
+        return $this->extractor;
+    }
+
+    private function remember(string $key, string $relativePath, FileExtraction $extraction): FileExtraction
+    {
         // Behind the cache file only for an extraction it does not hold; files gone are checked when saving.
         if (!isset($this->previous[$key])) {
             $this->dirty = true;
@@ -81,6 +115,27 @@ final class CachingExtractor implements FileExtractor
         $this->latest[$relativePath] = $key;
 
         return $this->current[$key] = $extraction;
+    }
+
+    private function restored(string $key): ?FileExtraction
+    {
+        $stored = $this->previous[$key] ?? null;
+        if (!\is_string($stored)) {
+            return $stored;
+        }
+        $extraction = @unserialize($stored, ['allowed_classes' => self::ALLOWED_CLASSES]);
+        if (!$extraction instanceof FileExtraction) {
+            unset($this->previous[$key]);
+
+            return null;
+        }
+
+        return $this->previous[$key] = $extraction;
+    }
+
+    private static function key(string $code, string $relativePath): string
+    {
+        return hash('xxh128', $relativePath . "\0" . $code);
     }
 
     /**
@@ -116,7 +171,7 @@ final class CachingExtractor implements FileExtractor
         }
 
         $temporary = $this->path . '.' . bin2hex(random_bytes(4)) . '.tmp';
-        if (file_put_contents($temporary, self::version() . "\n" . serialize($entries)) === false || !rename($temporary, $this->path)) {
+        if (file_put_contents($temporary, self::version() . "\n" . serialize(array_map('serialize', $entries))) === false || !rename($temporary, $this->path)) {
             @unlink($temporary);
 
             return;
@@ -136,7 +191,7 @@ final class CachingExtractor implements FileExtractor
     }
 
     /**
-     * @return array<string, FileExtraction>
+     * @return array<string, string> key => its extraction, serialized
      */
     private function load(): array
     {
@@ -150,11 +205,11 @@ final class CachingExtractor implements FileExtractor
             return [];
         }
 
-        $entries = @unserialize($payload, ['allowed_classes' => self::ALLOWED_CLASSES]);
+        $entries = @unserialize($payload, ['allowed_classes' => false]);
 
         $extractions = [];
         foreach (\is_array($entries) ? $entries : [] as $key => $entry) {
-            if ($entry instanceof FileExtraction) {
+            if (\is_string($entry)) {
                 $extractions[(string) $key] = $entry;
             }
         }

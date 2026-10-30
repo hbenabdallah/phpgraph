@@ -6,17 +6,17 @@ phpgraph could not type, the main target of type inference work. Arrows compare 
 
 | Project | Files | Failed | Duplicates | Classes | Methods | Edges | Vendor files read | Seconds | Memory MB |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4182 | 111 | 0.77 | 30 |
-| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140715 | 679 | 12.71 | 706 |
-| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 218452 | 762 | 18.74 | 724 |
-| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 187245 | 647 | 20.43 | 654 |
-| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6823 | 76 | 1.14 | 38 |
-| bookstack | 1513 | 0 | 0 | 698 | 4076 | 22834 | 393 | 6.57 | 156 |
-| wordpress | 1899 | 0 | 50 | 840 | 7580 | 43373 | 0 | 9.66 | 187 |
-| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 124 | 0.76 | 42 |
-| art-gallery | 266 | 0 | 0 | 140 | 148 | 1693 | 122 | 0.98 | 48 |
-| ticket-booking | 366 | 0 | 0 | 291 | 737 | 5040 | 220 | 1.28 | 34 |
-| stayhub | 260 | 0 | 0 | 112 | 323 | 2035 | 156 | 2.33 | 56 |
+| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4182 | 111 | 0.62 | 34 |
+| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140715 | 679 | 9.16 | 610 |
+| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 218452 | 762 | 14.29 | 892 |
+| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 187245 | 647 | 12.67 | 766 |
+| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6823 | 76 | 1.01 | 44 |
+| bookstack | 1513 | 0 | 0 | 698 | 4076 | 22834 | 393 | 3.66 | 170 |
+| wordpress | 1899 | 0 | 50 | 840 | 7580 | 43373 | 0 | 5.08 | 191 |
+| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 124 | 0.67 | 40 |
+| art-gallery | 266 | 0 | 0 | 140 | 148 | 1693 | 122 | 0.88 | 48 |
+| ticket-booking | 366 | 0 | 0 | 291 | 737 | 5040 | 220 | 0.97 | 38 |
+| stayhub | 260 | 0 | 0 | 112 | 323 | 2035 | 156 | 1.91 | 54 |
 
 ## Method calls in application code
 

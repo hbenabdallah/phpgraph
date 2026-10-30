@@ -14,7 +14,7 @@
   <a href="https://github.com/hbenabdallah/phpgraph/actions/workflows/ci.yml"><img src="https://github.com/hbenabdallah/phpgraph/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://packagist.org/packages/hbenabdallah/phpgraph"><img src="https://img.shields.io/packagist/v/hbenabdallah/phpgraph" alt="Version Packagist"></a>
   <a href="https://packagist.org/packages/hbenabdallah/phpgraph"><img src="https://img.shields.io/packagist/dt/hbenabdallah/phpgraph" alt="Téléchargements"></a>
-  <img src="https://img.shields.io/badge/php-%3E%3D8.2-777bb4" alt="PHP 8.2+">
+  <img src="https://img.shields.io/badge/php-%3E%3D8.5-777bb4" alt="PHP 8.5+">
   <a href="https://github.com/hbenabdallah/phpgraph/blob/main/LICENSE"><img src="https://img.shields.io/badge/licence-MIT-blue" alt="Licence : MIT"></a>
   <a href="https://mcpservers.org/servers/hbenabdallah/phpgraph"><img src="https://mcpservers.org/badge.svg" alt="Listed on mcpservers.org"></a>
 </p>
@@ -62,7 +62,7 @@ $env:PHPGRAPH_VERSION = "dev-main"; irm https://raw.githubusercontent.com/hbenab
 
 Le script télécharge le binaire, vérifie son SHA-256 et le place dans `~/.local/bin` (Windows : `%LOCALAPPDATA%\Programs\phpgraph`, ajouté au PATH) ; `PHPGRAPH_INSTALL_DIR` change le dossier. Le relancer met à jour. `dev-main` est reconstruit à chaque push sur `main` (la pré-version `edge`). Le binaire est un runtime PHP statique qui contient phpgraph, construit avec [static-php-cli](https://github.com/crazywhalecc/static-php-cli).
 
-Avec PHP 8.2 ou plus, ou avec Docker :
+Avec PHP 8.5 ou plus, ou avec Docker :
 
 ```bash
 composer require --dev hbenabdallah/phpgraph       # ou : composer global require hbenabdallah/phpgraph
@@ -135,7 +135,7 @@ phpgraph serve [chemin]                      # le serveur MCP, sur stdio
 phpgraph mcp-config claude|codex|cursor|json [--docker image]
 ```
 
-Options de `build` : `-e` pour exclure des chemins (répétable), `--no-vendor` pour ne pas lire les dépendances, `--no-cache` pour tout analyser à nouveau. `vendor`, `node_modules`, `var`, `.git` et les fichiers ignorés par les `.gitignore` du projet lui-même ne sont pas analysés ; un dépôt git au-dessus du projet n'applique jamais ses règles, si bien qu'un projet copié dans un dossier ignoré est quand même lu. Quand le dossier contient des fichiers PHP mais qu'ils sont tous exclus, `build` échoue en le disant, et chaque réponse MCP commence par cet avertissement au lieu de servir un graphe vide. La mémoire n'est pas limitée par défaut ; `PHPGRAPH_MEMORY_LIMIT=2G` fixe une limite. Avec PHP installé, opcache et son JIT accélèrent les builds d'environ 20 % : `php -d opcache.enable_cli=1 -d opcache.jit=tracing -d opcache.jit_buffer_size=128M vendor/bin/phpgraph build` (l'image Docker et les commandes affichées par `mcp-config` les utilisent déjà).
+Options de `build` : `-e` pour exclure des chemins (répétable), `--no-vendor` pour ne pas lire les dépendances, `--no-cache` pour tout analyser à nouveau. `vendor`, `node_modules`, `var`, `.git` et les fichiers ignorés par les `.gitignore` du projet lui-même ne sont pas analysés ; un dépôt git au-dessus du projet n'applique jamais ses règles, si bien qu'un projet copié dans un dossier ignoré est quand même lu. Quand le dossier contient des fichiers PHP mais qu'ils sont tous exclus, `build` échoue en le disant, et chaque réponse MCP commence par cet avertissement au lieu de servir un graphe vide. La mémoire n'est pas limitée par défaut ; `PHPGRAPH_MEMORY_LIMIT=2G` fixe une limite. Les fichiers sont analysés par un processus par processeur, avec l'extension `pcntl` de PHP (dans les binaires et l'image Docker ; pas sous Windows, où ils sont analysés l'un après l'autre) : Sylius se construit en 10 s au lieu de 28 s sur un portable à 12 threads. `PHPGRAPH_WORKERS=4` fixe le nombre de processus, `PHPGRAPH_WORKERS=1` analyse dans un seul processus. Avec PHP installé, opcache et son JIT accélèrent les builds d'environ 20 % : `php -d opcache.enable_cli=1 -d opcache.jit=tracing -d opcache.jit_buffer_size=128M vendor/bin/phpgraph build` (l'image Docker et les commandes affichées par `mcp-config` les utilisent déjà).
 
 ## Ce que contient le graphe
 
@@ -332,7 +332,7 @@ Sylius (le commit du corpus), octobre 2026, sans LLM : phpgraph 1.0.2, [codebase
 
 **Exécute-t-il mon code ?** Non. Il analyse les fichiers PHP et lit la configuration JSON, YAML et XML. Même `autoload_classmap.php` et les configurateurs de services PHP sont analysés, pas inclus.
 
-**Quelles versions de PHP peut-il analyser ?** Tout ce que `nikic/php-parser` 5 sait lire : la syntaxe de PHP 7 et 8, et celle de PHP 4 et 5 retirée depuis (`$s{0}`, `=& new`, octaux comme `08`), pour un fichier que la grammaire la plus récente refuse. phpgraph lui-même demande PHP 8.2 ou plus.
+**Quelles versions de PHP peut-il analyser ?** Tout ce que `nikic/php-parser` 5 sait lire : la syntaxe de PHP 7 et 8, et celle de PHP 4 et 5 retirée depuis (`$s{0}`, `=& new`, octaux comme `08`), pour un fichier que la grammaire la plus récente refuse. phpgraph lui-même demande PHP 8.5 ou plus.
 
 **Avec quels agents fonctionne-t-il ?** Tout client MCP sur stdio : [Sherpa](https://github.com/hbenabdallah/sherpa), Claude Code, Codex, Cursor, Claude Desktop, et d'autres. `mcp-config` affiche la configuration des plus courants.
 

@@ -26,6 +26,25 @@ final readonly class Node
     }
 
     /**
+     * Its properties in order, without their names: unserialize() then fills the declared properties instead of
+     * building a table of them for each object (5 times the memory, 3 times the time on 200 000 objects).
+     *
+     * @return array{string, string, NodeKind, ?string, ?int, ?string, list<string>, ?string}
+     */
+    public function __serialize(): array
+    {
+        return [$this->id, $this->label, $this->kind, $this->file, $this->line, $this->service, $this->modifiers, $this->alias];
+    }
+
+    /**
+     * @param array{string, string, NodeKind, ?string, ?int, ?string, list<string>, ?string} $data
+     */
+    public function __unserialize(array $data): void
+    {
+        [$this->id, $this->label, $this->kind, $this->file, $this->line, $this->service, $this->modifiers, $this->alias] = $data;
+    }
+
+    /**
      * @return array{id: string, label: string, kind: string, file: ?string, line: ?int, service?: string, modifiers?: list<string>, alias?: string}
      */
     public function toArray(): array

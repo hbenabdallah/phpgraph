@@ -175,6 +175,14 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<int, ?TypeExpr> closure passed as an argument => what it returns, once read */
     private array $closureReturns = [];
 
+    /**
+     * The types of the calls and property fetches already read, with the variables and closures they were read with:
+     * each call of a chain reads the chain below it, typed once instead of once per call above it.
+     *
+     * @var \WeakMap<Expr, array{?TypeExpr, array<string, TypeExpr>, int}>
+     */
+    private \WeakMap $chainTypes;
+
     /** @var list<int> the closures being read, innermost last */
     private array $closureNodes = [];
 
@@ -269,6 +277,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     public function __construct(private readonly string $path)
     {
         $this->fileId = 'file:' . $path;
+        $this->chainTypes = new \WeakMap();
         $this->bus = new BusExtractor();
         $this->configuration = new ConfigurationHelpers(fn (Name $name): ?string => $this->resolveName($name));
         $this->inConfigurationDirectory = preg_match('#(^|/)config/#', $path) === 1;
@@ -716,6 +725,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         $this->localTypes = [];
         $this->pinned = [];
         $this->outerScopes = [];
+        $this->chainTypes = new \WeakMap();
 
         foreach ($node->params as $param) {
             foreach ($this->typeNames($param->type) as $type) {
@@ -2771,6 +2781,22 @@ final class ExtractionVisitor extends NodeVisitorAbstract
      * The type of an expression, possibly depending on other files: chains of calls and property fetches.
      */
     private function typeOf(Expr $expr): ?TypeExpr
+    {
+        if (!$expr instanceof Expr\MethodCall && !$expr instanceof Expr\NullsafeMethodCall && !$expr instanceof Expr\PropertyFetch && !$expr instanceof Expr\NullsafePropertyFetch) {
+            return $this->typeOfUncached($expr);
+        }
+        // Read again only when a variable or a closure's return changed since: the same array is the same variables.
+        $read = $this->chainTypes[$expr] ?? null;
+        if ($read !== null && $read[1] === $this->localTypes && $read[2] === \count($this->closureReturns)) {
+            return $read[0];
+        }
+        $type = $this->typeOfUncached($expr);
+        $this->chainTypes[$expr] = [$type, $this->localTypes, \count($this->closureReturns)];
+
+        return $type;
+    }
+
+    private function typeOfUncached(Expr $expr): ?TypeExpr
     {
         if ($expr instanceof Expr\Variable && \is_string($expr->name)) {
             if ($expr->name === 'this') {
