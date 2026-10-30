@@ -35,6 +35,8 @@ final class SourceFacts
 
     private string $method = '';
 
+    private ?\PhpParser\NameContext $names = null;
+
     public function __construct()
     {
         $this->parser = new PhpCodeParser();
@@ -51,7 +53,9 @@ final class SourceFacts
         } catch (\PhpParser\Error) {
             return [];
         }
-        $statements = (new NodeTraverser(new NameResolver(null, ['replaceNodes' => false])))->traverse($statements);
+        $resolver = new NameResolver(null, ['replaceNodes' => false]);
+        $statements = (new NodeTraverser($resolver))->traverse($statements);
+        $this->names = $resolver->getNameContext();
 
         $facts = [];
         foreach ((new NodeFinder())->findInstanceOf($statements, Stmt\ClassLike::class) as $class) {
@@ -113,7 +117,113 @@ final class SourceFacts
             $this->constants,
             $cases,
             $this->hints,
+            $this->properties($class),
         );
+    }
+
+    /**
+     * Its properties naming classes: cast by Eloquent (`'log' => Log::class`), documented (`@property-read Log $log`),
+     * typed or promoted, the last ones winning.
+     *
+     * @return array<string, array{type: string, classes: list<string>}>
+     */
+    private function properties(Stmt\ClassLike $class): array
+    {
+        $properties = [];
+        foreach ($this->casts($class) as $name => $cast) {
+            $properties[$name] = ['type' => substr($cast, (int) strrpos('\\' . $cast, '\\')), 'classes' => [$cast]];
+        }
+        preg_match_all('/@property(?:-read|-write)?\s+([^$\n]+?)\s+\$(\w+)/', (string) $class->getDocComment()?->getText(), $documented, \PREG_SET_ORDER);
+        foreach ($documented as [, $type, $name]) {
+            $properties[$name] = ['type' => $type, 'classes' => $this->documentedClasses($type)];
+        }
+        $typed = [];
+        foreach ($class->getProperties() as $property) {
+            foreach ($property->props as $item) {
+                $typed[$item->name->toString()] = $property->type;
+            }
+        }
+        foreach ($class->getMethod('__construct')->params ?? [] as $param) {
+            if ($param->flags !== 0 && $param->var instanceof Expr\Variable && \is_string($param->var->name)) {
+                $typed[$param->var->name] = $param->type;
+            }
+        }
+        foreach ($typed as $name => $type) {
+            $written = $this->type($type);
+            if ($written !== null) {
+                $properties[$name] = ['type' => $written, 'classes' => $this->typeClasses($type)];
+            }
+        }
+
+        return array_filter($properties, static fn (array $property): bool => $property['classes'] !== []);
+    }
+
+    /**
+     * Eloquent's casts to a class: `protected $casts = [...]` or `casts(): array { return [...]; }`.
+     *
+     * @return array<string, string> attribute => class
+     */
+    private function casts(Stmt\ClassLike $class): array
+    {
+        $arrays = [];
+        foreach ($class->getProperties() as $property) {
+            foreach ($property->props as $item) {
+                if ($item->name->toString() === 'casts' && $item->default instanceof Expr\Array_) {
+                    $arrays[] = $item->default;
+                }
+            }
+        }
+        foreach ((new NodeFinder())->findInstanceOf($class->getMethod('casts')->stmts ?? [], Stmt\Return_::class) as $return) {
+            if ($return->expr instanceof Expr\Array_) {
+                $arrays[] = $return->expr;
+            }
+        }
+        $casts = [];
+        foreach ($arrays as $array) {
+            foreach ($array->items as $item) {
+                if ($item->key instanceof Scalar\String_ && $item->value instanceof Expr\ClassConstFetch && $item->value->class instanceof Name
+                    && $item->value->name instanceof AstNode\Identifier && strtolower($item->value->name->toString()) === 'class') {
+                    $resolved = $item->value->class->getAttribute('resolvedName');
+                    $casts[$item->key->value] = $resolved instanceof Name ? $resolved->toString() : $item->value->class->toString();
+                }
+            }
+        }
+
+        return $casts;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function typeClasses(?AstNode $type): array
+    {
+        $classes = [];
+        foreach ($type === null ? [] : (new NodeFinder())->findInstanceOf([$type], Name::class) as $name) {
+            $resolved = $name->getAttribute('resolvedName');
+            if ($resolved instanceof Name && !$name->isSpecialClassName()) {
+                $classes[] = $resolved->toString();
+            }
+        }
+
+        return $classes;
+    }
+
+    /**
+     * The classes a documented type names, resolved with the file's imports: `Collection<int, Commit>|null`.
+     *
+     * @return list<string>
+     */
+    private function documentedClasses(string $type): array
+    {
+        $classes = [];
+        foreach (preg_split('/[^\\\\\w]+/', $type, -1, \PREG_SPLIT_NO_EMPTY) ?: [] as $word) {
+            if (preg_match('/^\\\\?[A-Z]/', $word) !== 1 || $this->names === null) {
+                continue;
+            }
+            $classes[] = str_starts_with($word, '\\') ? ltrim($word, '\\') : $this->names->getResolvedClassName(new Name($word))->toString();
+        }
+
+        return $classes;
     }
 
     /**

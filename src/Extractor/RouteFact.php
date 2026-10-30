@@ -20,6 +20,7 @@ final readonly class RouteFact
      * @param ?string      $loader     the route loader adding its prefix to the path (`api_platform`), null for none
      * @param ?string      $host       the host it is restricted to, `{account}.example.com` (Laravel Route::domain()),
      *                                 null for any
+     * @param ?string      $name       the route's name, `home` (Laravel ->name(), Symfony name:, a YAML key)
      */
     public function __construct(
         public array $methods,
@@ -33,6 +34,7 @@ final readonly class RouteFact
         public bool $byFramework = false,
         public ?string $loader = null,
         public ?string $host = null,
+        public ?string $name = null,
     ) {
     }
 
@@ -84,6 +86,7 @@ final readonly class RouteFact
             $this->byFramework,
             $this->loader,
             $this->host,
+            $this->name,
         );
     }
 

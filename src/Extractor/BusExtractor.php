@@ -63,8 +63,8 @@ final class BusExtractor
     private array $dispatches = [];
 
     /**
-     * @param list<array{name: string, handles: ?string, method: ?string, key: ?string, path: ?string, methods: list<string>}> $methodAttributes resolved attribute names
-     * @param list<array{name: string, handles: ?string, method: ?string, key: ?string, path: ?string, methods: list<string>}> $classAttributes
+     * @param list<array{name: string, handles: ?string, method: ?string, key: ?string, path: ?string, methods: list<string>, routeName: ?string}> $methodAttributes resolved attribute names
+     * @param list<array{name: string, handles: ?string, method: ?string, key: ?string, path: ?string, methods: list<string>, routeName: ?string}> $classAttributes
      * @param list<?string>                                                 $parameterTypes   single class type of each parameter
      * @param list<string>                                                  $firstUnion       the classes of a union first parameter,
      *                                                                                        `Accepted|Rejected $event`: each is handled

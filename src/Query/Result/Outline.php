@@ -36,6 +36,7 @@ final readonly class Outline
      * @param ?array{class: string, methods: int, entries: array<string, array{routes: int, callers: int}>} $large the class named, when it declares many methods: its entry points, to outline one by one
      * @param array<string, list<string>>                                                                      $guesses  with a method, the calls guessed from a unique method name (AMBIGUOUS): caller => callees
      * @param list<string>                                                                                     $guessed  with a method, the methods it reaches only through such guesses
+     * @param list<string>                                                                                     $left     the classes that qualified once the core was full (FeatureCluster::MAX), best first
      */
     public function __construct(
         public string $topic,
@@ -63,6 +64,7 @@ final readonly class Outline
         public ?array $large = null,
         public array $guesses = [],
         public array $guessed = [],
+        public array $left = [],
     ) {
     }
 }

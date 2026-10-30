@@ -45,6 +45,9 @@ final class RouteExtractor
     /** @var list<?string> hosts of the enclosing Laravel route groups, `Route::domain('admin.example.com')` */
     private array $hosts = [];
 
+    /** @var list<string> name prefixes of the enclosing Laravel route groups, `Route::name('admin.')` */
+    private array $namePrefixes = [];
+
     /**
      * @param list<string> $prefixes
      */
@@ -57,22 +60,25 @@ final class RouteExtractor
      * Symfony #[Route] on a controller method, prefixed by the #[Route] of its class; a class #[Route] alone
      * routes to __invoke.
      *
-     * @param list<array{name: string, path: ?string, methods: list<string>}> $methodRoutes
-     * @param list<array{name: string, path: ?string, methods: list<string>}> $classRoutes
+     * @param list<array{name: string, path: ?string, methods: list<string>, routeName: ?string}> $methodRoutes
+     * @param list<array{name: string, path: ?string, methods: list<string>, routeName: ?string}> $classRoutes
      */
     public function onControllerMethod(string $class, string $method, array $methodRoutes, array $classRoutes, int $line): void
     {
         $prefix = $classRoutes[0]['path'] ?? '';
+        // The class's name is the prefix of its methods' names, as Symfony does.
+        $namePrefix = $classRoutes[0]['routeName'] ?? '';
         foreach ($methodRoutes as $route) {
             if ($route['path'] !== null) {
-                $this->routes[] = new RouteFact($route['methods'], RouteFact::normalizePath($prefix . '/' . $route['path']), $class, $method, $this->file, $line);
+                $name = $route['routeName'] === null ? null : $namePrefix . $route['routeName'];
+                $this->routes[] = new RouteFact($route['methods'], RouteFact::normalizePath($prefix . '/' . $route['path']), $class, $method, $this->file, $line, name: $name);
             }
         }
 
         if ($methodRoutes === [] && strtolower($method) === '__invoke') {
             foreach ($classRoutes as $route) {
                 if ($route['path'] !== null) {
-                    $this->routes[] = new RouteFact($route['methods'], RouteFact::normalizePath($route['path']), $class, null, $this->file, $line);
+                    $this->routes[] = new RouteFact($route['methods'], RouteFact::normalizePath($route['path']), $class, null, $this->file, $line, name: $route['routeName']);
                 }
             }
         }
@@ -126,7 +132,7 @@ final class RouteExtractor
                 }
             }
         }
-        $this->routes[] = new RouteFact($methods, RouteFact::normalizePath($routePath), $controller, $action, $this->file, $line);
+        $this->routes[] = new RouteFact($methods, RouteFact::normalizePath($routePath), $controller, $action, $this->file, $line, name: $this->literal($arguments[0]));
     }
 
     /**
@@ -137,16 +143,26 @@ final class RouteExtractor
         return $this->loaderPrefixes;
     }
 
-    public function pushPrefix(string $prefix, ?string $host = null): void
+    public function pushPrefix(string $prefix, ?string $host = null, string $namePrefix = ''): void
     {
         $this->prefixes[] = $prefix;
         $this->hosts[] = $host;
+        $this->namePrefixes[] = $namePrefix;
     }
 
     public function popPrefix(): void
     {
         array_pop($this->prefixes);
         array_pop($this->hosts);
+        array_pop($this->namePrefixes);
+    }
+
+    /**
+     * A Laravel call declaring routes: Route::get(), Route::match(), Route::resource()...
+     */
+    public static function isLaravelVerb(string $verb): bool
+    {
+        return \in_array(strtolower($verb), [...self::HTTP_VERBS, 'match', 'any', 'view', 'redirect', 'permanentredirect', 'resource', 'apiresource'], true);
     }
 
     /**
@@ -171,8 +187,9 @@ final class RouteExtractor
      *
      * @param array<AstNode> $args
      * @param \Closure(Name): ?string $resolve
+     * @param ?string                 $name    `->name('home')`; for a resource, the names are `photos.index`...
      */
-    public function onLaravelRoute(string $verb, array $args, int $line, \Closure $resolve): void
+    public function onLaravelRoute(string $verb, array $args, int $line, \Closure $resolve, ?string $name = null): void
     {
         $verb = strtolower($verb);
         $values = array_values(array_filter($args, static fn (AstNode $arg): bool => $arg instanceof AstNode\Arg));
@@ -196,7 +213,7 @@ final class RouteExtractor
                 if ($verb === 'apiresource' && \in_array($action, ['create', 'edit'], true)) {
                     continue;
                 }
-                $this->addLaravelRoute(explode('|', $methods), $base . str_replace('{}', '{' . self::singular($last) . '}', $suffix), $controller, $action, $line);
+                $this->addLaravelRoute(explode('|', $methods), $base . str_replace('{}', '{' . self::singular($last) . '}', $suffix), $controller, $action, $line, name: trim($path, '/') . '.' . $action);
             }
 
             return;
@@ -216,7 +233,7 @@ final class RouteExtractor
         }
 
         [$controller, $action] = $this->laravelHandler($handlerArg?->value, $resolve);
-        $this->addLaravelRoute(array_map('strtoupper', $methods), $path, $controller, $action, $line, \in_array($verb, ['view', 'redirect', 'permanentredirect'], true));
+        $this->addLaravelRoute(array_map('strtoupper', $methods), $path, $controller, $action, $line, \in_array($verb, ['view', 'redirect', 'permanentredirect'], true), $name);
     }
 
     public function onRequest(PendingRequest $request): void
@@ -296,11 +313,12 @@ final class RouteExtractor
     /**
      * @param list<string> $methods
      */
-    private function addLaravelRoute(array $methods, string $path, ?string $controller, ?string $action, int $line, bool $byFramework = false): void
+    private function addLaravelRoute(array $methods, string $path, ?string $controller, ?string $action, int $line, bool $byFramework = false, ?string $name = null): void
     {
         // The innermost group naming a host.
         $host = array_reduce($this->hosts, static fn (?string $outer, ?string $inner): ?string => $inner ?? $outer);
-        $this->routes[] = new RouteFact($methods, RouteFact::normalizePath(implode('/', $this->prefixes) . '/' . $path), $controller, $action, $this->file, $line, byFramework: $byFramework, host: $host);
+        $name = $name === null ? null : implode('', $this->namePrefixes) . $name;
+        $this->routes[] = new RouteFact($methods, RouteFact::normalizePath(implode('/', $this->prefixes) . '/' . $path), $controller, $action, $this->file, $line, byFramework: $byFramework, host: $host, name: $name);
     }
 
     /**

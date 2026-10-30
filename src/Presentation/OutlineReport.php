@@ -29,7 +29,12 @@ final class OutlineReport
 
     private const ENTRIES = 6;
 
+    private const LEFT = 5;
+
     private string $prefix = '';
+
+    /** @var array<string, string>|null class => its label, with namespace segments when another class the outline names shares it */
+    private ?array $names = null;
 
     public function __construct(
         private readonly GraphQuery $query,
@@ -62,7 +67,7 @@ final class OutlineReport
                 $outline->topic,
                 \count($outline->core),
                 $outline->method === null
-                    ? implode(', ', array_map(fn (string $seed): string => $this->query->label($seed), $outline->seeds))
+                    ? implode(', ', array_map(fn (string $seed): string => $this->className($seed), $outline->seeds))
                     : \sprintf('%s and what it calls, %d calls deep (each class with those methods only)', $this->query->label($outline->method), max([0, ...$outline->depths])),
                 $this->prefix === '' ? 'the project' : $this->prefix,
                 $outline->sourcesRead ? ' and the sources' : ' (sources not found: no signatures nor hints)',
@@ -90,6 +95,17 @@ final class OutlineReport
             );
         }
 
+        // The core is capped: what qualified past it, so the agent narrows the question rather than take it as whole.
+        if ($section === null && $outline->left !== []) {
+            $shown = \array_slice($outline->left, 0, self::LEFT);
+            $lines[] = \sprintf(
+                'The core is full: %d more classes qualified, left out: %s%s. A narrower question, or a class name, outlines them.',
+                \count($outline->left),
+                implode(', ', array_map(fn (string $class): string => $this->className($class), $shown)),
+                $more($outline->left, $shown),
+            );
+        }
+
         // At a glance: what an agent explaining the feature must not miss, before the details.
         $hints = $outline->hints;
         $glance = [];
@@ -103,13 +119,13 @@ final class OutlineReport
         $gaps = $section === null || $section === 'users';
         if ($gaps && $outline->unused !== []) {
             $glance[] = '  Nothing in the application uses: ' . implode(', ', array_map(
-                fn (string $class, bool $tested): string => $this->query->label($class) . ($tested ? ' (tests only)' : ''),
+                fn (string $class, bool $tested): string => $this->className($class) . ($tested ? ' (tests only)' : ''),
                 array_keys($outline->unused),
                 $outline->unused,
             )) . '.';
         }
         if ($gaps && $outline->uncovered !== []) {
-            $glance[] = '  No test touches: ' . implode(', ', array_map(fn (string $class): string => $this->query->label($class), $outline->uncovered)) . '.';
+            $glance[] = '  No test touches: ' . implode(', ', array_map(fn (string $class): string => $this->className($class), $outline->uncovered)) . '.';
         }
         // A guess may be wrong: an untyped receiver whose method name is declared once in the project.
         if ($section === null && $outline->guesses !== []) {
@@ -138,8 +154,11 @@ final class OutlineReport
                 if ($common === null) {
                     return $namespace . '\\';
                 }
+                // Without a parent left (`App\` against `Database\`, or no namespace), nothing in common: substr()
+                // would keep the first letter and never get shorter.
                 while ($common !== '' && !str_starts_with($namespace . '\\', $common)) {
-                    $common = substr($common, 0, (int) strrpos(rtrim($common, '\\'), '\\') + 1);
+                    $parent = strrpos(rtrim($common, '\\'), '\\');
+                    $common = $parent === false ? '' : substr($common, 0, $parent + 1);
                 }
 
                 return $common;
@@ -347,7 +366,7 @@ final class OutlineReport
                     'Used by %d files outside the core. Application%s: %s%s.',
                     $outline->consumerFiles,
                     ' (links)',
-                    implode(', ', array_map(fn (string $class, int $links): string => $this->query->label($class) . ' ' . $links, array_keys($shownConsumers), $shownConsumers)),
+                    implode(', ', array_map(fn (string $class, int $links): string => $this->className($class) . ' ' . $links, array_keys($shownConsumers), $shownConsumers)),
                     $more($consumers, $shownConsumers),
                 );
             }
@@ -432,6 +451,9 @@ final class OutlineReport
         }
         if ($facts->constants !== []) {
             $details[] = 'const ' . implode(', ', array_map(static fn (string $name, string $value): string => $name . ' = ' . $value, array_keys($facts->constants), $facts->constants));
+        }
+        if ($facts->properties !== []) {
+            $details[] = implode('; ', array_map(static fn (string $name, array $property): string => '$' . $name . ': ' . $property['type'], array_keys($facts->properties), $facts->properties));
         }
         $inherited = $this->inherited($class);
         $grouped = self::grouped(array_values(array_filter($facts->signatures, static fn (string $signature): bool => !isset($inherited[$signature]))));
@@ -642,6 +664,7 @@ final class OutlineReport
                 'signatures' => $outline->facts[$class]->signatures ?? null,
                 'constants' => $outline->facts[$class]->constants ?? null,
                 'cases' => $outline->facts[$class]->cases ?? null,
+                'properties' => ($properties = array_map(static fn (array $property): string => $property['type'], $outline->facts[$class]->properties ?? [])) === [] ? null : $properties,
             ], static fn (mixed $value): bool => $value !== null), $outline->core),
             'sourcesRead' => $outline->sourcesRead,
             'families' => $outline->families,
@@ -660,7 +683,51 @@ final class OutlineReport
             'uncovered' => $outline->uncovered,
             'unused' => array_keys($outline->unused),
         ] + ($outline->method === null ? [] : ['method' => $outline->method, 'depths' => $outline->depths, 'hubs' => $outline->hubs, 'guesses' => $outline->guesses, 'guessed' => $outline->guessed])
-            + ($outline->large === null ? [] : ['large' => $outline->large]), \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+            + ($outline->large === null ? [] : ['large' => $outline->large])
+            + ($outline->left === [] ? [] : ['left' => $outline->left]), \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * A class's label in a flat list: `LogController`, or `Api\LogController` beside `Http\Controllers\LogController`
+     * when the outline names both.
+     */
+    private function className(string $class): string
+    {
+        if ($this->names === null) {
+            $outline = $this->outline;
+            $classes = array_unique(array_map('strval', [...$outline->seeds, ...$outline->core, ...$outline->left, ...$outline->uncovered, ...array_keys($outline->unused), ...array_keys($outline->consumers)]));
+            $byLabel = [];
+            foreach ($classes as $named) {
+                $byLabel[$this->query->label($named)][] = $named;
+            }
+            $this->names = [];
+            foreach ($byLabel as $label => $sharing) {
+                foreach ($sharing as $named) {
+                    $this->names[$named] = \count($sharing) === 1 ? $label : self::distinct($named, $sharing);
+                }
+            }
+        }
+
+        return $this->names[$class] ?? $this->query->label($class);
+    }
+
+    /**
+     * The fewest last segments of a class name telling it from the others.
+     *
+     * @param list<string> $sharing
+     */
+    private static function distinct(string $class, array $sharing): string
+    {
+        $segments = explode('\\', $class);
+        for ($length = 2; $length < \count($segments); ++$length) {
+            $suffix = implode('\\', \array_slice($segments, -$length));
+            $clashes = array_filter($sharing, static fn (string $other): bool => $other !== $class && str_ends_with('\\' . $other, '\\' . $suffix));
+            if ($clashes === []) {
+                return $suffix;
+            }
+        }
+
+        return $class;
     }
 
     /**

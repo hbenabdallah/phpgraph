@@ -3,6 +3,41 @@
 phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md), and changes only in a major version (2.0.0), announced here.
 
+## Unreleased
+
+### Added
+- Route names: Laravel `->name()` (written before or after the route's call, after the names of its groups,
+  `Route::name('admin.')` or `'as'`; `photos.index` for a resource), Symfony `name:` of `#[Route]` (after the class's),
+  YAML route keys and `$routes->add()`. The route node carries it as `alias` in `graph.json`; `query_graph` and
+  `outline` find a route by its name, and a route named after the question opens the outline through its controller:
+  devnull's home feed, which its code calls the log, from `GET /` named `home` (8 classes, 3.8 KB, in place of 20
+  classes found by method names, 8.8 KB).
+- `outline`: a core full at 45 classes says how many more classes qualified and names the first ones (NextAPI
+  `customer order`: 96, all in the `CustomerOrder` context); a class used by many (the `User` model) shows its
+  attributes naming a class of the feature (`$log: Log`, `$pollVotes: Collection<int, PollVote>`); two classes of one
+  name are told apart in the lists (`Api\LogController`, `Controllers\LogController`).
+
+### Changed
+- `outline` keeps closer to the feature asked about:
+  - nothing joins through a class used by 20 classes or more (devnull's `User`, used by 520) unless it is of the module
+    asked about or named after the question; it shows what the feature calls of it, not its actions nor its wiring,
+    and a parent class of that kind stands for none of its subclasses (a controller stays, though its base has 59);
+  - a class off the topic joins through a class about the question only, not one DAO after another;
+  - a word most classes carry in their namespace (the `Order` of `App\SalesOrder`) is the topic only in a class's own
+    name; at the cap, of classes equally linked, the one most about the question joins first;
+  - the module of a seed keeps what the seed runs and what its callers run, not the siblings sharing a widget (the
+    catalog promotion forms sharing an add button with the shipping method's);
+  - a class found only by a method's name (`PageContent::base64ImageUriToUploadedImageUrl()` for `image upload`) is no
+    seed when most seeds are about the question or a route is named after it: its method shows as a caller.
+
+  Checked before and after on 15 outlines of 6 projects: devnull polls with all its `Poll*` classes and 250 users in
+  place of 859, jac2-web `ReservationCTRL` 30.5 → 22.7 KB, BookStack `image upload` without the page editor; NextAPI
+  `notification validation` and php-ddd-example unchanged.
+
+### Fixed
+- `outline` no longer runs forever when the classes of a feature share no namespace (devnull.com).
+- In an outline, Pest tests count as tests, not as wiring (devnull's outline was 67 KB).
+
 ## 1.5.8 (2026-10-27)
 
 ### Added
