@@ -59,8 +59,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          tagged=$(gh api "repos/$GH_REPO/commits/edge" --jq .sha)
-          if [ "$tagged" != "$GITHUB_SHA" ]; then
-            echo "::error::The edge tag points to $tagged, not $GITHUB_SHA: exclude refs/tags/edge from the repository's tag ruleset."
+          for _ in 1 2 3; do
+            tagged=$(gh api "repos/$GH_REPO/commits/edge" --jq .sha) && break
+            sleep 20
+          done
+          if [ "${tagged:-}" != "$GITHUB_SHA" ]; then
+            echo "::error::The edge tag points to ${tagged:-an unreadable commit}, not $GITHUB_SHA: exclude refs/tags/edge from the repository's tag ruleset."
             exit 1
           fi

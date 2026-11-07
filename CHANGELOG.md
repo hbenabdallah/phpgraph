@@ -20,9 +20,9 @@ phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stay
 ## 1.6.1 (2026-10-30)
 
 ### Fixed
-- A configuration helper called with the string `"param"`, the name of one of its parameters, took the string for the
-  parameter's value, so that call was never evaluated. The rest of 1.6.1 is internal (the AGENTS.md rules applied to
-  `src/`): every graph of the corpus is identical to 1.6.0's.
+- A call to a configuration helper with the string `"param"` among its arguments was taken for a call depending on
+  its caller's parameters, so it was never evaluated and the services it declares were missing. The rest of 1.6.1 is
+  internal (the AGENTS.md rules applied to `src/`): every graph of the corpus is identical to 1.6.0's.
 
 ## 1.6.0 (2026-10-30)
 
