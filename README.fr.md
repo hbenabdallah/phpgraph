@@ -1,9 +1,9 @@
-<p align="center">
+<h1 align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/docs/brand/logo-dark.svg">
     <img src="https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/docs/brand/logo.svg" alt="phpgraph" width="484">
   </picture>
-</p>
+</h1>
 
 <p align="center">
   <b>Le graphe de connaissances de votre code PHP, pour les agents IA.</b><br>
