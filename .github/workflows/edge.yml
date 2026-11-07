@@ -46,8 +46,21 @@ jobs:
             fi
             if gh release create edge dist/* --prerelease --target "$GITHUB_SHA" --title "dev-main" \
               --notes "Built from main at $GITHUB_SHA. Not a release: install a version for production use."; then
-              exit 0
+              published=1
+              break
             fi
             sleep 20
           done
-          exit 1
+          test -n "${published:-}"
+      # gh reuses an existing tag and ignores --target: when the old tag could not be deleted (a tag ruleset refuses it,
+      # "Cannot delete this tag" above), the release is published on the old commit and nothing else fails.
+      - name: Check that the edge tag moved to this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tagged=$(gh api "repos/$GH_REPO/commits/edge" --jq .sha)
+          if [ "$tagged" != "$GITHUB_SHA" ]; then
+            echo "::error::The edge tag points to $tagged, not $GITHUB_SHA: exclude refs/tags/edge from the repository's tag ruleset."
+            exit 1
+          fi
