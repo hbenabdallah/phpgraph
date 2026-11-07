@@ -17,6 +17,13 @@ phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stay
   the files a build reuses. Docker image, 12-thread laptop: Sylius 28 → 10 s, Akeneo 26 → 17 s; with the cache of
   the previous build, Sylius 14 → 8 s. Peak memory +12 to +20 % with workers, −4 to −28 % without.
 
+## 1.6.1 (2026-10-30)
+
+### Fixed
+- A call to a configuration helper with the string `"param"` among its arguments was taken for a call depending on
+  its caller's parameters, so it was never evaluated and the services it declares were missing. The rest of 1.6.1 is
+  internal (the AGENTS.md rules applied to `src/`): every graph of the corpus is identical to 1.6.0's.
+
 ## 1.6.0 (2026-10-30)
 
 ### Added
