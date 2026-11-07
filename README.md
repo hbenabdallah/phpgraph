@@ -1,8 +1,9 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/docs/phpgraph.png" alt="phpgraph turns a PHP codebase into a knowledge graph of domains, handlers, repositories, controllers and adapters, served to AI agents through a CLI and an MCP server" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/docs/brand/logo-dark.svg">
+    <img src="https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/docs/brand/logo.svg" alt="phpgraph" width="484">
+  </picture>
 </p>
-
-<h1 align="center">phpgraph</h1>
 
 <p align="center">
   <b>A knowledge graph of your PHP codebase, for AI coding agents.</b><br>
