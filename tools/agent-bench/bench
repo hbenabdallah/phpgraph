@@ -1,0 +1,30 @@
+#!/usr/bin/env sh
+# Runs the agent benchmark (run.php) in a PHP 8.5 container, so that the host needs only Docker and Claude Code:
+#
+#   tools/agent-bench/bench                       every task, both arms, 3 runs
+#   tools/agent-bench/bench --tasks=ddd-* --runs=1
+#   tools/agent-bench/bench report                the tables of docs/BENCHMARK.md, from the recorded runs
+#
+# Claude Code runs inside the container with the host's binary and login (~/.claude, ~/.claude.json): the agents'
+# shell, edits and tests stay in the container, which sees only this repository (read-only), the corpus checkouts
+# (read-only) and build/agent-bench/. The agent works on a copy of the checkout, never on corpus/checkouts.
+# Host network: containers cannot reach a local DNS resolver such as systemd-resolved (127.0.0.53).
+set -eu
+
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+IMAGE=phpgraph-agent-bench
+CLAUDE=${CLAUDE_BINARY:-$(readlink -f "$(command -v claude)")}
+mkdir -p "$ROOT/build/agent-bench"
+
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    printf 'FROM php:8.5-cli\nRUN apt-get update && apt-get install -y --no-install-recommends git ripgrep && rm -rf /var/lib/apt/lists/*\n' \
+        | docker build --network host -q -t "$IMAGE" - >&2
+fi
+TTY=
+[ -t 0 ] && TTY=-t
+exec docker run --rm -i $TTY --network host -u "$(id -u):$(id -g)" \
+    -e HOME=/home/bench -e PHPGRAPH_BENCH_IN_CONTAINER=1 \
+    -v "$HOME/.claude":/home/bench/.claude -v "$HOME/.claude.json":/home/bench/.claude.json \
+    -v "$CLAUDE":/usr/local/bin/claude:ro \
+    -v "$ROOT":/phpgraph:ro -v "$ROOT/build/agent-bench":/phpgraph/build/agent-bench \
+    -w /phpgraph "$IMAGE" php tools/agent-bench/run.php "$@"

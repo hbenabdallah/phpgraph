@@ -230,6 +230,20 @@ final class ImpactTest extends TestCase
         self::assertContains('Untested', Dig::list($json, 'uncovered'));
     }
 
+    public function testADependentShowsItsNamespaceAndTheRelationThatReachedIt(): void
+    {
+        $presenter = new TextPresenter(new GraphQuery($this->buildProject([
+            'src/Storage/Save/Query/Widget.php' => 'namespace App\Storage\Save\Query; abstract class Widget {}',
+            'src/Storage/Factory.php' => 'namespace App\Storage; use App\Storage\Save\Query\Widget; final class Factory { public function make(): Widget { return new Gadget(); } }',
+            'src/Storage/Gadget.php' => 'namespace App\Storage; final class Gadget extends Save\Query\Widget {}',
+        ])->graph));
+
+        $text = $presenter->impact('App\Storage\Save\Query\Widget');
+
+        self::assertStringContainsString('Gadget (App\Storage) [EXTRACTED]: extends it', $text, 'its whole namespace, and a relation of the class itself said once');
+        self::assertStringNotContainsString('extends (extends)', $text);
+    }
+
     public function testReadersUsingWhatTheChangeWritesComeFirst(): void
     {
         $presenter = new TextPresenter(new GraphQuery($this->buildProject([
@@ -246,7 +260,7 @@ final class ImpactTest extends TestCase
         ])->graph));
 
         $text = $presenter->impact('App\Notification::add');
-        self::assertStringContainsString('Response [uses Kind]', $text, 'it serializes the type the change writes');
+        self::assertStringContainsString('Response (App) [uses Kind]', $text, 'it serializes the type the change writes');
         self::assertStringNotContainsString('Logger', explode('Nothing in', $text)[0], 'reading all of it, AMBIGUOUS: counted, not listed');
         self::assertStringContainsString('+1 reading all of it: section state', $text);
         self::assertStringContainsString('Logger', $presenter->impact('App\Notification::add', 3, 40, 'state'));

@@ -1,0 +1,20 @@
+project: prestashop
+kind: find
+prompt: |
+  In the back office, which class handles the CQRS command
+  PrestaShop\PrestaShop\Core\Domain\Order\Command\AddCartRuleToOrderCommand, and which controller dispatches it?
+expected:
+  - PrestaShop\PrestaShop\Adapter\Order\CommandHandler\AddCartRuleToOrderHandler
+  - PrestaShopBundle\Controller\Admin\Sell\Order\OrderController
+allowed:
+  - PrestaShop\PrestaShop\Core\Domain\Order\CommandHandler\AddCartRuleToOrderHandlerInterface
+  - PrestaShop\PrestaShop\Core\Domain\Order\Command\AddCartRuleToOrderCommand
+  - PrestaShop\PrestaShop\Adapter\Order\AbstractOrderHandler
+min_recall: 1
+min_precision: 0.75
+checked: |
+  grep -rn AddCartRuleToOrderCommand src controllers classes: one handler, AddCartRuleToOrderHandler::handle()
+  (#[AsCommandHandler], implements AddCartRuleToOrderHandlerInterface), and one `new AddCartRuleToOrderCommand`,
+  in OrderController::addCartRuleAction() (OrderController.php:1524, dispatchCommand), routed as
+  admin_orders_add_cart_rule, POST /{orderId}/cart-rules (routing/admin/sell/orders/orders.yml:103). CartController
+  also has an addCartRuleAction, which does not send this command: a false answer.

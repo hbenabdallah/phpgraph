@@ -1,0 +1,13 @@
+--- a/src/Akeneo/Pim/Structure/Component/Query/PublicApi/Family/RequiredAttributesMaskForChannelAndLocale.php
++++ b/src/Akeneo/Pim/Structure/Component/Query/PublicApi/Family/RequiredAttributesMaskForChannelAndLocale.php
+@@ -31,8 +31,8 @@
+ 
+     public function __construct(string $channelCode, string $localeCode, array $mask)
+     {
+-        $this->channelCode = $channelCode;
+-        $this->localeCode = $localeCode;
++        $this->channelCode = $localeCode;
++        $this->localeCode = $channelCode;
+         $this->mask = $mask;
+     }
+ 

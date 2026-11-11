@@ -294,6 +294,15 @@ Mesuré sur un projet Symfony/DDD privé de 4 800 fichiers, 3 exécutions par co
 
 Les plages des exécutions avec et sans phpgraph ne se chevauchent pas.
 
+Sur des projets publics (novembre 2026) : Claude Code (`claude -p`, Sonnet) sur 24 tâches réparties entre php-ddd-example, Sylius, PrestaShop, BookStack et Akeneo, 3 exécutions par tâche avec phpgraph 2.0 et sans (grep et lecture de fichiers seulement), notées contre des réponses tirées du code. Méthode, résultats par tâche et variance : [`docs/BENCHMARK.md`](https://github.com/hbenabdallah/phpgraph/blob/main/docs/BENCHMARK.md) ; `tools/agent-bench/bench` le relance.
+
+| Type de tâche | Réussite avec / sans | Avec phpgraph |
+|---|---|---|
+| Trouver un handler, un contrôleur | 18/18 / 15/18 | −7 % de tokens, −14 % de temps, −27 % d'appels d'outils ; les 3 échecs sans lui sont des namespaces devinés |
+| Impact d'un changement de signature | 17/18 / 15/18 | +18 % de tokens (`impact_of` en dit plus que nécessaire sur une méthode aux nombreux appelants) ; chaque échec est un namespace deviné |
+| Expliquer une fonctionnalité | 17/18 / 18/18 | −12 % de tokens, −26 % de temps, −42 % d'appels d'outils |
+| Corriger un bogue introduit | 18/18 / 18/18 | phpgraph non appelé ; +10 % de tokens pour la présence du serveur |
+
 ### Comparé à d'autres graphes de code
 
 [Kimai](https://github.com/kimai/kimai) 2.70.2 (Symfony, 1 072 fichiers sources et 761 de tests, hors du corpus sur lequel phpgraph est mesuré), octobre 2026, sans LLM : phpgraph 1.5.2 et [graphify](https://github.com/Graphify-Labs/graphify) 0.9.93 (`extract --code-only`), sur la même machine, dans Docker. graphify garde une arête par appelant et appelé : les appels entre méthodes du projet sont donc comparés par paire ; des échantillons des différences ont été vérifiés dans le code. `tools/graphify/benchmark.sh` le relance.

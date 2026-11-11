@@ -1,0 +1,22 @@
+project: php-ddd-example
+kind: fix
+patch: ../patches/ddd-uuid-equals.patch
+prompt: |
+  The unit test CodelyTv\Tests\Mooc\CoursesCounter\Application\Increment\IncrementCoursesCounterOnCourseCreatedTest
+  fails: an existing courses counter is no longer incremented when a course is created. Find the bug and fix it.
+  Run the unit tests with:
+    php -d display_errors=stderr vendor/bin/phpunit tests/Mooc/CoursesCounter
+  (only the Application and Domain tests run without a database).
+# The first command fails with the seeded bug (checked by the harness before each run); all must pass after.
+tests:
+  - php -d display_errors=stderr vendor/bin/phpunit --do-not-cache-result tests/Mooc/CoursesCounter
+  - php -d display_errors=stderr vendor/bin/phpunit --do-not-cache-result tests/Mooc/Courses/Application
+  - php -d display_errors=stderr vendor/bin/phpunit --do-not-cache-result tests/Backoffice/Auth/Application
+protected:
+  - tests
+checked: |
+  Seed (patches/ddd-uuid-equals.patch): Uuid::equals() compares the value with itself, so
+  CoursesCounter::hasIncremented() is true for any course once the counter holds one, and CoursesCounterIncrementer
+  never saves: it_should_increment_an_existing_counter fails ("save ... should be called exactly 1 times"). The
+  cause is two layers below the failing test (Application → Domain → Shared kernel). Checked on a throwaway copy:
+  with the patch the first command fails (4 tests, 1 error), without it the three commands pass (5, 3 and 3 tests).

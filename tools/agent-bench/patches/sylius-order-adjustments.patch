@@ -1,0 +1,11 @@
+--- a/src/Sylius/Component/Order/Model/Order.php
++++ b/src/Sylius/Component/Order/Model/Order.php
+@@ -214,7 +214,7 @@
+     {
+         $adjustments = clone $this->getAdjustments($type);
+         foreach ($this->items as $item) {
+-            foreach ($item->getAdjustmentsRecursively($type) as $adjustment) {
++            foreach ($item->getAdjustments($type) as $adjustment) {
+                 $adjustments->add($adjustment);
+             }
+         }

@@ -3,6 +3,24 @@
 phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md), and changes only in a major version (2.0.0), announced here.
 
+## Unreleased
+
+### Added
+- `outline` says why each class is in it: a short tag at the end of its line (`[seed]`, `[module]`, `[uses Notification]`,
+  `[used by CourseCreator]`, `[family: 3 members use the core]`, `, what the core calls only` for a class used by
+  many; in a method's outline, `[by Cart::total]`, the method calling it first), and why each class left out of a full
+  core qualified. In JSON, a `reason` object per class of the core (`kind`, `via`, `count`, `reduced`) and
+  `leftReasons`. The classes selected are unchanged (15 reference subjects); the text grows by 2 to 10 %.
+  The classes left out are named in full (`App\Billing\Ledger3`): no namespace line of the outline says where they are.
+- An agent benchmark, `tools/agent-bench/` and [docs/BENCHMARK.md](docs/BENCHMARK.md): Claude Code with and without
+  phpgraph on 24 tasks of five public projects.
+
+### Changed
+- `impact` shows each class's namespace, whole, instead of its first two folders: an agent completed
+  `UpsertCategoryBaseSql (Infrastructure/Storage)` with a wrong namespace. A relation of the class itself (it extends
+  the change, handles the message) is said once: `extends it`, `handles it → __invoke()`, not `extends (extends)`.
+  The JSON is unchanged.
+
 ## 2.0.0 (2026-10-31)
 
 ### Changed

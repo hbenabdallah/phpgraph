@@ -149,6 +149,23 @@ final class OutlineTest extends TestCase
         self::assertStringNotContainsString('NotificationTest', $text);
     }
 
+    public function testTheOutlineSaysWhyEachClassIsInIt(): void
+    {
+        $text = $this->presenter()->outline('notification validation');
+
+        self::assertStringContainsString('Notification (final class) — Collects the violations of one validation run. [seed]', $text, 'its name carries the question\'s words');
+        self::assertMatchesRegularExpression('/^    ContextValidator \\(final class\\)[^\\n]* \\[module\\]$/m', $text, 'of the seed\'s module, linked to it');
+        self::assertMatchesRegularExpression('/^    ProblemDetails \\(abstract class\\)[^\\n]* \\[uses Notification\\]$/m', $text, 'joined through the core class it uses');
+
+        $json = json_decode($this->presenter()->outline('notification validation', 'json'), true);
+        $reasons = [];
+        foreach (Dig::list($json, 'core') as $index => $class) {
+            $reasons[Dig::text($json, 'core', $index, 'id')] = Dig::at($json, 'core', $index, 'reason');
+        }
+        self::assertSame(['kind' => 'topic'], $reasons['App\Validation\Notification'] ?? null, 'a seed by its name');
+        self::assertSame(['kind' => 'uses', 'via' => 'App\Validation\Notification'], $reasons['App\Presentation\ProblemDetails'] ?? null, 'the JSON names the class it joined through');
+    }
+
     private function presenter(): TextPresenter
     {
         return new TextPresenter(new GraphQuery(self::graph(), null, self::FIXTURE));

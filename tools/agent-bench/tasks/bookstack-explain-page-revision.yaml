@@ -1,0 +1,36 @@
+project: bookstack
+kind: explain
+prompt: |
+  Explain what happens when a user saves an edited page: from the controller handling the update to the creation of
+  a new page revision, and how old revisions are pruned. List the classes of the flow.
+expected:
+  - BookStack\Entities\Controllers\PageController
+  - BookStack\Entities\Repos\PageRepo
+  - BookStack\Entities\Repos\BaseRepo
+  - BookStack\Entities\Repos\RevisionRepo
+  - BookStack\Entities\Models\PageRevision
+  - BookStack\Entities\Models\Page
+allowed:
+  - BookStack\Entities\Models\Entity
+  - BookStack\Entities\Queries\PageQueries
+  - BookStack\Entities\Tools\PageContent
+  - BookStack\Entities\Tools\PageEditorType
+  - BookStack\Entities\Tools\SlugGenerator
+  - BookStack\Entities\Controllers\PageRevisionController
+  - BookStack\Activity\Tools\ActivityLogger
+  - BookStack\Facades\Activity
+  - BookStack\Activity\ActivityType
+  - BookStack\Activity\TagRepo
+  - BookStack\References\ReferenceStore
+  - BookStack\References\ReferenceUpdater
+  - BookStack\Search\SearchIndex
+  - BookStack\Entities\Models\Book
+min_recall: 0.8
+min_precision: 0.7
+checked: |
+  Read in the code: PageController::update() (Entities/Controllers/PageController.php:217) calls
+  PageRepo::update(), which updates the content (updateTemplateStatusAndContentFromInput, PageContent), calls
+  BaseRepo::update() (fill, slug, tags, search index, references), increments revision_count, deletes the user's
+  drafts (RevisionRepo::deleteDraftsForCurrentUser) and, when the name, HTML, Markdown or changelog changed, calls
+  RevisionRepo::storeNewForPage(), which saves a PageRevision of type 'version' and calls deleteOldRevisions()
+  (config app.revision_limit, PageRevision::query()). Then Activity::add(PAGE_UPDATE).

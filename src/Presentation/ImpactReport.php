@@ -101,7 +101,7 @@ final class ImpactReport
                 $this->impact->truncated ? ' (stopped at the limit: more exist)' : '',
             ),
             \sprintf(
-                'Paths under %s; a class shows its module. INFERRED unless marked. Per class: methods reaching the change, lines, → what they call. %s',
+                'Paths under %s; a class shows its namespace. INFERRED unless marked. Per class: methods reaching the change, lines, → what they call. %s',
                 $this->prefix === '' ? 'the project root' : $this->prefix,
                 $limit === 0 ? 'Complete.' : \sprintf('%d per list, %d sites per class: limit 0 for all, format json or full.', $limit, self::SITES),
             ),
@@ -381,13 +381,16 @@ final class ImpactReport
         // By calling method: its lines, and what it calls when that is not the change itself.
         $byMethod = [];
         foreach ($class->sites as $edge) {
-            $method = str_contains($edge->source, '::') ? substr($edge->source, (int) strrpos($edge->source, ':') + 1) : $edge->relation->value;
+            // A relation of the class itself (it extends the change, handles the message) has no method: the relation
+            // names the site, once.
+            $ofClass = !str_contains($edge->source, '::');
+            $method = $ofClass ? self::relationWords($edge->relation) : substr($edge->source, (int) strrpos($edge->source, ':') + 1);
             $target = $edge->target === $this->changed->id || $edge->target === $class->class ? '' : ' → ' . $this->target($edge->target, $class->class);
             $key = $method . $target;
             $byMethod[$key]['method'] = $method;
             $byMethod[$key]['target'] = $target;
             $byMethod[$key]['lines'] = [...$byMethod[$key]['lines'] ?? [], ...$edge->lines()];
-            if ($edge->lines() === [] && $edge->relation !== Relation::Calls) {
+            if ($edge->lines() === [] && $edge->relation !== Relation::Calls && !$ofClass) {
                 $byMethod[$key]['relation'] = $edge->relation->value;
             }
             if (str_starts_with($edge->via(), 'named: ')) {
@@ -433,6 +436,19 @@ final class ImpactReport
     }
 
     /**
+     * A relation of a class to the change, as the site of its line: `handles it → __invoke()`, `extends it`.
+     */
+    private static function relationWords(Relation $relation): string
+    {
+        return match ($relation) {
+            Relation::HandledBy => 'handles it',
+            Relation::Extends, Relation::Implements, Relation::References, Relation::Instantiates, Relation::Receives, Relation::Dispatches => $relation->value . ' it',
+            Relation::UsesTrait => 'uses it',
+            default => str_replace('_', ' ', $relation->value),
+        };
+    }
+
+    /**
      * Why a test is listed: the first class of the project on its way to the change.
      */
     private function reason(ImpactedClass $test): string
@@ -461,21 +477,18 @@ final class ImpactReport
     }
 
     /**
-     * Where a class is: its module when its file is ClassName.php (PSR-4), else its compact path; its last folder
-     * too when another listed class has the same name.
+     * Where a class is: its namespace, whole, so that its name can be written without guessing (two folders of
+     * `Infrastructure/Storage/Save/Query` led an agent to `Infrastructure\Storage\UpsertCategoryBaseSql`); a class
+     * without namespace, its compact path.
      */
     private function where(string $class): string
     {
-        $file = $this->file($class);
-        $short = substr($class, (int) strrpos('\\' . $class, '\\'));
-
-        if ($file === null || basename($file) !== $short . '.php') {
-            return $this->compact($file);
+        $separator = strrpos($class, '\\');
+        if ($separator !== false) {
+            return substr($class, 0, $separator);
         }
-        $module = $this->module($file);
-        $folder = basename(\dirname($file));
 
-        return ($this->names[$short] ?? 0) > 1 && !str_ends_with($module, $folder) ? $module . '/…/' . $folder : $module;
+        return $this->compact($this->file($class));
     }
 
     /**

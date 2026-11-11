@@ -1,0 +1,24 @@
+project: akeneo-pim
+kind: impact
+prompt: |
+  In the Category bounded context, the port Akeneo\Category\Domain\Query\GetCategoryInterface::byCode() will take a
+  second required parameter. List every production class (not tests) whose code must change: the interface, its
+  implementations, and the classes calling byCode() on it.
+expected:
+  - Akeneo\Category\Domain\Query\GetCategoryInterface
+  - Akeneo\Category\Infrastructure\Storage\Sql\GetCategorySql
+  - Akeneo\Category\Application\UpsertCategoryCommandHandler
+  - Akeneo\Category\Application\Handler\CategoryQueryHandler
+  - Akeneo\Category\Infrastructure\Handler\SearchFiltersSql
+  - Akeneo\Category\Infrastructure\Storage\Save\Query\UpsertCategoryBaseSql
+  - Akeneo\Category\Infrastructure\Storage\Save\Query\UpsertCategoryTranslationsSql
+allowed: []
+min_recall: 1
+min_precision: 0.75
+checked: |
+  grep -rln GetCategoryInterface src tests: 28 files. One implementation (GetCategorySql, registered in
+  Infrastructure/Symfony/Resources/config/queries.yml; nothing uses the class by its own name). Among the
+  production users, those calling ->byCode( on it: UpsertCategoryCommandHandler.php:41, CategoryQueryHandler.php:45,
+  SearchFiltersSql.php:38, UpsertCategoryBaseSql.php:34, UpsertCategoryTranslationsSql.php:76. The other production
+  users (controllers, TemplateBuilder, ActivateTemplate, Enrichment's CategoryTreeController) call byId() only:
+  false answers. Tests excluded by the question.

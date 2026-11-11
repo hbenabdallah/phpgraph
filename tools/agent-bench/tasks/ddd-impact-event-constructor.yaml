@@ -1,0 +1,20 @@
+project: php-ddd-example
+kind: impact
+prompt: |
+  We are adding a new required constructor parameter, `string $category`, to
+  CodelyTv\Mooc\Courses\Domain\CourseCreatedDomainEvent. List every class whose code must change so that the project
+  still runs and its tests still compile: the event itself and every class, production or test, that constructs it.
+expected:
+  - CodelyTv\Mooc\Courses\Domain\CourseCreatedDomainEvent
+  - CodelyTv\Mooc\Courses\Domain\Course
+  - CodelyTv\Mooc\Courses\Infrastructure\Cdc\DatabaseMutationToCourseCreatedDomainEvent
+  - CodelyTv\Tests\Mooc\Courses\Domain\CourseCreatedDomainEventMother
+allowed: []
+min_recall: 1
+min_precision: 0.75
+checked: |
+  grep -rn "new CourseCreatedDomainEvent\|new self" over src, apps, tests: Course::create (src/Mooc/Courses/Domain/
+  Course.php:18), DatabaseMutationToCourseCreatedDomainEvent::transform (Cdc, line 21), CourseCreatedDomainEventMother
+  (tests, line 20), and fromPrimitives() of the event itself (new self, line 32). No other construction: the other
+  users (subscribers, tests of the buses) only read it or build it through the mother. Precision 0.75 tolerates one
+  class read but not constructed (a subscriber, for instance).

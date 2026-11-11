@@ -1,0 +1,24 @@
+project: sylius
+kind: impact
+prompt: |
+  We are adding a required second parameter, `ChannelInterface $channel`, to
+  Sylius\Bundle\CoreBundle\Order\Checker\OrderPromotionsIntegrityCheckerInterface::check(). List every class whose
+  code must change: the interface, its implementations, the classes calling check() and the tests calling it.
+expected:
+  - Sylius\Bundle\CoreBundle\Order\Checker\OrderPromotionsIntegrityCheckerInterface
+  - Sylius\Bundle\CoreBundle\Order\Checker\OrderPromotionsIntegrityChecker
+  - Sylius\Bundle\ShopBundle\EventListener\OrderIntegrityChecker
+  - Sylius\Bundle\ApiBundle\CommandHandler\Checkout\CompleteOrderHandler
+  - Tests\Sylius\Bundle\CoreBundle\Order\Checker\OrderPromotionsIntegrityCheckerTest
+# Tests mocking check() keep working (a mock accepts the extra argument) but may need their expectations updated.
+allowed:
+  - Tests\Sylius\Bundle\ShopBundle\EventListener\OrderIntegrityCheckerTest
+  - Tests\Sylius\Bundle\ApiBundle\CommandHandler\Checkout\CompleteOrderHandlerTest
+min_recall: 1
+min_precision: 0.75
+checked: |
+  grep -rln OrderPromotionsIntegrityChecker src tests: 8 files. One implementation (OrderPromotionsIntegrityChecker
+  implements the interface); two production callers of ->check($order) on it (ShopBundle
+  EventListener/OrderIntegrityChecker.php:42, ApiBundle CompleteOrderHandler.php:63); the implementation's test calls
+  check($order) directly (OrderPromotionsIntegrityCheckerTest.php:55, 76); the two other tests only mock the
+  interface. services.php only registers it (no PHP call).

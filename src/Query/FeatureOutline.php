@@ -11,9 +11,12 @@ use PhpGraph\Extractor\PhpCodeParser;
 use PhpGraph\Extractor\SourceFacts;
 use PhpGraph\Graph\Confidence;
 use PhpGraph\Graph\Graph;
+use PhpGraph\Graph\Node;
 use PhpGraph\Graph\NodeKind;
 use PhpGraph\Graph\Relation;
 use PhpGraph\Query\Result\Outline;
+use PhpGraph\Query\Result\Reason;
+use PhpGraph\Query\Result\ReasonKind;
 use PhpParser\Node as AstNode;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Name;
@@ -73,6 +76,7 @@ final class FeatureOutline
         $subgraph = $this->query->subgraph($topic, 1, 10, false);
         // A class named exactly is the seed, not every class sharing a word of its name (ReservationCTRL, not each *CTRL).
         $seeds = array_fill_keys($this->namedClasses($topic), true);
+        $reasons = array_map(static fn (): Reason => new Reason(ReasonKind::Named), $seeds);
         $routed = [];
         foreach ($seeds !== [] ? [] : $subgraph->seeds as $seed) {
             // A route named after the question (`home` for GET /) opens it through its handler's class.
@@ -81,6 +85,7 @@ final class FeatureOutline
                 $node = $this->graph->node($class);
                 if ($node !== null && $node->kind->isClassLike() && $node->file !== null) {
                     $seeds[$class] = true;
+                    $reasons[$class] ??= $this->seedReason($seed, $class);
                     if ($seed->kind === NodeKind::Route) {
                         $routed[$class] = true;
                     }
@@ -109,7 +114,8 @@ final class FeatureOutline
         $cluster = new FeatureCluster($this->graph, $this->relevance);
         $named = $this->namedClasses($topic);
         $terms = $named === [] ? $subgraph->terms : $this->distinctive($subgraph->terms);
-        ['core' => $core, 'families' => $families, 'hubs' => $hubs, 'left' => $left] = $cluster->grow($seeds, $terms, $named);
+        ['core' => $core, 'families' => $families, 'hubs' => $hubs, 'left' => $left, 'reasons' => $joined] = $cluster->grow($seeds, $terms, $named);
+        $reasons = array_intersect_key($reasons, array_flip($seeds)) + $joined;
         $inCore = array_fill_keys($core, true);
         // The members of an interface family are the family's: counted with it, not as users of the core.
         $members = [];
@@ -131,6 +137,9 @@ final class FeatureOutline
             if ((isset($ancestors[$class]) && !\in_array($class, $seeds, true) && \count($cluster->membersOf($class)) >= MethodCone::HUB)
                 || (\in_array($class, $hubs, true) && \count($cluster->membersOf($class)) < 2)) {
                 $shared[$class] = $this->usedBy($class, $inCore);
+                if (isset($reasons[$class])) {
+                    $reasons[$class] = $reasons[$class]->reduced();
+                }
             }
         }
         $own = array_values(array_filter($core, static fn (string $class): bool => !isset($shared[$class])));
@@ -257,7 +266,51 @@ final class FeatureOutline
             $unused,
             large: \count($named) === 1 ? $this->large($named[0]) : null,
             left: $left,
+            reasons: array_intersect_key($reasons, array_flip([...$core, ...$left])),
         );
+    }
+
+    /**
+     * Why a node the question's words found makes its class a seed: a route named after the question, the class's
+     * own name or namespace, or one of its methods.
+     */
+    private function seedReason(Node $seed, string $class): Reason
+    {
+        if ($seed->kind === NodeKind::Route) {
+            return new Reason(ReasonKind::Route, $seed->id);
+        }
+
+        return $seed->id === $class ? new Reason(ReasonKind::Topic) : new Reason(ReasonKind::Method, $seed->id);
+    }
+
+    /**
+     * Why each class of a method's outline is in it: the class of the method, or the method of the cone that calls
+     * its nearest method first.
+     *
+     * @param array<string, int>          $methods method run => calls away from the start
+     * @param array<string, list<string>> $calls   caller => callees, nearest callers first
+     *
+     * @return array<string, Reason>
+     */
+    private static function coneReasons(string $start, array $methods, array $calls): array
+    {
+        $reasons = [explode('::', $start)[0] => new Reason(ReasonKind::Start)];
+        asort($methods);
+        foreach (array_keys($methods) as $method) {
+            $class = explode('::', (string) $method)[0];
+            if (isset($reasons[$class])) {
+                continue;
+            }
+            foreach ($calls as $caller => $callees) {
+                if (\in_array($method, $callees, true)) {
+                    $reasons[$class] = new Reason(ReasonKind::Called, (string) $caller);
+
+                    break;
+                }
+            }
+        }
+
+        return $reasons;
     }
 
     /**
@@ -485,6 +538,7 @@ final class FeatureOutline
             null,
             $cone['guesses'],
             $cone['guessed'],
+            reasons: self::coneReasons($start, $cone['methods'], $calls),
         );
     }
 
