@@ -3,7 +3,7 @@
 phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md), and changes only in a major version (2.0.0), announced here.
 
-## Unreleased
+## 2.1.0 (2026-11-13)
 
 ### Added
 - `outline` says why each class is in it: a short tag at the end of its line (`[seed]`, `[module]`, `[uses Notification]`,
@@ -20,8 +20,8 @@ phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stay
   2025-06-18). The text block holds the same JSON; a warning about the graph comes in a block of its own instead of
   before the JSON, which it made unreadable.
 - An agent benchmark, `tools/agent-bench/` and [docs/BENCHMARK.md](docs/BENCHMARK.md): Claude Code with and without
-  phpgraph on 24 tasks of five public projects.
-
+  phpgraph on 24 tasks of five public projects, a pilot of four harder tasks, and the impact tasks again after the
+  changes below. The README opens with the questions phpgraph answers and what it costs, as measured.
 - PrestaShop's legacy classes: `Context`, `Db`, `Link`… name the `ContextCore`, `DbCore`, `LinkCore` the project
   declares, which the autoloader of `prestashop/autoload` extends at run time (a class declared in `override/` keeps
   its name). On PrestaShop, calls resolved from declared types in application code: 58.8 → 75.7 %, unknown
