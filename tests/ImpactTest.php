@@ -227,6 +227,23 @@ final class ImpactTest extends TestCase
         self::assertArrayHasKey('App\Listener', $this->impact($graph, 'App\PromotionProcessor::process'), 'the autowired processor may be the changed one');
     }
 
+    public function testACallerGivenAServiceThatAutowiresTheInterfaceIsReachedThroughIt(): void
+    {
+        $graph = $this->buildProject([
+            'src/Processor.php' => 'namespace App; interface Processor { public function process(): void; }',
+            'src/PromotionProcessor.php' => 'namespace App; final class PromotionProcessor implements Processor { public function process(): void {} }',
+            'src/PaymentProcessor.php' => 'namespace App; final class PaymentProcessor implements Processor { public function process(): void {} }',
+            'src/Wrapper.php' => 'namespace App; final class Wrapper implements Processor { public function __construct(private Processor $payment, private Processor $other) {} public function process(): void { $this->payment->process(); $this->other->process(); } }',
+            'src/Listener.php' => 'namespace App; final class Listener { public function __construct(private Processor $processor) {} public function run(): void { $this->processor->process(); } }',
+            'config/services.php' => 'use function Symfony\Component\DependencyInjection\Loader\Configurator\service; return static function ($container): void { $services = $container->services();'
+                . ' $services->set("app.payment", App\PaymentProcessor::class);'
+                . ' $services->set("app.wrapper", App\Wrapper::class)->arg("$payment", service("app.payment"));'
+                . ' $services->set(App\Listener::class)->args([service("app.wrapper")]); };',
+        ])->graph;
+
+        self::assertArrayHasKey('App\Listener', $this->impact($graph, 'App\PromotionProcessor::process'), 'the wrapper it is given autowires a processor that may be the changed one');
+    }
+
     public function testACallerGivenADecoratedServiceIsReachedThroughTheCompositeDecoratingIt(): void
     {
         $graph = $this->buildProject([

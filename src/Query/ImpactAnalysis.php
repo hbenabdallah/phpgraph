@@ -959,7 +959,14 @@ final class ImpactAnalysis
             }
             $holdsOne = false;
             foreach ($this->graph->incident($service) as $item) {
-                if (!$item['forward'] || $item['edge']->relation !== Relation::Receives) {
+                if (!$item['forward']) {
+                    continue;
+                }
+                // The container autowires one of them into the service: it may hold the implementation.
+                if ($item['edge']->relation === Relation::Autowires && \in_array($interface, $this->ancestorsOf($item['other']), true)) {
+                    return true;
+                }
+                if ($item['edge']->relation !== Relation::Receives) {
                     continue;
                 }
                 $holdsOne = $holdsOne || \in_array($interface, $this->ancestorsOf($item['other']), true);

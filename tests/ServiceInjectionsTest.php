@@ -173,4 +173,35 @@ final class ServiceInjectionsTest extends TestCase
 
         self::assertTrue($this->hasEdge($graph, 'App\TracedMailer', 'App\Mailer', Relation::Receives), 'the decoration is in YAML, the attribute in the class');
     }
+
+    public function testAutowiresReadsTheInheritedConstructorAndLeavesSettersOut(): void
+    {
+        $graph = $this->buildProject([
+            'src/Processor.php' => 'namespace App; interface Processor {}',
+            'src/PaymentProcessor.php' => 'namespace App; class PaymentProcessor implements Processor {}',
+            'src/BaseListener.php' => 'namespace App; abstract class BaseListener { public function __construct(Processor $audit, Processor $processor) {} }',
+            'src/Listener.php' => 'namespace App; class Listener extends BaseListener {}',
+            'src/Worker.php' => 'namespace App; class Worker { public function __construct(Processor $audit, Processor $processor) {} public function setFallback(Processor $fallback): void {} }',
+            'config/services.php' => 'use function Symfony\Component\DependencyInjection\Loader\Configurator\service; return static function ($container): void { $services = $container->services();'
+                . ' $services->set("app.payment", App\PaymentProcessor::class);'
+                . ' $services->set(App\Listener::class)->arg("$audit", service("app.payment"));'
+                . ' $services->set(App\Worker::class)->arg("$audit", service("app.payment"))->call("setFallback", [service("app.payment")]); };',
+        ])->graph;
+
+        self::assertTrue($this->hasEdge($graph, 'App\Listener', 'App\Processor', Relation::Autowires), 'the constructor it inherits takes two processors, one is configured');
+        self::assertTrue($this->hasEdge($graph, 'App\Worker', 'App\Processor', Relation::Autowires), 'the service given to a setter fills no constructor parameter');
+    }
+
+    public function testAutowireDecoratedReadsADecoratorRegisteredUnderAnId(): void
+    {
+        $graph = $this->buildProject([
+            'src/Mailer.php' => 'namespace App; class Mailer {}',
+            'src/TracedMailer.php' => 'namespace App; use Symfony\Component\DependencyInjection\Attribute\AutowireDecorated;'
+                . ' class TracedMailer { public function __construct(#[AutowireDecorated] Mailer $inner) {} }',
+            'config/services.yaml' => "services:\n    app.mailer:\n        class: App\\Mailer\n"
+                . "    app.traced:\n        class: App\\TracedMailer\n        decorates: app.mailer\n",
+        ])->graph;
+
+        self::assertTrue($this->hasEdge($graph, 'App\TracedMailer', 'App\Mailer', Relation::Receives), 'the attribute names the class, the configuration its id');
+    }
 }

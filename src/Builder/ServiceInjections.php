@@ -228,14 +228,17 @@ final class ServiceInjections
     /**
      * The types a class takes in more constructor parameters than the configuration gives it services of: the
      * container autowires the others, which may be any implementation (`autowires`, so that `impact` does not take the
-     * configured ones for all the class holds). Arguments of setters (`calls`) are counted too: a class wired by
-     * setters may be taken for complete.
+     * configured ones for all the class holds). Services given to setters or properties (`calls`) fill no
+     * constructor parameter: they are not counted.
      */
     private function autowired(): void
     {
         /** @var array<string, list<string>> $given consumer class => the class of each service named for it */
         $given = [];
         foreach ($this->container->arguments() as $argument) {
+            if ($argument['setter']) {
+                continue;
+            }
             $consumer = $argument['target'] === null ? null : $this->classOf($argument['id'], $argument['service']);
             $class = $consumer === null ? null : $this->classOf((string) $argument['target'], $argument['service']);
             if ($consumer !== null && $class !== null) {
@@ -243,7 +246,7 @@ final class ServiceInjections
             }
         }
         foreach ($given as $consumer => $classes) {
-            $parameters = array_count_values(array_filter($this->constructorTypes[$consumer] ?? [], 'is_string'));
+            $parameters = array_count_values(array_filter($this->constructorOf($consumer), 'is_string'));
             foreach ($parameters as $type => $count) {
                 $type = (string) $type;
                 $configured = \count(array_filter($classes, fn (string $class): bool => $this->isA($class, $type)));
@@ -252,6 +255,32 @@ final class ServiceInjections
                 }
             }
         }
+    }
+
+    /**
+     * The class of each parameter of the constructor a class runs: its own, or the one it inherits.
+     *
+     * @return list<?string>
+     */
+    private function constructorOf(string $class): array
+    {
+        for ($depth = 0; $depth < self::MAX_DEPTH; ++$depth) {
+            if ($this->graph->hasNode($class . '::__construct')) {
+                return $this->constructorTypes[$class] ?? [];
+            }
+            $parent = null;
+            foreach ($this->graph->incident($class) as $item) {
+                if ($item['forward'] && $item['edge']->relation === Relation::Extends) {
+                    $parent = $item['other'];
+                }
+            }
+            if ($parent === null) {
+                return [];
+            }
+            $class = $parent;
+        }
+
+        return [];
     }
 
     private function isA(string $class, string $type): bool

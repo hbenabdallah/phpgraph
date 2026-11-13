@@ -116,7 +116,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<string, string> property of the current class => the string it holds by default */
     private array $stringProperties = [];
 
-    /** @var list<array{id: string, tag: ?string, service: ?string, locator?: bool}> */
+    /** @var list<array{id: string, tag: ?string, service: ?string, locator?: bool, setter?: bool}> */
     private array $serviceArguments = [];
 
     /** @var array<string, array{string, int}> container service id => [the id it decorates, its priority] */
@@ -1879,7 +1879,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                     if ($decorated !== null && ($target === '.inner' || $target === $id . '.inner')) {
                         $target = $decorated;
                     }
-                    $this->serviceArguments[] = ['id' => (string) $id, 'tag' => $injected['tag'], 'service' => $target, 'locator' => $injected['locator'] ?? false];
+                    $this->serviceArguments[] = ['id' => (string) $id, 'tag' => $injected['tag'], 'service' => $target, 'locator' => $injected['locator'] ?? false, 'setter' => $name === 'call'];
                 }
             }
 
@@ -1907,7 +1907,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
      * What a configuration value injects: `tagged_iterator('t')`, `tagged_locator('t')` (or `['tag' => 't']`),
      * `service('id')`, and those inside arrays (`iterator([...])`, `->args([...])`).
      *
-     * @return list<array{tag: ?string, service: ?string, locator?: bool}>
+     * @return list<array{tag: ?string, service: ?string, locator?: bool, setter?: bool}>
      */
     private function injectedValues(Expr $value): array
     {
