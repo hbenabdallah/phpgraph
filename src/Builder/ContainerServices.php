@@ -96,6 +96,31 @@ final class ContainerServices
             $this->cache[$file] = [$modified, $size, $declared];
             $this->merge($declared, $services->serviceOf($file));
         }
+        foreach ($this->arguments as $index => $argument) {
+            $this->arguments[$index]['target'] = $this->inner($argument['target'], $argument['id'], $argument['service']);
+        }
+    }
+
+    /**
+     * `.inner` (or `<id>.inner`) left for a decorator declared elsewhere: `#[AutowireDecorated]` on a class that YAML
+     * says decorates a service. It is the service the decorator decorates.
+     */
+    private function inner(?string $target, string $id, string $service): ?string
+    {
+        if ($target !== '.inner' && $target !== $id . '.inner') {
+            return $target;
+        }
+        foreach (array_unique([$service, ServiceMap::ROOT, '']) as $scope) {
+            foreach ($this->decorations[$scope] ?? [] as $decorated => $decorators) {
+                foreach ($decorators as [$decorator]) {
+                    if ($decorator === $id) {
+                        return (string) $decorated;
+                    }
+                }
+            }
+        }
+
+        return $target;
     }
 
     /**
@@ -217,22 +242,26 @@ final class ContainerServices
     }
 
     /**
-     * The id of the decorator the container injects in place of a service, following aliases: the outermost one,
-     * or for one of its decorators (`$consumer`, receiving `.inner`) the next one inside. Null when nothing decorates
-     * the service there: the service itself is injected.
+     * The ids of the decorators the container injects in place of a service, outermost first, following aliases: for
+     * one of its decorators (`$consumer`, receiving `.inner`), those inside it. A decorator may be decorated in turn:
+     * its own decorators wrap it. Empty when nothing decorates the service there: the service itself is injected.
      *
      * Symfony applies the decorators of a service from the highest priority (innermost) to the lowest (outermost);
      * of equal priorities, the one declared last is outermost.
+     *
+     * @return list<string>
      */
-    public function decoratorOf(string $id, string $consumer, string $service = ''): ?string
+    public function decoratorsOf(string $id, string $consumer, string $service = ''): array
     {
         foreach (array_unique([$service, ServiceMap::ROOT, '']) as $scope) {
             $target = $id;
             for ($step = 0; $step <= self::MAX_ALIASES; ++$step) {
                 $target = ltrim($target, '@');
-                $chain = $this->decorations[$scope][$target] ?? [];
-                if ($chain !== []) {
-                    return $this->nextDecorator($chain, $consumer);
+                if (($this->decorations[$scope][$target] ?? []) !== []) {
+                    $decorators = $this->wrapping($target, $scope, 0);
+                    $position = array_search($consumer, $decorators, true);
+
+                    return $position === false ? $decorators : \array_slice($decorators, $position + 1);
                 }
                 $definition = $this->definitions[$scope][$target] ?? null;
                 if ($definition === null || !str_starts_with($definition, '@')) {
@@ -242,23 +271,30 @@ final class ContainerServices
             }
         }
 
-        return null;
+        return [];
     }
 
     /**
-     * @param non-empty-list<array{string, int}> $chain [decorator id, priority], in declaration order
+     * The decorators wrapping a service, outermost first, each preceded by those wrapping it.
+     *
+     * @return list<string>
      */
-    private function nextDecorator(array $chain, string $consumer): ?string
+    private function wrapping(string $id, string $scope, int $depth): array
     {
+        $chain = $this->decorations[$scope][$id] ?? [];
+        if ($chain === [] || $depth > self::MAX_ALIASES) {
+            return [];
+        }
         $order = array_keys($chain);
         usort($order, static fn (int $a, int $b): int => [$chain[$a][1], $b] <=> [$chain[$b][1], $a]);
-        $decorators = array_map(static fn (int $index): string => $chain[$index][0], $order);
-        $position = array_search($consumer, $decorators, true);
-        if ($position === false) {
-            return $decorators[0];
+        $decorators = [];
+        foreach ($order as $index) {
+            $decorator = $chain[$index][0];
+            array_push($decorators, ...$this->wrapping($decorator, $scope, $depth + 1));
+            $decorators[] = $decorator;
         }
 
-        return $decorators[$position + 1] ?? null;
+        return $decorators;
     }
 
     /**

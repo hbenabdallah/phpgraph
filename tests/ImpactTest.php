@@ -211,6 +211,22 @@ final class ImpactTest extends TestCase
         self::assertArrayNotHasKey('App\PaymentListener', $impact, 'the configuration gives it another processor, which never runs the changed one');
     }
 
+    public function testACallerAlsoAutowiredWithTheInterfaceIsReachedThroughIt(): void
+    {
+        $graph = $this->buildProject([
+            'src/Processor.php' => 'namespace App; interface Processor { public function process(): void; }',
+            'src/PromotionProcessor.php' => 'namespace App; final class PromotionProcessor implements Processor { public function process(): void {} }',
+            'src/PaymentProcessor.php' => 'namespace App; final class PaymentProcessor implements Processor { public function process(): void {} }',
+            'src/Listener.php' => 'namespace App; final class Listener { public function __construct(private Processor $audit, private Processor $processor) {} public function run(): void { $this->processor->process(); } }',
+            'config/services.php' => 'use function Symfony\Component\DependencyInjection\Loader\Configurator\service; return static function ($container): void { $services = $container->services();'
+                . ' $services->set("app.payment", App\PaymentProcessor::class);'
+                . ' $services->set(App\Listener::class)->arg("$audit", service("app.payment")); };',
+        ])->graph;
+
+        self::assertTrue($this->hasEdge($graph, 'App\Listener', 'App\Processor', Relation::Autowires), 'one of its two processors is not named by the configuration');
+        self::assertArrayHasKey('App\Listener', $this->impact($graph, 'App\PromotionProcessor::process'), 'the autowired processor may be the changed one');
+    }
+
     public function testACallerGivenADecoratedServiceIsReachedThroughTheCompositeDecoratingIt(): void
     {
         $graph = $this->buildProject([

@@ -176,6 +176,7 @@ phpgraph mcp-config claude|codex|cursor|json [--docker image]
 | `requests` | HTTP call → the route it reaches, in the same service or another, or the operation of another API's OpenAPI document |
 | `implemented_by` | API schema operation (`operation:`) → the route with its method and path (OpenAPI), or the method of a class implementing the generated service (protobuf) |
 | `receives` | service → each service the container configuration injects into it (a tag, an id, the decorated service); `via` says which: `service sales.pipeline` for one of several services of a class |
+| `autowires` | service → an interface or class it takes in more constructor parameters than the configuration gives it services of: the container autowires the others, so `impact` keeps it as a caller whatever it is given, INFERRED |
 | `reads_state_of` | method → a method of the same class changing a property it reads, outside the constructor (`hasErrors()` → `add()`), INFERRED |
 
 Every relation carries a confidence level:

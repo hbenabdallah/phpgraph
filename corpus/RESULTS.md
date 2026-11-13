@@ -6,17 +6,17 @@ phpgraph could not type, the main target of type inference work. Arrows compare 
 
 | Project | Files | Failed | Duplicates | Classes | Methods | Edges | Vendor files read | Seconds | Memory MB |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4182 | 111 | 0.47 | 34 |
-| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140903 (+181 ▲) | 681 | 13.15 | 610 |
-| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 218696 (+61 ▲) | 767 | 15.75 | 898 |
-| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 192739 (+6 ▲) | 647 | 12.82 (-4.31 ▲) | 774 |
-| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6823 | 76 | 0.87 | 44 |
-| bookstack | 1513 | 0 | 0 | 698 | 4076 | 22834 | 393 | 4.82 (+1.26 ▼) | 170 |
-| wordpress | 1899 | 0 | 50 | 840 | 7580 | 43373 | 0 | 4.54 | 191 |
-| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 124 | 1.06 (+0.27 ▼) | 40 |
-| art-gallery | 266 | 0 | 0 | 140 | 148 | 1693 | 122 | 0.88 | 50 |
-| ticket-booking | 366 | 0 | 0 | 291 | 737 | 5040 | 223 | 0.99 (+0.22 ▼) | 38 |
-| stayhub | 260 | 0 | 0 | 112 | 323 | 2035 | 156 | 1.53 | 54 |
+| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4182 | 111 | 0.58 | 34 |
+| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140917 (+195 ▲) | 681 | 8.27 (-4.21 ▲) | 610 |
+| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 218696 (+61 ▲) | 767 | 17.96 | 896 |
+| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 192743 (+10 ▲) | 647 | 11.56 (-5.57 ▲) | 774 |
+| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6823 | 76 | 0.83 | 44 |
+| bookstack | 1513 | 0 | 0 | 698 | 4076 | 22834 | 393 | 3.55 | 170 |
+| wordpress | 1899 | 0 | 50 | 840 | 7580 | 43373 | 0 | 4.95 | 191 |
+| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 124 | 0.68 | 40 |
+| art-gallery | 266 | 0 | 0 | 140 | 148 | 1693 | 122 | 0.96 | 48 |
+| ticket-booking | 366 | 0 | 0 | 291 | 737 | 5040 | 223 | 1.00 (+0.23 ▼) | 38 |
+| stayhub | 260 | 0 | 0 | 112 | 323 | 2035 | 156 | 1.69 | 54 |
 
 ## Method calls in application code
 
@@ -134,7 +134,7 @@ What the container configuration injects by tag or by id (`receives`), and what 
 | Project | Injections | Linked | Receives edges | Not linked |
 |---|---:|---:|---:|---:|
 | php-ddd-example | 13 | 12 | 30 | 1 |
-| sylius | 1737 | 791 (+116 ▲) | 1541 | 946 |
+| sylius | 1737 | 805 (+130 ▲) | 1555 | 932 |
 | akeneo-pim | 6534 | 5004 (+55 ▲) | 5592 | 1530 |
 | prestashop | 2608 | 2193 (+6 ▲) | 2080 | 415 |
 | ecotone-quickstart | 0 | 0 | 0 | 0 |

@@ -14,7 +14,11 @@ phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stay
 ### Added
 - Decorators of container services: `->decorate()`, YAML `decorates:`, XML `decorates`, `#[AsDecorator]` (with their
   priority, `#[AutowireDecorated]`). A class given a decorated service also `receives` its outermost decorator; each
-  decorator's `.inner` is the next one inside. A decorator in test code is given to test code only.
+  decorator's `.inner` is the next one inside, and a decorator of a decorator wraps it. A decorator in test code is
+  given to test code only (application code gets the next one inside). `#[AutowireDecorated]` also reads a decoration
+  declared in YAML or XML.
+- Relation `autowires`: a class taking more constructor parameters of a type than the configuration gives it services
+  of; the container autowires the others, and `impact` keeps the class as a caller of that type.
 
 ## 2.1.0 (2026-11-13)
 

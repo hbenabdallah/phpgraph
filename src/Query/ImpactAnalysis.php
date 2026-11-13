@@ -908,14 +908,22 @@ final class ImpactAnalysis
     /**
      * The container configuration gives the caller other implementations of the interface, none of which runs the
      * changed one (`ProcessOrderListener` given the payment processor, not the composite running the promotion
-     * processor). A caller the configuration says nothing about (autowired) may hold any of them.
+     * processor). A caller the configuration says nothing about (autowired), or not about every parameter of the
+     * interface (`autowires`), may hold any of them.
      */
     private function isGivenAnother(string $caller, string $method, string $implementation): bool
     {
         $interface = $this->classOf($method);
         $given = [];
         foreach ($this->graph->incident($caller) as $item) {
-            if ($item['forward'] && $item['edge']->relation === Relation::Receives && \in_array($interface, $this->ancestorsOf($item['other']), true)) {
+            if (!$item['forward'] || !\in_array($interface, $this->ancestorsOf($item['other']), true)) {
+                continue;
+            }
+            // The container also autowires one of them: the class may hold any implementation.
+            if ($item['edge']->relation === Relation::Autowires) {
+                return false;
+            }
+            if ($item['edge']->relation === Relation::Receives) {
                 $given[] = $item['other'];
             }
         }

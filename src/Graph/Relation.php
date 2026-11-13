@@ -36,6 +36,13 @@ enum Relation: string
     case Receives = 'receives';
 
     /**
+     * A type the container fills by autowiring in a class the configuration also gives services of that type: the
+     * constructor takes more parameters of it than the configuration names (`->arg('$audit', service('app.audit'))`
+     * beside an autowired `Processor $processor`). The class may hold any implementation of it. INFERRED.
+     */
+    case Autowires = 'autowires';
+
+    /**
      * A method reading a property of its class that another method changes (outside the constructor): it depends on
      * the state that method writes. `hasErrors()` reads what `addViolation()` appends. INFERRED.
      */

@@ -64,7 +64,7 @@ Format 2: `{"version": 2, "meta": {...}, "nodes": [...], "edges": [...]}`.
   `receives` edge; `closure of <method>` on a `calls` edge from a method running a closure it receives; `named: severity, path` on a call written with named arguments).
 - Relations: `defines`, `imports`, `extends`, `implements`, `uses_trait`, `has_method`, `overrides`, `instantiates`,
   `calls`, `references`, `dispatches`, `handled_by`, `contract`, `requests`, `receives`, `reads_state_of`,
-  `implemented_by` (since 1.2.0).
+  `implemented_by` (since 1.2.0), `autowires` (unreleased).
 - Confidence: `EXTRACTED` (read in the code or the configuration), `INFERRED` (resolved from declared types or
   the shape of the code), `AMBIGUOUS` (a guess, labelled as such).
 

@@ -34,6 +34,8 @@ final class ServiceInjections
         private readonly ContainerServices $container,
         private readonly TaggedClasses $tagged,
         private readonly ?InputGuards $guards = null,
+        /** @var array<string, list<?string>> class => the class of each constructor parameter */
+        private readonly array $constructorTypes = [],
     ) {
     }
 
@@ -99,6 +101,7 @@ final class ServiceInjections
         }
         usort($outside, static fn (array $a, array $b): int => $a[0] <=> $b[0]);
         $edges += $this->transitive();
+        $this->autowired();
 
         return new InjectionStats($injections, $linked, $edges, \count($outside), \array_slice(array_column($outside, 1), 0, self::MAX_UNLINKED));
     }
@@ -198,16 +201,19 @@ final class ServiceInjections
     /**
      * The classes a service named by id gives: its own, and the decorator the container injects in its place
      * (`impact` keeps the decorated class too, the decorator may hold it without saying so: a composite). A decorator
-     * in test code decorates in the test environment only: application code is not given it.
+     * in test code decorates in the test environment only: application code is given the next one inside.
      *
      * @return list<string>
      */
     private function givenBy(string $target, string $consumerId, string $consumer, string $service): array
     {
-        $decoratorId = $this->container->decoratorOf($target, $consumerId, $service);
-        $decorator = $decoratorId === null ? null : $this->classOf($decoratorId, $service);
-        if ($decorator !== null && $this->isTest($decorator) && !$this->isTest($consumer)) {
-            $decorator = null;
+        $decorator = null;
+        foreach ($this->container->decoratorsOf($target, $consumerId, $service) as $decoratorId) {
+            $class = $this->classOf($decoratorId, $service);
+            if ($class !== null && (!$this->isTest($class) || $this->isTest($consumer))) {
+                $decorator = $class;
+                break;
+            }
         }
         $classes = [];
         foreach ([$this->classOf($target, $service), $decorator] as $class) {
@@ -217,6 +223,54 @@ final class ServiceInjections
         }
 
         return $classes;
+    }
+
+    /**
+     * The types a class takes in more constructor parameters than the configuration gives it services of: the
+     * container autowires the others, which may be any implementation (`autowires`, so that `impact` does not take the
+     * configured ones for all the class holds). Arguments of setters (`calls`) are counted too: a class wired by
+     * setters may be taken for complete.
+     */
+    private function autowired(): void
+    {
+        /** @var array<string, list<string>> $given consumer class => the class of each service named for it */
+        $given = [];
+        foreach ($this->container->arguments() as $argument) {
+            $consumer = $argument['target'] === null ? null : $this->classOf($argument['id'], $argument['service']);
+            $class = $consumer === null ? null : $this->classOf((string) $argument['target'], $argument['service']);
+            if ($consumer !== null && $class !== null) {
+                $given[$consumer][] = $class;
+            }
+        }
+        foreach ($given as $consumer => $classes) {
+            $parameters = array_count_values(array_filter($this->constructorTypes[$consumer] ?? [], 'is_string'));
+            foreach ($parameters as $type => $count) {
+                $type = (string) $type;
+                $configured = \count(array_filter($classes, fn (string $class): bool => $this->isA($class, $type)));
+                if ($configured > 0 && $count > $configured && $this->graph->hasNode($type)) {
+                    $this->graph->addEdge(new Edge($consumer, $type, Relation::Autowires, Confidence::Inferred));
+                }
+            }
+        }
+    }
+
+    private function isA(string $class, string $type): bool
+    {
+        for ($queue = [$class], $seen = [$class => true]; $queue !== [];) {
+            $current = array_shift($queue);
+            if ($current === $type) {
+                return true;
+            }
+            foreach ($this->graph->incident($current) as $item) {
+                $relation = $item['edge']->relation;
+                if ($item['forward'] && ($relation === Relation::Extends || $relation === Relation::Implements) && !isset($seen[$item['other']])) {
+                    $seen[$item['other']] = true;
+                    $queue[] = $item['other'];
+                }
+            }
+        }
+
+        return false;
     }
 
     private function isTest(string $class): bool

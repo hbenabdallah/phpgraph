@@ -122,4 +122,55 @@ final class ServiceInjectionsTest extends TestCase
         self::assertTrue($this->hasEdge($graph, 'App\Scheduler', 'App\Clock', Relation::Receives));
         self::assertFalse($this->hasEdge($graph, 'App\Scheduler', 'App\Tests\FrozenClock', Relation::Receives), 'a decorator in test code decorates in the test environment only');
     }
+
+    public function testADecoratorDecoratedInTurnIsWrappedByItsOwnDecorator(): void
+    {
+        $graph = $this->buildProject([
+            'src/Base.php' => 'namespace App; class Base {}',
+            'src/First.php' => 'namespace App; class First {}',
+            'src/Second.php' => 'namespace App; class Second {}',
+            'src/Consumer.php' => 'namespace App; class Consumer {}',
+            'config/services.php' => 'use function Symfony\Component\DependencyInjection\Loader\Configurator\service; return static function ($container): void { $services = $container->services();'
+                . ' $services->set("app.base", App\Base::class);'
+                . ' $services->set("app.first", App\First::class)->decorate("app.base")->args([service(".inner")]);'
+                . ' $services->set("app.second", App\Second::class)->decorate("app.first")->args([service(".inner")]);'
+                . ' $services->set(App\Consumer::class)->args([service("app.base")]); };',
+        ])->graph;
+
+        self::assertTrue($this->hasEdge($graph, 'App\Consumer', 'App\Second', Relation::Receives), 'the decorator of the decorator is what the container injects');
+        self::assertFalse($this->hasEdge($graph, 'App\Consumer', 'App\First', Relation::Receives), 'the first decorator is inside the second');
+        self::assertTrue($this->hasEdge($graph, 'App\Second', 'App\First', Relation::Receives), '.inner of the second decorator');
+        self::assertTrue($this->hasEdge($graph, 'App\First', 'App\Base', Relation::Receives), '.inner of the first decorator');
+    }
+
+    public function testApplicationCodeIsGivenTheProductionDecoratorInsideATestOne(): void
+    {
+        $graph = $this->buildProject([
+            'src/Clock.php' => 'namespace App; class Clock {}',
+            'src/CachedClock.php' => 'namespace App; class CachedClock {}',
+            'src/Scheduler.php' => 'namespace App; class Scheduler {}',
+            'tests/FrozenClock.php' => 'namespace App\Tests; class FrozenClock {}',
+            'config/services.php' => 'use function Symfony\Component\DependencyInjection\Loader\Configurator\service; return static function ($container): void { $services = $container->services();'
+                . ' $services->set("app.clock", App\Clock::class);'
+                . ' $services->set("app.clock.cached", App\CachedClock::class)->decorate("app.clock", null, 10);'
+                . ' $services->set("app.clock.frozen", App\Tests\FrozenClock::class)->decorate("app.clock");'
+                . ' $services->set(App\Scheduler::class)->args([service("app.clock")]); };',
+        ])->graph;
+
+        self::assertTrue($this->hasEdge($graph, 'App\Scheduler', 'App\CachedClock', Relation::Receives), 'outside the test environment, the production decorator is the outermost');
+        self::assertFalse($this->hasEdge($graph, 'App\Scheduler', 'App\Tests\FrozenClock', Relation::Receives));
+    }
+
+    public function testAutowireDecoratedReadsTheDecorationTheConfigurationDeclares(): void
+    {
+        $graph = $this->buildProject([
+            'src/Mailer.php' => 'namespace App; class Mailer {}',
+            'src/TracedMailer.php' => 'namespace App; use Symfony\Component\DependencyInjection\Attribute\AutowireDecorated;'
+                . ' class TracedMailer { public function __construct(#[AutowireDecorated] Mailer $inner) {} }',
+            'config/services.yaml' => "services:\n    app.mailer:\n        class: App\\Mailer\n"
+                . "    App\\TracedMailer:\n        decorates: app.mailer\n",
+        ])->graph;
+
+        self::assertTrue($this->hasEdge($graph, 'App\TracedMailer', 'App\Mailer', Relation::Receives), 'the decoration is in YAML, the attribute in the class');
+    }
 }

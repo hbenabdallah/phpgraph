@@ -1961,10 +1961,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                 foreach ($group->attrs as $attribute) {
                     $name = (string) $this->resolveName($attribute->name);
                     $short = substr($name, (int) strrpos('\\' . $name, '\\'));
-                    // #[AutowireDecorated] (or #[Autowire(service: '.inner')]) on a decorator: the service it decorates.
+                    // #[AutowireDecorated] (or #[Autowire(service: '.inner')]) on a decorator: the service it decorates,
+                    // or `.inner` when the configuration declares the decoration (resolved by ContainerServices).
                     $decorated = $this->serviceDecorations[$class][0] ?? null;
-                    if ($short === 'AutowireDecorated' && $decorated !== null) {
-                        $this->serviceArguments[] = ['id' => $class, 'tag' => null, 'service' => $decorated];
+                    if ($short === 'AutowireDecorated') {
+                        $this->serviceArguments[] = ['id' => $class, 'tag' => null, 'service' => $decorated ?? '.inner'];
                     }
                     foreach ($attribute->args as $position => $argument) {
                         $key = $argument->name?->toString();
