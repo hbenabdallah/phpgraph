@@ -22,6 +22,8 @@ use PhpGraph\Query\Result\ImpactedClass;
  *
  * - A handler is reached by what sends its message (`dispatches`, then `handled_by`): the use case dispatching
  *   PlaceOrder depends on PlaceOrderHandler.
+ * - A constructor is reached by `new` of its class (`instantiates` points to the class), and of the subclasses
+ *   inheriting it.
  * - A method is also reached through the interface or parent method it implements: the callers of
  *   `OrderRepository::save` may run `DbalOrderRepository::save` (INFERRED, the call is resolved at runtime).
  * - A method reading a property the changed method writes depends on it (`reads_state_of`): its callers are listed as
@@ -870,6 +872,12 @@ final class ImpactAnalysis
             }
         }
 
+        if (str_ends_with(strtolower($id), '::__construct')) {
+            foreach ($this->instantiations($this->classOf($id)) as $edge) {
+                $dependents[] = [$edge->source, $edge, $edge->confidence, true, null];
+            }
+        }
+
         // Called through the interface or parent method it implements: the call may run this one. Not a constructor
         // (parent::__construct() runs the parent's), nor a call from another subclass, which runs its own.
         // Nor from test code: a fake repository implementing the interface is not what the application calls.
@@ -887,6 +895,45 @@ final class ImpactAnalysis
         }
 
         return $dependents;
+    }
+
+    /**
+     * What runs a class's constructor: `new` of the class, and of its subclasses declaring none of their own. The
+     * `instantiates` edges point to the class, not to its constructor.
+     *
+     * @return list<Edge>
+     */
+    private function instantiations(string $class): array
+    {
+        $edges = [];
+        $seen = [$class => true];
+        for ($queue = [$class]; $queue !== [];) {
+            $current = array_shift($queue);
+            foreach ($this->graph->incident($current) as $item) {
+                if ($item['forward']) {
+                    continue;
+                }
+                if ($item['edge']->relation === Relation::Instantiates) {
+                    $edges[] = $item['edge'];
+                } elseif ($item['edge']->relation === Relation::Extends && !isset($seen[$item['other']]) && !$this->declaresConstructor($item['other'])) {
+                    $seen[$item['other']] = true;
+                    $queue[] = $item['other'];
+                }
+            }
+        }
+
+        return $edges;
+    }
+
+    private function declaresConstructor(string $class): bool
+    {
+        foreach ($this->methods($class) as $method) {
+            if (str_ends_with(strtolower($method), '::__construct')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

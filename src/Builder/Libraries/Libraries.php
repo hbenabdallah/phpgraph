@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpGraph\Builder\Libraries;
 
+use PhpGraph\Builder\ContainerServices;
 use PhpGraph\Builder\Generics;
 use PhpGraph\Builder\TypeResolver;
 use PhpGraph\Extractor\TypeExpr;
@@ -30,9 +31,14 @@ final class Libraries
         }
     }
 
-    public static function defaults(Generics $generics): self
+    public static function defaults(Generics $generics, ?ContainerServices $container = null): self
     {
-        return new self([new PsrContainer()], [new Eloquent($generics->casts)]);
+        $methods = [new PsrContainer()];
+        if ($container !== null) {
+            $methods[] = new ServiceIds($container);
+        }
+
+        return new self($methods, [new Eloquent($generics->casts)]);
     }
 
     /**

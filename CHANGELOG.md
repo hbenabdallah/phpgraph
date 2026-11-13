@@ -12,14 +12,46 @@ phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stay
   core qualified. In JSON, a `reason` object per class of the core (`kind`, `via`, `count`, `reduced`) and
   `leftReasons`. The classes selected are unchanged (15 reference subjects); the text grows by 2 to 10 %.
   The classes left out are named in full (`App\Billing\Ledger3`): no namespace line of the outline says where they are.
+- The JSON of `outline` is stable: keys only grow, like `impact`'s. Both follow a JSON schema,
+  [docs/schemas/outline.schema.json](docs/schemas/outline.schema.json) and
+  [docs/schemas/impact.schema.json](docs/schemas/impact.schema.json), checked by the tests and against the 15
+  reference outlines.
+- MCP: with `format` `json`, `outline` and `impact_of` also return their answer as `structuredContent` (protocol
+  2025-06-18). The text block holds the same JSON; a warning about the graph comes in a block of its own instead of
+  before the JSON, which it made unreadable.
 - An agent benchmark, `tools/agent-bench/` and [docs/BENCHMARK.md](docs/BENCHMARK.md): Claude Code with and without
   phpgraph on 24 tasks of five public projects.
+
+- PrestaShop's legacy classes: `Context`, `Db`, `Link`… name the `ContextCore`, `DbCore`, `LinkCore` the project
+  declares, which the autoloader of `prestashop/autoload` extends at run time (a class declared in `override/` keeps
+  its name). On PrestaShop, calls resolved from declared types in application code: 58.8 → 75.7 %, unknown
+  receivers 3.5 → 2.0 %; no INFERRED edge lost, 305 guesses (AMBIGUOUS) now resolved.
+- A Symfony container asked for a service by its id, `$container->get('app.mailer')->send()`, gives the class the
+  project's configuration defines for that id (YAML, XML or PHP, aliases and parameters followed). Calls now resolved
+  from declared types: Akeneo +194, PrestaShop +48, Sylius +10, mostly in tests; no INFERRED edge lost. An id that
+  the configuration does not define (framework, bundles, ids built at run time) still says nothing.
+- For contributors: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (layers, pipeline, where to add what) and
+  [docs/PROVIDERS.md](docs/PROVIDERS.md) (how a library provider types a call, how to test and measure it).
 
 ### Changed
 - `impact` shows each class's namespace, whole, instead of its first two folders: an agent completed
   `UpsertCategoryBaseSql (Infrastructure/Storage)` with a wrong namespace. A relation of the class itself (it extends
   the change, handles the message) is said once: `extends it`, `handles it → __invoke()`, not `extends (extends)`.
   The JSON is unchanged.
+- In the JSON of `outline`, a map is an object even when empty (`"tests": {}`, not `"tests": []`), and a class without
+  constants or enum cases leaves those keys out, as it did its properties.
+
+### Fixed
+- `impact` of a constructor finds what constructs the class (`new`, also of a subclass inheriting the constructor):
+  it found nothing, as the `instantiates` edges point to the class. Asked for `CourseCreatedDomainEvent::__construct`
+  (php-ddd-example), it now lists `Course`, `DatabaseMutationToCourseCreatedDomainEvent` and the test mother, 0
+  classes before.
+- `symfony/yaml` 7.4.23 (CVE-2026-123792): a crafted YAML file of an analysed project could make the build parse
+  for exponential time. The graphs of the corpus are unchanged.
+- A documented return union that names the declared class keeps refining it: `@return NodeDefinition|ArrayNodeDefinition`
+  on `getRootNode(): NodeDefinition` (Symfony Config's `TreeBuilder`) reaches `children()`, which only
+  `ArrayNodeDefinition` declares. A union without the declared class still gives way to it. Unknown receivers in
+  application code: Sylius −62, Akeneo −148; no INFERRED edge lost.
 
 ## 2.0.0 (2026-10-31)
 

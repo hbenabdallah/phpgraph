@@ -308,7 +308,7 @@ class McpServer
     /**
      * @param array<mixed> $params
      *
-     * @return array{content: list<array{type: string, text: string}>, isError: bool}
+     * @return array{content: list<array{type: string, text: string}>, structuredContent?: \stdClass, isError: bool}
      */
     private function callTool(array $params): array
     {
@@ -319,6 +319,7 @@ class McpServer
             throw new \InvalidArgumentException(sprintf('Unknown tool: %s', \is_string($name) ? $name : 'null'));
         }
 
+        $format = \is_string($arguments['format'] ?? null) && \in_array($arguments['format'], TextPresenter::IMPACT_FORMATS, true) ? $arguments['format'] : 'text';
         try {
             $presenter = new TextPresenter($this->provider->get());
 
@@ -337,7 +338,7 @@ class McpServer
                 'overview' => $presenter->overview(),
                 'outline' => $presenter->outline(
                     $this->requireString($arguments, 'topic'),
-                    \is_string($arguments['format'] ?? null) && \in_array($arguments['format'], TextPresenter::IMPACT_FORMATS, true) ? $arguments['format'] : 'text',
+                    $format,
                     \is_string($arguments['section'] ?? null) && \in_array($arguments['section'], OutlineReport::SECTIONS, true) ? $arguments['section'] : null,
                 ),
                 'impact_of' => $presenter->impact(
@@ -345,21 +346,41 @@ class McpServer
                     max(1, Values::number($arguments['depth'] ?? 3)),
                     max(0, Values::number($arguments['limit'] ?? 40)),
                     \is_string($arguments['section'] ?? null) && \in_array($arguments['section'], TextPresenter::IMPACT_SECTIONS, true) ? $arguments['section'] : null,
-                    \is_string($arguments['format'] ?? null) && \in_array($arguments['format'], TextPresenter::IMPACT_FORMATS, true) ? $arguments['format'] : 'text',
+                    $format,
                 ),
                 default => $presenter->godNodes(max(1, Values::number($arguments['limit'] ?? 15))),
             };
+            $structured = $format === 'json' && \in_array($name, ['outline', 'impact_of'], true) ? self::structured($text) : null;
             $warning = $presenter->warning();
-            if ($warning !== null && $name !== 'overview') {
-                $text = $warning . "\n\n" . $text;
-            }
         } catch (\InvalidArgumentException $exception) {
             throw $exception;
         } catch (\Throwable $exception) {
             return ['content' => [['type' => 'text', 'text' => $exception->getMessage()]], 'isError' => true];
         }
 
-        return ['content' => [['type' => 'text', 'text' => $text]], 'isError' => false];
+        if ($structured === null) {
+            $warned = $warning !== null && $name !== 'overview' ? $warning . "\n\n" . $text : $text;
+
+            return ['content' => [['type' => 'text', 'text' => $warned]], 'isError' => false];
+        }
+        // The JSON stays parseable: the warning goes in a block of its own.
+        $content = [['type' => 'text', 'text' => $text]];
+        if ($warning !== null) {
+            $content[] = ['type' => 'text', 'text' => $warning];
+        }
+
+        return ['content' => $content, 'structuredContent' => $structured, 'isError' => false];
+    }
+
+    /**
+     * The JSON of an answer as structured content (protocol 2025-06-18), the shape of docs/schemas/; none for an
+     * error, which the text says.
+     */
+    private static function structured(string $json): ?\stdClass
+    {
+        $value = json_decode($json);
+
+        return $value instanceof \stdClass && !property_exists($value, 'error') ? $value : null;
     }
 
     /**

@@ -16,9 +16,15 @@ final readonly class TypeExpr
     public const STATIC = 'static';
 
     /**
+     * Prefix of an argument naming a container service, `id:app.mailer` for `get('app.mailer')`.
+     */
+    public const SERVICE_ID = 'id:';
+
+    /**
      * @param ?string      $generic   the type with its arguments, a GenericType string, when it has some: `Collection<?,Item>`
      * @param list<string> $functions the function called, `response()`: the names it may have, its namespace's first
-     * @param list<string> $arguments what the call passes, by position: `null`, `class:Foo` (Foo::class) or `?`
+     * @param list<string> $arguments what the call passes, by position: `null`, `class:Foo` (Foo::class), `id:app.mailer` (a service id
+     *                            given to `get()`) or `?`
      * @param array{int|string, int}|null $closure the closure argument of the method call, by position or name, and
      *                                             the parameter of the closure
      * @param array<int, self> $argumentTypes the types of the arguments the call passes, by position; for a closure,

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace PhpGraph\Builder;
 
+use PhpGraph\Builder\Libraries\Libraries;
+use PhpGraph\Builder\Libraries\PrestaShopClasses;
 use PhpGraph\Extractor\ConditionalReturn;
 use PhpGraph\Extractor\FileExtractor;
 use PhpGraph\Extractor\GenericType;
@@ -150,6 +152,11 @@ final class GraphBuilder
                 }
                 $names->declare($node->id);
                 $graph->addNode($node);
+            }
+        }
+        if (PrestaShopClasses::isUsed($root, $composerFiles)) {
+            foreach (PrestaShopClasses::aliases($graph) as $name => $class) {
+                $names->alias($name, $class);
             }
         }
 
@@ -368,9 +375,24 @@ final class GraphBuilder
             }
         }
 
+        // Services declared by configuration helpers called with literal arguments.
+        $evaluated = $configuration->evaluate();
+        foreach ($evaluated['definitions'] as $service => $definitions) {
+            foreach ($definitions as $serviceId => $target) {
+                $containerDefinitions[$service][$serviceId] ??= $target;
+            }
+        }
+        foreach ($evaluated['tags'] as $service => $tags) {
+            $containerTags[$service] = [...$containerTags[$service] ?? [], ...$tags];
+        }
+        foreach ($evaluated['arguments'] as $service => $arguments) {
+            $containerArguments[$service] = [...$containerArguments[$service] ?? [], ...$arguments];
+        }
+        $container = new ContainerServices($root, $configurationFiles, $serviceMap, $containerDefinitions, $containerTags, $previous->configuration ?? [], $containerArguments);
+
         // The calls of an unchanged file resolve as before when no declaration changed anywhere, the dependencies are
-        // the same, and every name resolved to the same id.
-        $namesFingerprint = $names->fingerprint();
+        // the same, and every name and service id resolved to the same id.
+        $namesFingerprint = md5($names->fingerprint() . $container->fingerprint());
         $sameEnvironment = $previous !== null && $previous->environment === $environment;
         $reuse = $sameEnvironment && $previous->names === $namesFingerprint && array_keys($previous->files) === array_keys($files);
         foreach (array_keys($changed) as $path) {
@@ -386,7 +408,8 @@ final class GraphBuilder
         }
 
         $methodsByClass = $this->methodsByClass($graph);
-        $types = new TypeResolver($graph, $names, $methodsByClass, $returnTypes, $propertyTypes, $vendor, $returnElements, new Generics($templates, $parentArguments, $genericReturns, $genericProperties, $documentedMethods, $mixins, $conditionals, $callables, $binders, $casts, $assertions), null, $fileReturns);
+        $generics = new Generics($templates, $parentArguments, $genericReturns, $genericProperties, $documentedMethods, $mixins, $conditionals, $callables, $binders, $casts, $assertions);
+        $types = new TypeResolver($graph, $names, $methodsByClass, $returnTypes, $propertyTypes, $vendor, $returnElements, $generics, Libraries::defaults($generics, $container), $fileReturns);
 
         // A method reading a property typed as an enum (`$violation->type`) uses that enum: what it outputs depends on it.
         foreach ($propertyReads as [$reader, $property]) {
@@ -433,20 +456,6 @@ final class GraphBuilder
         }
 
         // Handlers the container configuration declares come first: the edge keeps their confidence, EXTRACTED.
-        // Services declared by configuration helpers called with literal arguments.
-        $evaluated = $configuration->evaluate();
-        foreach ($evaluated['definitions'] as $service => $definitions) {
-            foreach ($definitions as $serviceId => $target) {
-                $containerDefinitions[$service][$serviceId] ??= $target;
-            }
-        }
-        foreach ($evaluated['tags'] as $service => $tags) {
-            $containerTags[$service] = [...$containerTags[$service] ?? [], ...$tags];
-        }
-        foreach ($evaluated['arguments'] as $service => $arguments) {
-            $containerArguments[$service] = [...$containerArguments[$service] ?? [], ...$arguments];
-        }
-        $container = new ContainerServices($root, $configurationFiles, $serviceMap, $containerDefinitions, $containerTags, $previous->configuration ?? [], $containerArguments);
         $handlers = [...(new TaggedHandlers($graph, $names, $types, $parameterTypes))->facts($container), ...$handlers];
         // The signatures of the methods a parameter is passed on to only: those InputGuards reads.
         $passedTo = [];

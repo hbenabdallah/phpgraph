@@ -22,6 +22,14 @@ final class NameCanonicalizer
         $this->ids[$this->key($id)] = $id;
     }
 
+    /**
+     * Another name of a declared class, made by the framework at run time: kept only if nothing declares that name.
+     */
+    public function alias(string $name, string $id): void
+    {
+        $this->ids[$this->key($name)] ??= $id;
+    }
+
     public function canonical(string $id, string $service = ''): string
     {
         if (str_starts_with($id, 'file:')) {

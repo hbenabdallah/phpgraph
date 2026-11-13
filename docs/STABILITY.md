@@ -36,6 +36,9 @@ files, a new layer violation for `check`); `2` for invalid input (an unknown dir
 | `shortest_path` | `from`, `to` (required) |
 | `god_nodes` | `limit` |
 
+With `format` `json`, `impact_of` and `outline` also return the answer as `structuredContent` (since 2.1.0), the
+shape of their JSON schema below; the text block holds the same JSON, for clients reading only the text.
+
 The server speaks the MCP protocol versions 2024-11-05, 2025-03-26, 2025-06-18 and 2025-11-25, over stdio. Only
 JSON-RPC goes to stdout; progress and errors go to stderr.
 
@@ -65,6 +68,14 @@ Format 2: `{"version": 2, "meta": {...}, "nodes": [...], "edges": [...]}`.
 A graph in another format is refused with a message asking to rebuild it; `serve` rebuilds it by itself, and also
 rebuilds a graph built by another version of phpgraph.
 
+### The JSON of `impact` and `outline`
+
+`impact --format json` (since 1.0.0) and `outline --format json` (since 2.1.0), from the commands and the MCP tools,
+follow the JSON schemas [docs/schemas/impact.schema.json](schemas/impact.schema.json) and
+[docs/schemas/outline.schema.json](schemas/outline.schema.json). Their keys only grow: read them ignoring the keys you
+do not know. A map is a JSON object, `{}` when empty; an optional key is left out rather than null. An answer that
+is no outline or impact (nothing matches the name) is `{"error": "..."}`.
+
 ### Files and variables
 
 - `phpgraph.yaml` at the project root: the keys `services` (a list of service directories) and `actions` (routing
@@ -86,9 +97,9 @@ Never breaking the above, a minor version (1.1.0) may:
 
 - find more: new edges, new routes, new handlers, calls resolved that were not; an edge's confidence may rise;
 - add relations, node kinds, MCP tools, parameters, command options, `phpgraph.yaml` keys, `meta` fields;
-- change the text of answers (`overview`, `impact`, `query`): it is written for an agent to read, not for a program to
-  parse. Programs read `graph.json`, or `impact --format json`, whose keys only grow;
-- change the JSON of `outline --format json` (and of the `outline` tool), new in 1.0.0: it becomes stable in the minor version that says so.
+- change the text of answers (`overview`, `impact`, `outline`, `query`): it is written for an agent to read, not for a
+  program to parse. Programs read `graph.json`, or the JSON of `impact` and `outline`, whose keys only grow;
+- add keys to those JSON answers, with their schemas.
 
 A patch version (1.0.1) fixes what is wrong: an edge that should not exist may disappear.
 

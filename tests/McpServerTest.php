@@ -71,6 +71,25 @@ final class McpServerTest extends TestCase
         self::assertStringContainsString('Shortest path', Dig::text($response, 'result', 'content', 0, 'text'));
     }
 
+    public function testJsonAnswersOfOutlineAndImpactComeAsStructuredContentToo(): void
+    {
+        foreach (['outline' => ['topic' => 'PlaceOrderHandler'], 'impact_of' => ['name' => 'DbalOrderRepository']] as $tool => $arguments) {
+            $json = $this->sent(['jsonrpc' => '2.0', 'id' => 7, 'method' => 'tools/call', 'params' => ['name' => $tool, 'arguments' => [...$arguments, 'format' => 'json']]]);
+            $text = $this->sent(['jsonrpc' => '2.0', 'id' => 8, 'method' => 'tools/call', 'params' => ['name' => $tool, 'arguments' => $arguments]]);
+
+            self::assertIsArray(Dig::at($json, 'result', 'structuredContent'), $tool . ': structured for clients reading it');
+            self::assertSame(
+                json_decode(Dig::text($json, 'result', 'content', 0, 'text'), true),
+                Dig::at($json, 'result', 'structuredContent'),
+                $tool . ': the text block holds the same JSON, for older clients',
+            );
+            self::assertNull(Dig::at($text, 'result', 'structuredContent'), $tool . ': the text answer is text only');
+        }
+
+        $missing = $this->sent(['jsonrpc' => '2.0', 'id' => 9, 'method' => 'tools/call', 'params' => ['name' => 'impact_of', 'arguments' => ['name' => 'Nothing', 'format' => 'json']]]);
+        self::assertNull(Dig::at($missing, 'result', 'structuredContent'), 'an error is no answer of the schema');
+    }
+
     public function testRejectsUnknownToolsAndMissingArguments(): void
     {
         $unknown = $this->call(['jsonrpc' => '2.0', 'id' => 4, 'method' => 'tools/call', 'params' => ['name' => 'nope']]);
@@ -196,6 +215,16 @@ final class McpServerTest extends TestCase
         self::assertIsArray($response);
 
         return $response;
+    }
+
+    /**
+     * The response as the client reads it, once encoded: objects included.
+     *
+     * @param array<string, mixed> $request
+     */
+    private function sent(array $request): mixed
+    {
+        return json_decode((string) json_encode($this->call($request)), true);
     }
 
     private function server(): McpServer

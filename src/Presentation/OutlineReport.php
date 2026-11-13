@@ -730,41 +730,55 @@ final class OutlineReport
             'seeds' => $outline->seeds,
             'core' => array_map($this->coreClassData(...), $outline->core),
             'sourcesRead' => $outline->sourcesRead,
-            'families' => $outline->families,
+            'families' => array_map(static fn (array $family): array => [...$family, 'directories' => self::map($family['directories'])], $outline->families),
             'routes' => array_map($this->routeData(...), $outline->routes),
-            'operations' => $this->rpcs($outline->core),
-            'entries' => $outline->entries,
-            'fromFamilies' => $outline->fromFamilies,
-            'closures' => $outline->closures,
-            'inside' => $outline->inside,
+            'operations' => self::map($this->rpcs($outline->core)),
+            'entries' => self::map($outline->entries),
+            'fromFamilies' => self::map($outline->fromFamilies),
+            'closures' => self::map($outline->closures),
+            'inside' => self::map($outline->inside),
             'hints' => array_map(static fn (array $hint): array => ['class' => $hint[0], 'method' => $hint[1]->method, 'line' => $hint[1]->line, 'text' => $hint[1]->text], $outline->hints),
             'wiring' => $outline->wiring,
-            'consumers' => $outline->consumers,
+            'consumers' => self::map($outline->consumers),
             'consumerFiles' => $outline->consumerFiles,
-            'tests' => $outline->tests,
+            'tests' => self::map($outline->tests),
             'topTests' => $outline->topTests,
             'uncovered' => $outline->uncovered,
             'unused' => array_keys($outline->unused),
         ];
         if ($outline->method !== null) {
             $data['method'] = $outline->method;
-            $data['depths'] = $outline->depths;
-            $data['hubs'] = $outline->hubs;
-            $data['guesses'] = $outline->guesses;
+            $data['depths'] = self::map($outline->depths);
+            $data['hubs'] = self::map($outline->hubs);
+            $data['guesses'] = self::map($outline->guesses);
             $data['guessed'] = $outline->guessed;
         }
         if ($outline->large !== null) {
-            $data['large'] = $outline->large;
+            $data['large'] = [...$outline->large, 'entries' => self::map($outline->large['entries'])];
         }
         if ($outline->left !== []) {
             $data['left'] = $outline->left;
-            $data['leftReasons'] = array_map(
+            $data['leftReasons'] = self::map(array_map(
                 static fn (Reason $reason): array => $reason->toArray(),
                 array_intersect_key($outline->reasons, array_flip($outline->left)),
-            );
+            ));
         }
 
         return (string) json_encode($data, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * A map as a JSON object even when empty: `{}`, not `[]`.
+     *
+     * @template T of array
+     *
+     * @param T $map
+     *
+     * @return T|\stdClass
+     */
+    private static function map(array $map): array|\stdClass
+    {
+        return $map === [] ? new \stdClass() : $map;
     }
 
     /**
@@ -784,8 +798,8 @@ final class OutlineReport
             'modifiers' => $facts?->modifiers,
             'summary' => $facts?->summary,
             'signatures' => $facts?->signatures,
-            'constants' => $facts?->constants,
-            'cases' => $facts?->cases,
+            'constants' => $facts === null || $facts->constants === [] ? null : $facts->constants,
+            'cases' => $facts === null || $facts->cases === [] ? null : $facts->cases,
             'properties' => $properties === [] ? null : $properties,
         ], static fn (mixed $value): bool => $value !== null);
     }

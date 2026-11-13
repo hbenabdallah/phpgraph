@@ -362,9 +362,9 @@ Sylius (the corpus commit), October 2026, without any LLM: phpgraph 1.0.2, [code
 
 ## Contributing
 
-Issues and pull requests are welcome. See [CONTRIBUTING.md](https://github.com/hbenabdallah/phpgraph/blob/main/CONTRIBUTING.md): `composer check` must pass (php-cs-fixer, PHPStan level max, PHPUnit), and changes to the analysis are judged on the corpus. Without PHP installed, `bin/dev composer check` runs everything in Docker.
+Issues and pull requests are welcome. See [CONTRIBUTING.md](https://github.com/hbenabdallah/phpgraph/blob/main/CONTRIBUTING.md): `composer check` must pass (php-cs-fixer, PHPStan level max, PHPUnit), and changes to the analysis are judged on the corpus. Without PHP installed, `bin/dev composer check` runs everything in Docker. [docs/ARCHITECTURE.md](https://github.com/hbenabdallah/phpgraph/blob/main/docs/ARCHITECTURE.md) explains how the code is organised, [docs/PROVIDERS.md](https://github.com/hbenabdallah/phpgraph/blob/main/docs/PROVIDERS.md) how to add what a library returns.
 
-What stays stable across versions (commands, MCP tools, the `graph.json` format) is listed in [docs/STABILITY.md](https://github.com/hbenabdallah/phpgraph/blob/main/docs/STABILITY.md); changes are in the [changelog](https://github.com/hbenabdallah/phpgraph/blob/main/CHANGELOG.md).
+What stays stable across versions (commands, MCP tools, the `graph.json` format, the JSON of `impact` and `outline`, with [their schemas](https://github.com/hbenabdallah/phpgraph/tree/main/docs/schemas)) is listed in [docs/STABILITY.md](https://github.com/hbenabdallah/phpgraph/blob/main/docs/STABILITY.md); changes are in the [changelog](https://github.com/hbenabdallah/phpgraph/blob/main/CHANGELOG.md).
 
 Releases are published by pushing a version tag: the [release workflow](https://github.com/hbenabdallah/phpgraph/blob/main/.github/workflows/release.yml) builds the PHAR, the executables for Linux, macOS and Windows (`tools/build-binary.sh`), and the Docker image `ghcr.io/hbenabdallah/phpgraph`.
 

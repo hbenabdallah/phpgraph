@@ -181,6 +181,25 @@ final class ImpactTest extends TestCase
         self::assertTrue($this->hasEdge($graph, 'file:config/services.php', 'App\Wiring::wire', Relation::Calls), 'a static call outside any method: the file calls it');
     }
 
+    public function testAChangedConstructorReachesWhatInstantiatesItsClassAndTheSubclassesInheritingIt(): void
+    {
+        $graph = $this->buildProject([
+            'src/OrderPlaced.php' => 'namespace App; class OrderPlaced { public function __construct(private string $id) {} public function id(): string { return $this->id; } }',
+            'src/UrgentOrderPlaced.php' => 'namespace App; final class UrgentOrderPlaced extends OrderPlaced {}',
+            'src/LateOrderPlaced.php' => 'namespace App; final class LateOrderPlaced extends OrderPlaced { public function __construct() { parent::__construct("late"); } }',
+            'src/PlaceOrder.php' => 'namespace App; final class PlaceOrder { public function handle(): OrderPlaced { return new OrderPlaced("1"); } }',
+            'src/PlaceUrgentOrder.php' => 'namespace App; final class PlaceUrgentOrder { public function handle(): OrderPlaced { return new UrgentOrderPlaced("2"); } }',
+            'src/PlaceLateOrder.php' => 'namespace App; final class PlaceLateOrder { public function handle(): OrderPlaced { return new LateOrderPlaced(); } }',
+            'src/ReadOrder.php' => 'namespace App; final class ReadOrder { public function handle(OrderPlaced $event): string { return $event->id(); } }',
+        ])->graph;
+        $impact = $this->impact($graph, 'App\OrderPlaced::__construct');
+
+        self::assertArrayHasKey('App\PlaceOrder', $impact, 'new OrderPlaced() runs the constructor');
+        self::assertArrayHasKey('App\PlaceUrgentOrder', $impact, 'a subclass without a constructor runs its parent\'s');
+        self::assertArrayHasKey('App\LateOrderPlaced', $impact, 'parent::__construct() calls it');
+        self::assertArrayNotHasKey('App\ReadOrder', $impact, 'reading the object does not run its constructor');
+    }
+
     public function testAChangedHandlerReachesWhatSendsItsMessageAndItsRoutes(): void
     {
         $graph = $this->buildProject([

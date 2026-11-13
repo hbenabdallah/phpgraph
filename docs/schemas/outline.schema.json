@@ -1,0 +1,176 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://github.com/hbenabdallah/phpgraph/blob/main/docs/schemas/outline.schema.json",
+    "title": "phpgraph outline --format json",
+    "description": "The structural outline of a feature, or of what one method runs. Stable from 2.1.0: keys are only added, in a minor version; read it ignoring the keys you do not know. Ids are graph.json node ids. A map is always a JSON object, {} when empty.",
+    "type": "object",
+    "required": ["topic", "seeds", "core", "sourcesRead", "families", "routes", "operations", "entries", "fromFamilies", "closures", "inside", "hints", "wiring", "consumers", "consumerFiles", "tests", "topTests", "uncovered", "unused"],
+    "additionalProperties": false,
+    "properties": {
+        "topic": {"type": "string", "description": "The topic asked."},
+        "seeds": {"$ref": "#/definitions/ids", "description": "The classes the topic names, the outline starts from them."},
+        "core": {
+            "type": "array",
+            "description": "The classes of the feature, in the order they joined.",
+            "items": {"$ref": "#/definitions/coreClass"}
+        },
+        "sourcesRead": {"type": "boolean", "description": "Whether the sources could be read: without them, the core classes carry their id and reason only."},
+        "families": {
+            "type": "array",
+            "description": "Interfaces and base classes around the core.",
+            "items": {
+                "type": "object",
+                "required": ["head", "members", "directories", "receivers"],
+                "additionalProperties": false,
+                "properties": {
+                    "head": {"type": "string", "description": "The interface or base class."},
+                    "members": {"type": "integer", "description": "Its implementations or subclasses."},
+                    "directories": {"$ref": "#/definitions/counts", "description": "Directory => members in it."},
+                    "receivers": {"$ref": "#/definitions/ids", "description": "Services injecting the members (tagged collections)."}
+                }
+            }
+        },
+        "routes": {
+            "type": "array",
+            "description": "The routes running into the core.",
+            "items": {
+                "type": "object",
+                "required": ["route", "id", "chain"],
+                "additionalProperties": false,
+                "properties": {
+                    "route": {"type": "string", "description": "Its label: GET /orders, ACTION <code>."},
+                    "id": {"type": "string"},
+                    "chain": {"$ref": "#/definitions/ids", "description": "The methods from the route's handler down into the core."},
+                    "operations": {"$ref": "#/definitions/ids", "description": "The API schema operations the route implements."}
+                }
+            }
+        },
+        "operations": {"$ref": "#/definitions/strings", "description": "Operation id => the core method implementing it (gRPC)."},
+        "entries": {"$ref": "#/definitions/idLists", "description": "Method of the core => the methods outside the core calling it."},
+        "fromFamilies": {"$ref": "#/definitions/familyCalls", "description": "Method of the core => family head => its members' methods calling it."},
+        "closures": {"$ref": "#/definitions/familyCalls", "description": "Method of the core => the method writing a closure it runs => what the closure calls."},
+        "inside": {"$ref": "#/definitions/idLists", "description": "Method of the core => the methods of other core classes it calls."},
+        "hints": {
+            "type": "array",
+            "description": "Behaviour read in the method bodies: guarded throws, early returns, branches on constants.",
+            "items": {
+                "type": "object",
+                "required": ["class", "method", "line", "text"],
+                "additionalProperties": false,
+                "properties": {
+                    "class": {"type": "string"},
+                    "method": {"type": "string", "description": "The method name, without its class."},
+                    "line": {"type": "integer"},
+                    "text": {"type": "string"}
+                }
+            }
+        },
+        "wiring": {
+            "type": "array",
+            "description": "Container configuration wiring the core.",
+            "items": {
+                "type": "object",
+                "required": ["file", "line", "call", "services"],
+                "additionalProperties": false,
+                "properties": {
+                    "file": {"type": "string"},
+                    "line": {"type": "integer"},
+                    "call": {"type": "string"},
+                    "services": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": ["id", "class", "consumers"],
+                            "additionalProperties": false,
+                            "properties": {
+                                "id": {"type": "string", "description": "The service id."},
+                                "class": {"type": "string"},
+                                "consumers": {"$ref": "#/definitions/ids"}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "consumers": {"$ref": "#/definitions/counts", "description": "Application class outside the core => its links to it."},
+        "consumerFiles": {"type": "integer", "description": "Application files using the core."},
+        "tests": {"$ref": "#/definitions/counts", "description": "Test module => test files touching the core."},
+        "topTests": {"$ref": "#/definitions/names", "description": "The test files touching the most core classes."},
+        "uncovered": {"$ref": "#/definitions/ids", "description": "Core classes no test touches."},
+        "unused": {"$ref": "#/definitions/ids", "description": "Core classes nothing in the application uses."},
+        "method": {"type": "string", "description": "When the topic names a method: that method, the core is what it runs."},
+        "depths": {"$ref": "#/definitions/counts", "description": "With a method: the methods it runs => calls away from it."},
+        "hubs": {"$ref": "#/definitions/counts", "description": "With a method: the hubs it reaches, not followed => application classes calling them."},
+        "guesses": {"$ref": "#/definitions/idLists", "description": "With a method: the calls guessed from a unique method name (AMBIGUOUS), caller => callees."},
+        "guessed": {"$ref": "#/definitions/ids", "description": "With a method: the methods it reaches only through such guesses."},
+        "large": {
+            "type": "object",
+            "description": "When the class named declares many methods: its entry points, to outline one by one.",
+            "required": ["class", "methods", "entries"],
+            "additionalProperties": false,
+            "properties": {
+                "class": {"type": "string"},
+                "methods": {"type": "integer"},
+                "entries": {
+                    "type": "object",
+                    "description": "Method => the routes handled by it and the classes calling it.",
+                    "additionalProperties": {
+                        "type": "object",
+                        "required": ["routes", "callers"],
+                        "additionalProperties": false,
+                        "properties": {
+                            "routes": {"type": "integer"},
+                            "callers": {"type": "integer"}
+                        }
+                    }
+                }
+            }
+        },
+        "left": {"$ref": "#/definitions/ids", "description": "When the core is full: the classes that qualified after it, best first."},
+        "leftReasons": {
+            "type": "object",
+            "description": "Class left out => why it qualified.",
+            "additionalProperties": {"$ref": "#/definitions/reason"}
+        }
+    },
+    "definitions": {
+        "ids": {"type": "array", "items": {"type": "string"}},
+        "names": {"type": "array", "items": {"type": "string"}},
+        "strings": {"type": "object", "additionalProperties": {"type": "string"}},
+        "counts": {"type": "object", "additionalProperties": {"type": "integer"}},
+        "idLists": {"type": "object", "additionalProperties": {"$ref": "#/definitions/ids"}},
+        "familyCalls": {"type": "object", "additionalProperties": {"$ref": "#/definitions/idLists"}},
+        "reason": {
+            "type": "object",
+            "description": "Why a class is in the outline.",
+            "required": ["kind"],
+            "additionalProperties": false,
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "description": "Seeds: named (the topic names the class), route (it handles a route named after the topic), topic (its name or namespace carries the topic's words), method (one of its methods does). Joined: module (of a seed's module), uses (it uses a core class), used_by (a core class uses it), family (an interface or base class whose members mostly use the core). A method's outline: start (the class of the method), called (called by a method it runs).",
+                    "enum": ["named", "route", "topic", "method", "module", "uses", "used_by", "family", "start", "called"]
+                },
+                "via": {"type": "string", "description": "The class, method or route the decision went through."},
+                "count": {"type": "integer", "description": "For a family, its members using the core."},
+                "reduced": {"const": true, "description": "A class used by many, shown with the methods the core calls only."}
+            }
+        },
+        "coreClass": {
+            "type": "object",
+            "required": ["id"],
+            "additionalProperties": false,
+            "properties": {
+                "id": {"type": "string"},
+                "reason": {"$ref": "#/definitions/reason"},
+                "kind": {"type": "string", "description": "class, interface, trait or enum."},
+                "modifiers": {"$ref": "#/definitions/names", "description": "final, readonly, abstract."},
+                "summary": {"type": "string", "description": "The first sentence of its docblock."},
+                "signatures": {"$ref": "#/definitions/names", "description": "Its public methods, as declared."},
+                "constants": {"$ref": "#/definitions/strings", "description": "Name => value as written."},
+                "cases": {"$ref": "#/definitions/strings", "description": "Enum case => value as written, or ''."},
+                "properties": {"$ref": "#/definitions/strings", "description": "Property naming another core class => its type as written."}
+            }
+        }
+    }
+}

@@ -362,9 +362,9 @@ Sylius (le commit du corpus), octobre 2026, sans LLM : phpgraph 1.0.2, [codebase
 
 ## Contribuer
 
-Les issues et les pull requests sont les bienvenues. Voir [CONTRIBUTING.md](https://github.com/hbenabdallah/phpgraph/blob/main/CONTRIBUTING.md) : `composer check` doit passer (php-cs-fixer, PHPStan niveau max, PHPUnit), et les évolutions de l'analyse se jugent sur le corpus. Sans PHP installé, `bin/dev composer check` lance tout dans Docker.
+Les issues et les pull requests sont les bienvenues. Voir [CONTRIBUTING.md](https://github.com/hbenabdallah/phpgraph/blob/main/CONTRIBUTING.md) : `composer check` doit passer (php-cs-fixer, PHPStan niveau max, PHPUnit), et les évolutions de l'analyse se jugent sur le corpus. Sans PHP installé, `bin/dev composer check` lance tout dans Docker. [docs/ARCHITECTURE.md](https://github.com/hbenabdallah/phpgraph/blob/main/docs/ARCHITECTURE.md) décrit l'organisation du code, [docs/PROVIDERS.md](https://github.com/hbenabdallah/phpgraph/blob/main/docs/PROVIDERS.md) comment ajouter ce que renvoie une bibliothèque (en anglais).
 
-Ce qui reste stable d'une version à l'autre (commandes, outils MCP, format de `graph.json`) est listé dans [docs/STABILITY.md](https://github.com/hbenabdallah/phpgraph/blob/main/docs/STABILITY.md) ; les changements sont dans le [changelog](https://github.com/hbenabdallah/phpgraph/blob/main/CHANGELOG.md).
+Ce qui reste stable d'une version à l'autre (commandes, outils MCP, format de `graph.json`, JSON d'`impact` et d'`outline`, avec [leurs schémas](https://github.com/hbenabdallah/phpgraph/tree/main/docs/schemas)) est listé dans [docs/STABILITY.md](https://github.com/hbenabdallah/phpgraph/blob/main/docs/STABILITY.md) ; les changements sont dans le [changelog](https://github.com/hbenabdallah/phpgraph/blob/main/CHANGELOG.md).
 
 Les versions se publient en poussant un tag : le [workflow de release](https://github.com/hbenabdallah/phpgraph/blob/main/.github/workflows/release.yml) construit le PHAR, les exécutables pour Linux, macOS et Windows (`tools/build-binary.sh`) et l'image Docker `ghcr.io/hbenabdallah/phpgraph`.
 

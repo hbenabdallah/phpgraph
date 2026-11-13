@@ -97,6 +97,14 @@ final class ContainerServices
     }
 
     /**
+     * What the services resolve to, for a build to know whether calls resolved by service id still hold.
+     */
+    public function fingerprint(): string
+    {
+        return md5(serialize([$this->definitions, $this->parameters]));
+    }
+
+    /**
      * @return array{definitions: array<string, string>, parameters: array<string, string>, tags: list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>, arguments: list<array{id: string, tag: ?string, service: ?string, locator?: bool}>}
      */
     private function read(string $file, string $content): array
