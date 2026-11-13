@@ -1,0 +1,22 @@
+project: stayhub
+kind: impact
+prompt: |
+  In inventory-service, the HTTP endpoint handled by App\Http\Controllers\RoomInventoryController::release() will
+  change the payload it accepts. List the production classes in the other services (not tests) whose code sends a
+  request to this endpoint and must be adapted.
+expected:
+  - App\Services\CreateBookingAction
+  - App\Http\Controllers\BookingController
+allowed:
+  - App\Services\InventoryClient
+min_recall: 1
+min_precision: 0.66
+checked: |
+  services/inventory-service/routes/api.php: Route::post('/inventory/releases', [RoomInventoryController::class,
+  'release']) under the api prefix. grep -rn RoomInventoryController outside inventory-service: nothing, so the
+  obvious grep finds none of the expected classes. grep -rn "inventory/releases" services (outside tests):
+  booking-service CreateBookingAction.php:63, 93, 131 and BookingController.php:98, 268 call
+  $this->inventory->post('/api/inventory/releases', ...) on InventoryClient, which posts to
+  config('services.inventory.url') . $path (allowed: it sends whatever path it is given). routes/console.php:59 also
+  posts there, but from a console closure, not a class. No other service calls it; the gateway is APISIX
+  configuration, not PHP.

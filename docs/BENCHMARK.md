@@ -173,6 +173,47 @@ the text tags removed).
 | sylius-impact-promotions-integrity | impact | phpgraph | 3/3 | 3/3 | 1.00 | 1.00 | 117,394 ± 26,096 | 0.15 | 1.7 | 16 |
 | sylius-impact-promotions-integrity | impact | baseline | 0/3 | 3/3 | 0.80 | 0.57 | 123,418 ± 2,473 | 0.17 | 3.0 | 17 |
 
+### Hard tasks (pilot)
+
+13 November 2026: does phpgraph answer what grep cannot, when the answer goes through something a search of the
+obvious name does not see? Four `impact` tasks (`tools/agent-bench/tasks/*-hard-*.yaml`), written so that a grep of
+the class or method named in the prompt finds none of the expected classes. Claude Code 2.1.323, phpgraph at commit
+`363df2f`, 1 run per task, arm and model (12 runs, $1.94).
+
+| Task | Indirection to follow |
+|---|---|
+| sylius-hard-promotion-processor-triggers | callers of the composite order processor, given by `service()` in the container config; trap: `ProcessOrderListener` holds the same interface but receives the payment processor |
+| stayhub-hard-inventory-release-callers | callers in another service of `POST /api/inventory/releases`, through an HTTP client and a path string |
+| sylius-hard-handlers-reaching-promotion-processor | API command handlers reaching `OrderPromotionProcessor` in 1 to 3 hops: composite, `OrderModifier`, promotion code assigner, integrity checker, checkout transitions heard by tagged event listeners |
+| akeneo-hard-controllers-reaching-category-by-code | controllers reaching `GetCategoryInterface::byCode()` through a custom command bus (`tagged_iterator` indexed by command), savers and SQL builders; traps: controllers holding the interface but calling `byId()` |
+
+| Task | Model | Arm | Recall | Precision | Tokens | Time (s) |
+|---|---|---|---|---|---|---|
+| sylius-hard-promotion-processor-triggers | sonnet | phpgraph | 0.89 | 1.00 | 264,956 | 30 |
+| sylius-hard-promotion-processor-triggers | sonnet | baseline | 0.89 | 1.00 | 243,380 | 28 |
+| sylius-hard-promotion-processor-triggers | haiku | phpgraph | 1.00 | 0.90 | 451,550 | 34 |
+| sylius-hard-promotion-processor-triggers | haiku | baseline | 1.00 | 1.00 | 288,506 | 29 |
+| stayhub-hard-inventory-release-callers | sonnet | phpgraph | 1.00 | 1.00 | 224,120 | 11 |
+| stayhub-hard-inventory-release-callers | sonnet | baseline | 1.00 | 1.00 | 124,127 | 10 |
+| stayhub-hard-inventory-release-callers | haiku | phpgraph | 1.00 | 1.00 | 249,497 | 16 |
+| stayhub-hard-inventory-release-callers | haiku | baseline | 1.00 | 1.00 | 237,703 | 15 |
+| sylius-hard-handlers-reaching-promotion-processor | sonnet | phpgraph | 1.00 | 1.00 | 377,930 | 25 |
+| sylius-hard-handlers-reaching-promotion-processor | sonnet | baseline | 1.00 | 1.00 | 246,932 | 27 |
+| akeneo-hard-controllers-reaching-category-by-code | sonnet | phpgraph | 1.00 | 1.00 | 181,774 | 19 |
+| akeneo-hard-controllers-reaching-category-by-code | sonnet | baseline | 1.00 | 1.00 | 381,911 | 33 |
+
+No recall gap: on every task both arms reach the full answer, with sonnet and with haiku. The agents without the
+graph grep the interface or the path string, then read the container config, and take the extra hops too; a grep of
+the obvious name missing the answer does not mean the agent misses it. The two Sylius sonnet runs at 0.89 left out
+`CompositeOrderProcessor`, which the prompt did not ask for (it is now `allowed`). Tokens go both ways: −52 % with
+phpgraph on Akeneo, the largest project, +53 % on the Sylius multi-hop task and +80 % on stayhub; with one run each,
+that is within run-to-run variance. The pilot was stopped there: the hard tasks do not separate the arms on this
+corpus, so the full set planned after it was not written.
+
+One fault of phpgraph came out: `impact_of` goes from `OrderProcessorInterface::process()` to every caller of the
+interface, whichever service the container injects into each, so haiku with phpgraph listed the `ProcessOrderListener`
+trap that the baseline avoided by reading the config.
+
 
 ## Method
 
