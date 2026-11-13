@@ -1,0 +1,47 @@
+project: sylius
+kind: impact
+prompt: |
+  Sylius\Component\Core\OrderProcessing\OrderPromotionProcessor::process() will become slower. Which Messenger
+  command handlers of the API (classes in Sylius\Bundle\ApiBundle\CommandHandler) can end up running it while they
+  handle their command, directly or through any chain of services, event listeners or state machine transitions?
+  List the command handlers only.
+expected:
+  - Sylius\Bundle\ApiBundle\CommandHandler\Cart\BlameCartHandler
+  - Sylius\Bundle\ApiBundle\CommandHandler\Cart\ChangeItemQuantityInCartHandler
+  - Sylius\Bundle\ApiBundle\CommandHandler\Cart\AddItemToCartHandler
+  - Sylius\Bundle\ApiBundle\CommandHandler\Cart\RemoveItemFromCartHandler
+  - Sylius\Bundle\ApiBundle\CommandHandler\Checkout\UpdateCartHandler
+  - Sylius\Bundle\ApiBundle\CommandHandler\Checkout\CompleteOrderHandler
+  - Sylius\Bundle\ApiBundle\CommandHandler\Checkout\ChooseShippingMethodHandler
+  - Sylius\Bundle\ApiBundle\CommandHandler\Checkout\ChoosePaymentMethodHandler
+allowed:
+  - Sylius\Component\Order\Processor\CompositeOrderProcessor
+  - Sylius\Component\Order\Modifier\OrderModifier
+  - Sylius\Bundle\ApiBundle\Assigner\OrderPromotionCodeAssigner
+  - Sylius\Bundle\ApiBundle\Modifier\OrderAddressModifier
+  - Sylius\Bundle\CoreBundle\Order\Checker\OrderPromotionsIntegrityChecker
+  - Sylius\Bundle\CoreBundle\EventListener\Workflow\OrderCheckout\ProcessCartListener
+min_recall: 1
+min_precision: 0.85
+checked: |
+  OrderPromotionProcessor is only tagged sylius.order_processor (CoreBundle config/services/order_processing.php)
+  and runs inside the composite sylius.order_processing.order_processor (CompositeOrderProcessor). Handler
+  arguments in ApiBundle config/services/command_handlers.php, then each chain read in the code:
+  - BlameCartHandler:63, ChangeItemQuantityInCartHandler:52: ->process() on the composite (1 hop).
+  - AddItemToCartHandler:72 addToOrder(), RemoveItemFromCartHandler:49 removeFromOrder() on sylius.modifier.order
+    (OrderModifier, given the composite in OrderBundle services.php:70; both methods call ->process()).
+  - UpdateCartHandler:55 assign() on sylius_api.assigner.order_promotion_code (OrderPromotionCodeAssigner:41
+    ->process() on the composite); also :52 modify() on OrderAddressModifier, which applies the order checkout
+    transition address (OrderAddressModifier:60).
+  - CompleteOrderHandler:63 check() on sylius.checker.order.promotions_integrity (OrderPromotionsIntegrityChecker:32
+    ->process() on the composite).
+  - ChooseShippingMethodHandler:67 and ChoosePaymentMethodHandler:73 apply the sylius_order_checkout transitions
+    select_shipping and select_payment; ProcessCartListener (CoreBundle workflow/order_checkout.php:28-34, given the
+    composite) listens to workflow.sylius_order_checkout.completed.{address, select_shipping, skip_shipping,
+    select_payment, skip_payment}, and the winzou callback sylius_process_cart (sylius_order_checkout.yml:42) does
+    the same on those transitions.
+  Not reached: ShipShipmentHandler (shipment graph, no listener given the composite), ChangePaymentMethodHandler
+  (PaymentMethodChanger: repositories and resolver, no state machine), PickupCartHandler, the account, catalog,
+  payment request and promotion coupon handlers (no processor, modifier or checkout transition among their
+  arguments). The payment workflow ProcessOrderListener gets the payment processor only. Intermediate services of
+  the chains are allowed, not required.

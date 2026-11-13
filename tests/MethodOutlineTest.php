@@ -50,6 +50,21 @@ final class MethodOutlineTest extends TestCase
         self::assertStringContainsString('GenerateFromUrl::handle() → Palette::build(); guessed: Unrelated::collect()', $text);
     }
 
+    public function testEachClassOfAMethodsOutlineSaysWhichMethodCallsItFirst(): void
+    {
+        $this->buildProject([
+            'src/PlaceOrder.php' => 'namespace App; class PlaceOrder { public function __construct(private Cart $cart) {} public function handle(): void { $this->cart->total(); } }',
+            'src/Cart.php' => 'namespace App; class Cart { public function __construct(private Prices $prices) {} public function total(): int { return $this->prices->of(); } }',
+            'src/Prices.php' => 'namespace App; class Prices { public function of(): int { return 1; } }',
+        ]);
+        $query = new GraphQuery((new GraphBuilder())->build($this->root)->graph, null, $this->root);
+        $text = (new TextPresenter($query))->outline('App\PlaceOrder::handle');
+
+        self::assertStringContainsString('Cart (class) [by handle]', $text, 'called by the method outlined: its name is enough');
+        self::assertStringContainsString('Prices (class) [by Cart::total]', $text, 'called further down: the method calling it');
+        self::assertStringContainsString("    PlaceOrder (class)\n", $text, 'the class of the method outlined: the header names it');
+    }
+
     public function testACoreWithoutACommonNamespaceIsListedByFullNamespace(): void
     {
         $this->buildProject([
@@ -229,7 +244,7 @@ final class MethodOutlineTest extends TestCase
         self::assertContains('App\Models\User', $outline->core);
         self::assertContains('App\Models\Team', $outline->core);
         self::assertSame(['log'], array_keys($outline->facts['App\Models\User']->properties ?? []), 'the tab it stores, not its profile nor its team, another model used by many');
-        self::assertStringContainsString("    User (class)\n      \$log: Log", (new TextPresenter($query))->outline('home log'));
+        self::assertMatchesRegularExpression('/^    User \(class\)[^\n]*\n      \$log: Log$/m', (new TextPresenter($query))->outline('home log'), 'the hub keeps the property naming a class of the core');
     }
 
     public function testTwoClassesOfOneNameAreToldApartInTheLists(): void
@@ -264,7 +279,8 @@ final class MethodOutlineTest extends TestCase
         self::assertNotNull($outline);
         self::assertCount(45, $outline->core);
         self::assertCount(6, $outline->left, 'the 50 ledgers qualified, 44 joined');
-        self::assertStringContainsString('The core is full: 6 more classes qualified, left out: ', (new TextPresenter($query))->outline('poll options'));
+        $text = (new TextPresenter($query))->outline('poll options');
+        self::assertStringContainsString('The core is full: 6 more classes qualified, left out: App\Billing\Ledger', $text, 'named in full: no namespace line of the outline says where they are');
     }
 
     public function testAParentClassUsedByManyStandsForNoneOfItsSubclasses(): void

@@ -1,0 +1,41 @@
+project: bookstack
+kind: impact
+prompt: |
+  We are adding a required third parameter to BookStack\Activity\Tools\ActivityLogger::add(). List every class,
+  production or test, whose code must change: the logger itself and every class calling add() on it, directly or
+  through a facade.
+expected:
+  - BookStack\Activity\Tools\ActivityLogger
+  - BookStack\Exports\ImportRepo
+  - BookStack\Permissions\PermissionsRepo
+  - BookStack\Entities\Tools\PermissionsUpdater
+  - BookStack\Entities\Repos\BookRepo
+  - BookStack\Entities\Repos\ChapterRepo
+  - BookStack\Entities\Repos\BookshelfRepo
+  - BookStack\Entities\Tools\HierarchyTransformer
+  - BookStack\Entities\Repos\PageRepo
+  - BookStack\Entities\Repos\DeletionRepo
+  - BookStack\Http\Controller
+  - BookStack\Access\RegistrationService
+  - BookStack\Access\LoginService
+  - BookStack\Entities\Controllers\BookController
+  - BookStack\Sorting\BookSortController
+  - BookStack\Entities\Controllers\PageRevisionController
+  - BookStack\Users\UserRepo
+  - Tests\Activity\AuditLogApiTest
+  - Tests\Commands\ClearActivityCommandTest
+  - Tests\User\UserProfileTest
+  - Tests\Api\UsersApiTest
+  - Tests\Activity\AuditLogTest
+  - Tests\Activity\WatchTest
+  - Tests\Activity\WebhookCallTest
+allowed: []
+min_recall: 0.9
+min_precision: 0.8
+checked: |
+  ActivityLogger is bound as 'activity' (App/Providers/AppServiceProvider.php:38) and exposed by the facade
+  BookStack\Facades\Activity (@mixin ActivityLogger). grep -rln "Activity::add(" app routes tests: 20 files (16 in
+  app, 4 tests), among them Http\Controller::logActivity(), the wrapper the controllers call (its callers pass
+  through it and need no change). Direct calls on an instance resolved from the container: tests AuditLogTest
+  ($this->activityService->add, lines 47, 62, 77), WatchTest (371, 406), WebhookCallTest (148). No other class
+  receives an ActivityLogger (grep ActivityLogger app tests). Recall 0.9: two of 24 classes may be missed.

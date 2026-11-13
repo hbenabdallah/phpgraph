@@ -1,0 +1,24 @@
+project: sylius
+kind: fix
+patch: ../patches/sylius-order-adjustments.patch
+prompt: |
+  Tests of Tests\Sylius\Component\Core\Model\OrderTest fail: the promotion total and the tax totals of an order no
+  longer include the adjustments of its units. Find the bug and fix it. Run the tests with:
+    php -d display_errors=stderr vendor/bin/phpunit src/Sylius/Component/Core/tests/Model/OrderTest.php
+tests:
+  - php -d display_errors=stderr vendor/bin/phpunit --do-not-cache-result --colors=never src/Sylius/Component/Core/tests/Model/OrderTest.php
+  - php -d display_errors=stderr vendor/bin/phpunit --do-not-cache-result --colors=never src/Sylius/Component/Core/tests
+  - php -d display_errors=stderr vendor/bin/phpunit --do-not-cache-result --colors=never src/Sylius/Component/Order/tests
+  - php -d display_errors=stderr vendor/bin/phpunit --do-not-cache-result --colors=never src/Sylius/Component/Promotion/tests
+protected:
+  - tests
+  - src/Sylius/Component/Core/tests
+  - src/Sylius/Component/Order/tests
+  - src/Sylius/Component/Promotion/tests
+checked: |
+  Seed (patches/sylius-order-adjustments.patch): Sylius\Component\Order\Model\Order::getAdjustmentsRecursively(), the
+  base class of Core's Order, takes each item's own adjustments instead of its recursive ones (units left out). The
+  failing tests are in Core (getOrderPromotionTotal(), getTaxIncludedTotal()/getTaxExcludedTotal() are Core methods
+  calling the inherited one), the cause one component below. Checked with the seeded file mounted over the
+  checkout: Core tests 1,029 run, 3 failures (OrderTest); Order component tests 2 failures; without the patch the
+  Core, Order and Promotion component suites exit 0.

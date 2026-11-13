@@ -1,0 +1,23 @@
+project: sylius
+kind: fix
+patch: ../patches/sylius-comparison-operator.patch
+prompt: |
+  A promotion rule "cart quantity lower than or equal to 3" no longer applies to a cart of exactly 3 items: the test
+  Tests\Sylius\Component\Core\Promotion\Checker\Rule\CartQuantityRuleCheckerTest fails. Find the bug and fix it. Run
+  the tests with:
+    php -d display_errors=stderr vendor/bin/phpunit src/Sylius/Component/Core/tests/Promotion/Checker/Rule
+tests:
+  - php -d display_errors=stderr vendor/bin/phpunit --do-not-cache-result --colors=never src/Sylius/Component/Core/tests/Promotion/Checker/Rule/CartQuantityRuleCheckerTest.php
+  - php -d display_errors=stderr vendor/bin/phpunit --do-not-cache-result --colors=never src/Sylius/Component/Core/tests
+  - php -d display_errors=stderr vendor/bin/phpunit --do-not-cache-result --colors=never src/Sylius/Component/Promotion/tests
+protected:
+  - tests
+  - src/Sylius/Component/Core/tests
+  - src/Sylius/Component/Promotion/tests
+checked: |
+  Seed (patches/sylius-comparison-operator.patch): ComparisonOperatorMatcher::match() of the Promotion component
+  maps '<=' to `<`. CartQuantityRuleChecker (Core) delegates the comparison to it, so the Core test fails
+  (lower_than_equal on equality), as does ItemTotalRuleCheckerTest and the matcher's own test in the Promotion
+  component. Checked with the seeded file mounted over the checkout: Core promotion tests 2 failures, Promotion
+  tests 1 failure; without the patch both suites exit 0. This task takes BookStack's fix slot: every BookStack test,
+  tests/Unit included, extends a TestCase opening a MySQL transaction.

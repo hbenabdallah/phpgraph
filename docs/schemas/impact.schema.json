@@ -1,0 +1,106 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://github.com/hbenabdallah/phpgraph/blob/main/docs/schemas/impact.schema.json",
+    "title": "phpgraph impact --format json",
+    "description": "What may break when a class or a method changes. Stable from 1.0.0: keys are only added, in a minor version; read it ignoring the keys you do not know. With a section, only changed and that section's key. Ids are graph.json node ids.",
+    "type": "object",
+    "required": ["changed"],
+    "additionalProperties": false,
+    "properties": {
+        "changed": {
+            "type": "object",
+            "description": "The node asked about.",
+            "required": ["id", "kind", "file", "line"],
+            "additionalProperties": false,
+            "properties": {
+                "id": {"type": "string"},
+                "kind": {"type": "string", "description": "A graph.json node kind."},
+                "file": {"type": ["string", "null"]},
+                "line": {"type": ["integer", "null"]}
+            }
+        },
+        "maxDepth": {"type": "integer", "description": "The depth followed."},
+        "truncated": {"type": "boolean", "description": "Whether the search stopped at its class limit."},
+        "routes": {
+            "type": "array",
+            "description": "The routes reaching the change, without the depth limit.",
+            "items": {
+                "type": "object",
+                "required": ["route", "id", "confidence", "chain"],
+                "additionalProperties": false,
+                "properties": {
+                    "route": {"type": "string", "description": "Its label: GET /orders, ACTION <code>."},
+                    "id": {"type": "string"},
+                    "confidence": {"$ref": "#/definitions/confidence"},
+                    "chain": {"$ref": "#/definitions/ids", "description": "From the route's handler down to the change."},
+                    "screens": {
+                        "type": "object",
+                        "description": "File quoting the route's action code => its lines.",
+                        "additionalProperties": {"type": "array", "items": {"type": "integer"}}
+                    }
+                }
+            }
+        },
+        "operations": {
+            "type": "array",
+            "description": "API schema operations implemented by what the change reaches.",
+            "items": {
+                "type": "object",
+                "required": ["operation", "id", "file", "confidence", "implementedBy"],
+                "additionalProperties": false,
+                "properties": {
+                    "operation": {"type": "string"},
+                    "id": {"type": "string"},
+                    "file": {"type": ["string", "null"]},
+                    "confidence": {"$ref": "#/definitions/confidence"},
+                    "implementedBy": {"type": "string"}
+                }
+            }
+        },
+        "direct": {"$ref": "#/definitions/classes", "description": "The classes depending on the change, nearest first."},
+        "uncovered": {"$ref": "#/definitions/names", "description": "Classes reached that no test touches (short names)."},
+        "unused": {"$ref": "#/definitions/names", "description": "Classes reached that nothing in the application uses (short names)."},
+        "state": {"$ref": "#/definitions/classes", "description": "Possibly affected through the state the change writes."},
+        "tests": {"$ref": "#/definitions/classes", "description": "The tests to run."},
+        "stateTests": {"$ref": "#/definitions/classes", "description": "Tests reaching what reads that state."},
+        "helpers": {"$ref": "#/definitions/ids", "description": "Test helpers on the way (fakers)."},
+        "unusedHelperMethods": {"$ref": "#/definitions/ids", "description": "Methods of those helpers nothing calls."}
+    },
+    "definitions": {
+        "ids": {"type": "array", "items": {"type": "string"}},
+        "names": {"type": "array", "items": {"type": "string"}},
+        "confidence": {"type": "string", "enum": ["EXTRACTED", "INFERRED", "AMBIGUOUS"]},
+        "classes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["class", "file", "depth", "confidence", "sites"],
+                "additionalProperties": false,
+                "properties": {
+                    "class": {"type": "string"},
+                    "file": {"type": ["string", "null"]},
+                    "depth": {"type": "integer", "description": "Relations away from the change."},
+                    "confidence": {"$ref": "#/definitions/confidence", "description": "The weakest on the way."},
+                    "comparesState": {"const": true, "description": "It compares the state before and after."},
+                    "followed": {"const": false, "description": "Listed, not followed further (a tagged collection, inherited code)."},
+                    "sites": {
+                        "type": "array",
+                        "description": "Its edges reaching the change.",
+                        "items": {
+                            "type": "object",
+                            "required": ["source", "relation", "target"],
+                            "additionalProperties": false,
+                            "properties": {
+                                "source": {"type": "string"},
+                                "relation": {"type": "string", "description": "A graph.json relation."},
+                                "target": {"type": "string"},
+                                "lines": {"type": "array", "items": {"type": "integer"}, "description": "The source lines."},
+                                "via": {"type": "string"}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

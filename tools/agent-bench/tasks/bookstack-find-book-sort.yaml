@@ -1,0 +1,26 @@
+project: bookstack
+kind: find
+prompt: |
+  Which controller handles the web route PUT /books/{bookSlug}/sort, and which classes does it use to apply the new
+  order of the book's chapters and pages?
+expected:
+  - BookStack\Sorting\BookSortController
+  - BookStack\Sorting\BookSorter
+  - BookStack\Sorting\BookSortMap
+allowed:
+  - BookStack\Sorting\BookSortMapItem
+  - BookStack\Sorting\SortRule
+  - BookStack\Entities\Queries\BookQueries
+  - BookStack\Entities\Models\Book
+  - BookStack\Util\DatabaseTransaction
+  - BookStack\Activity\Tools\ActivityLogger
+  - BookStack\Facades\Activity
+  - BookStack\Activity\ActivityType
+  - BookStack\Entities\Tools\BookContents
+min_recall: 1
+min_precision: 0.75
+checked: |
+  routes/web.php:81 Route::put('/books/{bookSlug}/sort', [BookSortController::class, 'update']).
+  BookSortController::update(Request, BookSorter $sorter, string $bookSlug): BookSortMap::fromJson() of the
+  sort-tree input, $sorter->sortUsingMap($sortMap) in a DatabaseTransaction, or $sorter->runBookAutoSort($book) with
+  a SortRule; Activity::add(BOOK_SORT) for each book involved. Allowed: what update() also touches.

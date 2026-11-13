@@ -30,6 +30,7 @@ final class ServeCommand extends Command
             ->addOption('output', 'o', InputOption::VALUE_REQUIRED, 'Output directory (default: <path>/phpgraph-out)')
             ->addOption('exclude', 'e', InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Path pattern to exclude (repeatable, default: those of the last build)')
             ->addOption('no-vendor', null, InputOption::VALUE_NONE, 'Do not read dependency signatures from vendor/')
+            ->addOption('all-tools', null, InputOption::VALUE_NONE, 'List all 8 MCP tools, not only get_node, get_neighbors, impact_of and outline')
             ->addOption('graph', 'g', InputOption::VALUE_REQUIRED, 'Serve this graph.json as is: never build it, reload it when it changes');
     }
 
@@ -39,9 +40,10 @@ final class ServeCommand extends Command
         ini_set('display_errors', 'stderr');
         // Its stdin may be a socket (Node gives its children socketpairs): waiting for the next request never times out.
         ini_set('default_socket_timeout', '-1');
+        $allTools = (bool) $input->getOption('all-tools');
         $graph = $input->getOption('graph');
         if (\is_string($graph)) {
-            (new McpServer(new GraphQueryProvider($graph), Version::get(), \Phar::running(false)))->run();
+            (new McpServer(new GraphQueryProvider($graph), Version::get(), \Phar::running(false), $allTools))->run();
 
             return Command::SUCCESS;
         }
@@ -68,7 +70,7 @@ final class ServeCommand extends Command
         );
 
         $project->deferCacheWrites();
-        (new McpServer(GraphQueryProvider::forProject($project), Version::get(), \Phar::running(false)))->run();
+        (new McpServer(GraphQueryProvider::forProject($project), Version::get(), \Phar::running(false), $allTools))->run();
 
         return Command::SUCCESS;
     }

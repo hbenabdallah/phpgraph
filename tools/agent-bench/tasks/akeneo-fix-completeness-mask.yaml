@@ -1,0 +1,22 @@
+project: akeneo-pim
+kind: fix
+patch: ../patches/akeneo-mask-channel-locale.patch
+prompt: |
+  The spec Specification\Akeneo\Pim\Enrichment\Component\Product\Completeness\CompletenessCalculatorSpec fails: the
+  completeness computed for a product is reported for the wrong channel and locale. Find the bug and fix it. Run the
+  specs with:
+    php -d error_reporting=8191 -d display_errors=stderr -d memory_limit=-1 vendor/bin/phpspec run -c phpspec.yml.dist --no-interaction --no-code-generation --format=progress tests/back/Pim/Enrichment/Specification/Component/Product/Completeness
+tests:
+  - php -d error_reporting=8191 -d display_errors=stderr -d memory_limit=-1 vendor/bin/phpspec run -c phpspec.yml.dist --no-interaction --no-code-generation --format=progress tests/back/Pim/Enrichment/Specification/Component/Product/Completeness
+  - php -d error_reporting=8191 -d display_errors=stderr -d memory_limit=-1 vendor/bin/phpspec run -c phpspec.yml.dist --no-interaction --no-code-generation --format=progress tests/back/Pim/Structure/Specification/Component/Query
+protected:
+  - tests
+checked: |
+  Seed (patches/akeneo-mask-channel-locale.patch): the constructor of
+  Akeneo\Pim\Structure\Component\Query\PublicApi\Family\RequiredAttributesMaskForChannelAndLocale (Structure context,
+  public API) swaps channel and locale. The failing spec is in the Enrichment context (CompletenessCalculator,
+  MissingRequiredAttributesCalculator, CompletenessProductMask: 5 failures in 60 examples), the cause in another
+  bounded context; Structure's RequiredAttributesMaskSpec fails too. Checked on a throwaway copy (phpspec writes
+  nothing with --no-code-generation): with the patch both commands fail, without it 60 and 7 examples pass.
+  error_reporting=8191 leaves out the deprecations PHP 8.5 reports in vendor/ (Akeneo pins PHP 8.3), which phpspec
+  would count as broken examples.

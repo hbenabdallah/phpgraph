@@ -1,0 +1,47 @@
+project: akeneo-pim
+kind: explain
+prompt: |
+  Explain how Akeneo PIM computes and stores the completeness of products: what is compared with what for each
+  channel and locale, where the required attributes come from, and how the result is saved. List the classes of the
+  flow.
+expected:
+  - Akeneo\Pim\Enrichment\Bundle\Product\ComputeAndPersistProductCompletenesses
+  - Akeneo\Pim\Enrichment\Component\Product\Completeness\CompletenessCalculator
+  - Akeneo\Pim\Enrichment\Component\Product\Completeness\Query\GetCompletenessProductMasks
+  - Akeneo\Pim\Enrichment\Bundle\Storage\Sql\Completeness\SqlGetCompletenessProductMasks
+  - Akeneo\Pim\Enrichment\Component\Product\Completeness\Model\CompletenessProductMask
+  - Akeneo\Pim\Structure\Component\Query\PublicApi\Family\GetRequiredAttributesMasks
+  - Akeneo\Pim\Structure\Component\Query\PublicApi\Family\RequiredAttributesMask
+  - Akeneo\Pim\Structure\Component\Query\PublicApi\Family\RequiredAttributesMaskForChannelAndLocale
+  - Akeneo\Pim\Enrichment\Component\Product\Completeness\Model\ProductCompletenessWithMissingAttributeCodes
+  - Akeneo\Pim\Enrichment\Component\Product\Completeness\Model\ProductCompletenessWithMissingAttributeCodesCollection
+  - Akeneo\Pim\Enrichment\Component\Product\Query\SaveProductCompletenesses
+allowed:
+  - Akeneo\Pim\Enrichment\Component\Product\Completeness\MissingRequiredAttributesCalculatorInterface
+  - Akeneo\Pim\Enrichment\Component\Product\Completeness\MissingRequiredAttributesCalculator
+  - Akeneo\Pim\Enrichment\Component\Product\Completeness\Model\ProductCompletenessCollection
+  - Akeneo\Pim\Enrichment\Component\Product\Completeness\Model\ProductCompleteness
+  - Akeneo\Pim\Enrichment\Component\Product\Completeness\Query\GetProductCompletenessRatio
+  - Akeneo\Pim\Enrichment\Component\Product\Completeness\MaskItemGenerator\DefaultMaskItemGenerator
+  - Akeneo\Pim\Enrichment\Component\Product\Completeness\MaskItemGenerator\MaskItemGeneratorForAttributeType
+  - Akeneo\Pim\Enrichment\Component\Product\Completeness\MaskItemGenerator\MaskItemGenerator
+  - Akeneo\Pim\Enrichment\Component\Product\Completeness\MaskItemGenerator\MetricMaskItemGenerator
+  - Akeneo\Pim\Enrichment\Component\Product\Completeness\MaskItemGenerator\PriceCollectionMaskItemGenerator
+  - Akeneo\Pim\Structure\Component\Query\PublicApi\Family\GetRequiredAttributesMasksForAttributeType
+  - Akeneo\Pim\Structure\Bundle\Query\InternalApi\Family\DefaultSqlGetRequiredAttributesMasks
+  - Akeneo\Pim\Structure\Bundle\Query\InternalApi\Family\GetRequiredAttributesMasksAggregator
+  - Akeneo\Pim\Structure\Bundle\Query\InternalApi\Family\PriceCollectionSqlGetRequiredAttributesMasks
+  - Akeneo\Pim\Structure\Bundle\Query\PublicApi\Family\Cache\LRUCachedGetRequiredAttributesMasks
+  - Akeneo\Pim\Enrichment\Component\Product\Connector\Job\ComputeCompletenessOfFamilyProductsTasklet
+  - Akeneo\Pim\Enrichment\Component\Product\Query\GetProductCompletenesses
+min_recall: 0.7
+min_precision: 0.7
+checked: |
+  Read in the code: ComputeAndPersistProductCompletenesses::fromProductUuids() (chunks) reads the previous
+  completenesses, asks CompletenessCalculator::fromProductUuids() and saves with SaveProductCompletenesses::saveAll(),
+  then dispatches "product was completed" events. CompletenessCalculator gets the products' masks
+  (GetCompletenessProductMasks, SQL implementation SqlGetCompletenessProductMasks building mask items with
+  MaskItemGenerator) and the families' required masks (GetRequiredAttributesMasks, Structure's public API,
+  implementations in Structure Bundle), then CompletenessProductMask::completenessCollectionForProduct() compares
+  them per RequiredAttributesMaskForChannelAndLocale (array_diff) into ProductCompletenessWithMissingAttributeCodes,
+  grouped in a ...Collection. FQCNs from each file's namespace line.

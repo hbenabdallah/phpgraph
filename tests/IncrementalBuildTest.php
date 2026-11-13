@@ -10,6 +10,8 @@ use PhpGraph\Extractor\CachingExtractor;
 use PhpGraph\Extractor\FileExtraction;
 use PhpGraph\Extractor\FileExtractor;
 use PhpGraph\Extractor\PhpFileExtractor;
+use PhpGraph\Graph\Confidence;
+use PhpGraph\Graph\Relation;
 use PhpGraph\Tests\Support\TemporaryProject;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -55,6 +57,24 @@ final class IncrementalBuildTest extends TestCase
         $this->change($write, $remove);
         $incremental = $builder->build($this->root, [], null, $state);
 
+        self::assertSame($this->snapshot((new GraphBuilder(new PhpFileExtractor()))->build($this->root)), $this->snapshot($incremental));
+    }
+
+    public function testAServiceDefinitionChangedResolvesAgainTheCallsMadeThroughItsId(): void
+    {
+        $this->write([
+            'src/Psr/ContainerInterface.php' => 'namespace Psr\Container; interface ContainerInterface { public function get(string $id): mixed; }',
+            'src/Mailers.php' => 'namespace App; class SmtpMailer { public function send(): void {} } class NullMailer { public function send(): void {} }',
+            'src/Newsletter.php' => 'namespace App; class Newsletter { public function run(\Psr\Container\ContainerInterface $container): void { $container->get("app.mailer")->send(); } }',
+            'config/services.yaml' => "services:\n    app.mailer:\n        class: App\\SmtpMailer\n",
+        ]);
+        $builder = new GraphBuilder(new PhpFileExtractor());
+        $state = $builder->build($this->root)->state;
+
+        $this->change(['config/services.yaml' => "services:\n    app.mailer:\n        class: App\\NullMailer\n"], []);
+        $incremental = $builder->build($this->root, [], null, $state);
+
+        self::assertTrue($this->hasEdge($incremental->graph, 'App\Newsletter::run', 'App\NullMailer::send', Relation::Calls, Confidence::Inferred), 'no PHP file changed, the service did');
         self::assertSame($this->snapshot((new GraphBuilder(new PhpFileExtractor()))->build($this->root)), $this->snapshot($incremental));
     }
 

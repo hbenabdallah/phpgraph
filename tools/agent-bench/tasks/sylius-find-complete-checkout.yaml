@@ -1,0 +1,24 @@
+project: sylius
+kind: find
+prompt: |
+  In the shop API, the operation PATCH /api/v2/shop/orders/{tokenValue}/complete completes the checkout. Which class
+  is the message this operation sends, and which class handles it?
+expected:
+  - Sylius\Bundle\ApiBundle\Command\Checkout\CompleteOrder
+  - Sylius\Bundle\ApiBundle\CommandHandler\Checkout\CompleteOrderHandler
+# The validators that check the message before it is sent may be named too.
+allowed:
+  - Sylius\Bundle\ApiBundle\Validator\Constraints\OrderItemAvailabilityValidator
+  - Sylius\Bundle\ApiBundle\Validator\Constraints\OrderPaymentMethodEligibilityValidator
+  - Sylius\Bundle\ApiBundle\Validator\Constraints\CheckoutCompletionValidator
+  - Sylius\Bundle\ApiBundle\Validator\Constraints\OrderProductEligibilityValidator
+  - Sylius\Bundle\ApiBundle\Validator\Constraints\OrderNotEmptyValidator
+min_recall: 1
+min_precision: 0.75
+checked: |
+  ApiBundle/Resources/config/api_platform/resources/shop/Order.xml:292-297: operation sylius_api_shop_order_patch_complete,
+  Patch, uriTemplate /shop/orders/{tokenValue}/complete, messenger="input",
+  input="Sylius\Bundle\ApiBundle\Command\Checkout\CompleteOrder" (the /api/v2 prefix comes from the api_platform
+  route prefix). The handler: CompleteOrderHandler::__invoke(CompleteOrder), registered in
+  ApiBundle/Resources/config/services/command_handlers.php:140. The allowed validators assert the value is a
+  CompleteOrder (grep CompleteOrder::class in Validator/Constraints).

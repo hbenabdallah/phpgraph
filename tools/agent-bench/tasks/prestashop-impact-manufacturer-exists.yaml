@@ -1,0 +1,19 @@
+project: prestashop
+kind: impact
+prompt: |
+  We are changing the signature of
+  PrestaShop\PrestaShop\Adapter\Manufacturer\Repository\ManufacturerRepository::assertManufacturerExists() (it will
+  take a ShopConstraint as second parameter). List every class whose code must change: the repository itself and
+  every class calling this method.
+expected:
+  - PrestaShop\PrestaShop\Adapter\Manufacturer\Repository\ManufacturerRepository
+  - PrestaShop\PrestaShop\Adapter\Product\Repository\ProductRepository
+  - PrestaShop\PrestaShop\Adapter\Discount\Validate\DiscountValidator
+allowed: []
+min_recall: 1
+min_precision: 0.75
+checked: |
+  grep -rn assertManufacturerExists src tests classes controllers: two calls, ProductRepository.php:1183 and
+  DiscountValidator.php:144, both on a property typed with the Adapter repository. No test calls it. Traps:
+  PrestaShopBundle\Entity\Repository\ManufacturerRepository is another class of the same short name, and
+  ManufacturerResolver (Import) calls getManufacturerIdsByName() of the repository, not this method.

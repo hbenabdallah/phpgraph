@@ -1,0 +1,39 @@
+project: prestashop
+kind: explain
+prompt: |
+  Explain how products are deleted in bulk from the back-office product list (the "bulk delete from all shops"
+  action): from the controller to the deletion of the product, its images and its combinations. List the classes of
+  the flow.
+expected:
+  - PrestaShopBundle\Controller\Admin\Sell\Catalog\Product\ProductController
+  - PrestaShop\PrestaShop\Core\Domain\Product\Command\BulkDeleteProductCommand
+  - PrestaShop\PrestaShop\Adapter\Product\CommandHandler\BulkDeleteProductHandler
+  - PrestaShop\PrestaShop\Adapter\Product\CommandHandler\AbstractBulkHandler
+  - PrestaShop\PrestaShop\Adapter\Product\ProductDeleter
+  - PrestaShop\PrestaShop\Adapter\Product\Repository\ProductRepository
+  - PrestaShop\PrestaShop\Adapter\Product\Image\Repository\ProductImageRepository
+  - PrestaShop\PrestaShop\Adapter\Product\Combination\Repository\CombinationRepository
+  - PrestaShop\PrestaShop\Adapter\CartRule\CartRuleDisablerService
+allowed:
+  - PrestaShop\PrestaShop\Core\Domain\Product\CommandHandler\BulkDeleteProductHandlerInterface
+  - PrestaShop\PrestaShop\Core\Domain\Product\Exception\CannotBulkDeleteProductException
+  - PrestaShop\PrestaShop\Core\Domain\Product\Exception\BulkProductException
+  - PrestaShop\PrestaShop\Core\Domain\Product\ValueObject\ProductId
+  - PrestaShop\PrestaShop\Core\Domain\Shop\ValueObject\ShopConstraint
+  - PrestaShop\PrestaShop\Core\Repository\AbstractMultiShopObjectModelRepository
+  - PrestaShop\PrestaShop\Core\CommandBus\CommandBusInterface
+  - PrestaShopBundle\Controller\Admin\PrestaShopAdminController
+  - PrestaShopBundle\Controller\Admin\Sell\Catalog\MonitoringController
+  - ProductCore
+min_recall: 0.75
+min_precision: 0.7
+checked: |
+  Read in the code: routing/admin/sell/catalog/products/product.yml:432 admin_products_bulk_delete_from_all_shops
+  (POST/DELETE /bulk-delete-from-all-shops) → ProductController::bulkDeleteFromAllShopsAction →
+  bulkDeleteByShopConstraint() (ProductController.php:1326) dispatches new BulkDeleteProductCommand.
+  BulkDeleteProductHandler (extends AbstractBulkHandler, handleBulkAction → handleSingleAction) calls
+  ProductDeleter::deleteByShopConstraint(), which disables the cart rules giving the product
+  (CartRuleDisablerService), removes images (ProductImageRepository), combinations (CombinationRepository) and the
+  product (ProductRepository::deleteFromShops, through AbstractMultiShopObjectModelRepository). Allowed: the
+  handler interface, its exceptions, the value objects passed, the legacy Product ObjectModel deleted, the other
+  controller dispatching the command (MonitoringController.php:159).

@@ -1,0 +1,19 @@
+project: prestashop
+kind: fix
+patch: ../patches/prestashop-wholesale-price.patch
+prompt: |
+  The unit test Tests\Unit\Adapter\Product\Update\Filler\PricesFillerTest fails: when a product's wholesale price
+  is updated, the wholesale price is not filled. Find the bug and fix it. Run the test with:
+    php -d display_errors=stderr vendor/bin/phpunit -c tests/Unit/phpunit.xml tests/Unit/Adapter/Product/Update/Filler
+tests:
+  - php -d display_errors=stderr vendor/bin/phpunit -c tests/Unit/phpunit.xml --do-not-cache-result --colors=never tests/Unit/Adapter/Product/Update/Filler
+  - php -d display_errors=stderr vendor/bin/phpunit -c tests/Unit/phpunit.xml --do-not-cache-result --colors=never tests/Unit/Adapter/Product
+  - php -d display_errors=stderr vendor/bin/phpunit -c tests/Unit/phpunit.xml --do-not-cache-result --colors=never tests/Unit/Core/Domain/Product
+protected:
+  - tests
+checked: |
+  Seed (patches/prestashop-wholesale-price.patch): UpdateProductCommand::setWholesalePrice() (Core domain) stores the
+  value in $price instead of $wholesalePrice; PricesFiller (Adapter) then sees no wholesale price, and the test's
+  data set #0 fails (updatable properties without wholesale_price). The cause is in the command the test builds,
+  not in the filler under test. Checked with the seeded file mounted over the checkout (var/ writable, as in the
+  bench's copy): Filler tests 1 failure, exit 1; without the patch the three commands exit 0 (25, 57 and 247 tests).

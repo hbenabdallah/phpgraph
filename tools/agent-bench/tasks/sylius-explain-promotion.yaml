@@ -1,0 +1,102 @@
+project: sylius
+kind: explain
+prompt: |
+  Explain how promotions are applied to an order (cart) in Sylius when the order is processed: which promotions are
+  considered, how their eligibility is checked, and how their actions change the order. List the classes of the flow.
+expected:
+  - Sylius\Component\Core\OrderProcessing\OrderPromotionProcessor
+  - Sylius\Component\Promotion\Processor\PromotionProcessor
+  - Sylius\Component\Promotion\Provider\PreQualifiedPromotionsProviderInterface
+  - Sylius\Component\Promotion\Checker\Eligibility\PromotionEligibilityCheckerInterface
+  - Sylius\Component\Promotion\Checker\Eligibility\PromotionRulesEligibilityChecker
+  - Sylius\Component\Promotion\Action\PromotionApplicator
+  - Sylius\Component\Promotion\Action\PromotionActionCommandInterface
+  - Sylius\Component\Promotion\Checker\Rule\RuleCheckerInterface
+# Classes of the flow an explanation may name: the eligibility checkers, providers, rule checkers and action commands,
+# the order processors, the models and adjustments they change, the service registry the applicator reads.
+allowed:
+  - Sylius\Bundle\CoreBundle\Order\Checker\OrderPromotionsIntegrityChecker
+  - Sylius\Bundle\CoreBundle\Order\Checker\OrderPromotionsIntegrityCheckerInterface
+  - Sylius\Component\Core\Distributor\IntegerDistributor
+  - Sylius\Component\Core\Distributor\IntegerDistributorInterface
+  - Sylius\Component\Core\Distributor\MinimumPriceDistributor
+  - Sylius\Component\Core\Distributor\MinimumPriceDistributorInterface
+  - Sylius\Component\Core\Distributor\ProportionalIntegerDistributor
+  - Sylius\Component\Core\Distributor\ProportionalIntegerDistributorInterface
+  - Sylius\Component\Core\Model\Adjustment
+  - Sylius\Component\Core\Model\AdjustmentInterface
+  - Sylius\Component\Core\Model\Order
+  - Sylius\Component\Core\Model\OrderInterface
+  - Sylius\Component\Core\Model\OrderItem
+  - Sylius\Component\Core\Model\OrderItemUnit
+  - Sylius\Component\Core\Model\Promotion
+  - Sylius\Component\Core\Model\PromotionInterface
+  - Sylius\Component\Core\OrderProcessing\OrderPromotionProcessor
+  - Sylius\Component\Core\Promotion\Action\DiscountPromotionActionCommand
+  - Sylius\Component\Core\Promotion\Action\FixedDiscountPromotionActionCommand
+  - Sylius\Component\Core\Promotion\Action\PercentageDiscountPromotionActionCommand
+  - Sylius\Component\Core\Promotion\Action\PerChannelPromotionActionCommand
+  - Sylius\Component\Core\Promotion\Action\ShippingPercentageDiscountPromotionActionCommand
+  - Sylius\Component\Core\Promotion\Action\UnitDiscountPromotionActionCommand
+  - Sylius\Component\Core\Promotion\Action\UnitFixedDiscountPromotionActionCommand
+  - Sylius\Component\Core\Promotion\Action\UnitPercentageDiscountPromotionActionCommand
+  - Sylius\Component\Core\Promotion\Applicator\UnitsPromotionAdjustmentsApplicator
+  - Sylius\Component\Core\Promotion\Applicator\UnitsPromotionAdjustmentsApplicatorInterface
+  - Sylius\Component\Core\Promotion\Checker\Rule\CartQuantityRuleChecker
+  - Sylius\Component\Core\Promotion\Checker\Rule\ContainsProductRuleChecker
+  - Sylius\Component\Core\Promotion\Checker\Rule\CustomerGroupRuleChecker
+  - Sylius\Component\Core\Promotion\Checker\Rule\HasTaxonRuleChecker
+  - Sylius\Component\Core\Promotion\Checker\Rule\ItemTotalRuleChecker
+  - Sylius\Component\Core\Promotion\Checker\Rule\NthOrderRuleChecker
+  - Sylius\Component\Core\Promotion\Checker\Rule\PerChannelRuleChecker
+  - Sylius\Component\Core\Promotion\Checker\Rule\ShippingCountryRuleChecker
+  - Sylius\Component\Core\Promotion\Checker\Rule\TotalOfItemsFromTaxonRuleChecker
+  - Sylius\Component\Core\Provider\ActivePromotionsByChannelProvider
+  - Sylius\Component\Order\Factory\AdjustmentFactory
+  - Sylius\Component\Order\Factory\AdjustmentFactoryInterface
+  - Sylius\Component\Order\Model\Adjustment
+  - Sylius\Component\Order\Model\AdjustmentInterface
+  - Sylius\Component\Order\Processor\CompositeOrderProcessor
+  - Sylius\Component\Order\Processor\OrderProcessorInterface
+  - Sylius\Component\Promotion\Action\PromotionActionCommandInterface
+  - Sylius\Component\Promotion\Action\PromotionApplicator
+  - Sylius\Component\Promotion\Action\PromotionApplicatorInterface
+  - Sylius\Component\Promotion\Checker\Eligibility\CompositePromotionCouponEligibilityChecker
+  - Sylius\Component\Promotion\Checker\Eligibility\CompositePromotionEligibilityChecker
+  - Sylius\Component\Promotion\Checker\Eligibility\PromotionArchivalEligibilityChecker
+  - Sylius\Component\Promotion\Checker\Eligibility\PromotionCouponDurationEligibilityChecker
+  - Sylius\Component\Promotion\Checker\Eligibility\PromotionCouponEligibilityCheckerInterface
+  - Sylius\Component\Promotion\Checker\Eligibility\PromotionCouponUsageLimitEligibilityChecker
+  - Sylius\Component\Promotion\Checker\Eligibility\PromotionDurationEligibilityChecker
+  - Sylius\Component\Promotion\Checker\Eligibility\PromotionEligibilityCheckerInterface
+  - Sylius\Component\Promotion\Checker\Eligibility\PromotionRulesEligibilityChecker
+  - Sylius\Component\Promotion\Checker\Eligibility\PromotionSubjectCouponEligibilityChecker
+  - Sylius\Component\Promotion\Checker\Eligibility\PromotionUsageLimitEligibilityChecker
+  - Sylius\Component\Promotion\Checker\Eligibility\WithoutOwnAdjustmentsPromotionEligibilityChecker
+  - Sylius\Component\Promotion\Checker\Rule\RuleCheckerInterface
+  - Sylius\Component\Promotion\Model\Promotion
+  - Sylius\Component\Promotion\Model\PromotionAction
+  - Sylius\Component\Promotion\Model\PromotionActionInterface
+  - Sylius\Component\Promotion\Model\PromotionInterface
+  - Sylius\Component\Promotion\Model\PromotionRule
+  - Sylius\Component\Promotion\Model\PromotionRuleInterface
+  - Sylius\Component\Promotion\Model\PromotionSubjectInterface
+  - Sylius\Component\Promotion\Processor\PromotionProcessor
+  - Sylius\Component\Promotion\Processor\PromotionProcessorInterface
+  - Sylius\Component\Promotion\Provider\ActivePromotionsProvider
+  - Sylius\Component\Promotion\Provider\PreQualifiedPromotionsProviderInterface
+  - Sylius\Component\Registry\ServiceRegistry
+  - Sylius\Component\Registry\ServiceRegistryInterface
+min_recall: 0.75
+min_precision: 0.7
+checked: |
+  Read in the code: CoreBundle/Resources/config/services/order_processing.php registers OrderPromotionProcessor as a
+  sylius.order_processor (priority 20); it calls PromotionProcessorInterface::process(), PromotionProcessor
+  (PromotionBundle services.php: sylius.processor.promotion). PromotionProcessor reverts the order's promotions
+  through PromotionApplicator, asks PreQualifiedPromotionsProviderInterface for candidates (ActivePromotionsProvider,
+  ActivePromotionsByChannelProvider), checks each with PromotionEligibilityCheckerInterface (composite; the rules part
+  is PromotionRulesEligibilityChecker, which runs a RuleCheckerInterface per rule from a registry) and applies the
+  eligible ones, exclusive first. PromotionApplicator runs a PromotionActionCommandInterface per action (registry by
+  type). The allowed list: every class of the directories read (Promotion Checker/Eligibility, Checker/Rule,
+  Provider, Action, Processor; Core Promotion/Action, Checker/Rule, Applicator, Distributor), the models touched
+  and the registry, FQCN from each file's namespace line.

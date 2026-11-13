@@ -2,6 +2,8 @@
 
 Contributions are welcome: issues, fixes, new detectors, corpus projects.
 
+Start with [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (layers, pipeline, where to add what). To teach phpgraph what a library returns, write a provider: [docs/PROVIDERS.md](docs/PROVIDERS.md).
+
 ## Before a pull request
 
 - `composer check` must pass (php-cs-fixer, PHPStan level max, PHPUnit). Without PHP installed: `bin/dev composer check`.

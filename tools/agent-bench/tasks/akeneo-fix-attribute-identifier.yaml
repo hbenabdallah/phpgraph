@@ -1,0 +1,20 @@
+project: akeneo-pim
+kind: fix
+patch: ../patches/akeneo-attribute-identifier.patch
+prompt: |
+  The spec Specification\Akeneo\Category\Domain\UserIntent\Factory\ValueUserIntentFactorySpec fails: no user intent is
+  created for the values of a category's attributes. Find the bug and fix it. Run the specs with:
+    php -d error_reporting=8191 -d display_errors=stderr -d memory_limit=-1 vendor/bin/phpspec run -c phpspec.yml.dist --no-interaction --no-code-generation --format=progress src/Akeneo/Category/back/tests/Specification
+tests:
+  - php -d error_reporting=8191 -d display_errors=stderr -d memory_limit=-1 vendor/bin/phpspec run -c phpspec.yml.dist --no-interaction --no-code-generation --format=progress src/Akeneo/Category/back/tests/Specification/Domain/UserIntent
+  - php -d error_reporting=8191 -d display_errors=stderr -d memory_limit=-1 vendor/bin/phpspec run -c phpspec.yml.dist --no-interaction --no-code-generation --format=progress src/Akeneo/Category/back/tests/Specification
+protected:
+  - tests
+  - src/Akeneo/Category/back/tests
+checked: |
+  Seed (patches/akeneo-attribute-identifier.patch): Akeneo\Category\Domain\Model\Attribute\Attribute::getIdentifier()
+  returns uuid|code instead of code|uuid, so AttributeCollection::getAttributeByIdentifier() finds no attribute for
+  the values' keys and ValueUserIntentFactory skips every value. Only ValueUserIntentFactorySpec fails (2 of 164
+  Category examples): no spec covers Attribute::getIdentifier() or AttributeCollection, so the cause is found by
+  following the factory's calls, two classes away. Checked on a throwaway copy: with the patch 2 failures, without it
+  164 examples pass.

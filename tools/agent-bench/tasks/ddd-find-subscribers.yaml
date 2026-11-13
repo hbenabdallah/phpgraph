@@ -1,0 +1,17 @@
+project: php-ddd-example
+kind: find
+prompt: |
+  Which classes react to the domain event CodelyTv\Mooc\Courses\Domain\CourseCreatedDomainEvent, that is, which
+  subscribers receive it when it is published? Production code only, not tests.
+expected:
+  - CodelyTv\Mooc\CoursesCounter\Application\Increment\IncrementCoursesCounterOnCourseCreated
+  - CodelyTv\Backoffice\Courses\Application\Create\CreateBackofficeCourseOnCourseCreated
+allowed: []
+min_recall: 1
+min_precision: 1
+checked: |
+  grep -rln CourseCreatedDomainEvent src apps: 6 files. The two expected classes implement DomainEventSubscriber and
+  return [CourseCreatedDomainEvent::class] from subscribedTo(); the others create the event (Course,
+  DatabaseMutationToCourseCreatedDomainEvent), declare it or publish it from mutations
+  (PublishDomainEventsFromMutationsCommand). grep -rn subscribedTo tests: only TestAllWorksOnRabbitMqEventsPublished, a
+  test double, excluded by the question.

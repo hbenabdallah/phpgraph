@@ -1,0 +1,11 @@
+--- a/src/Sylius/Component/Promotion/Checker/Comparison/ComparisonOperatorMatcher.php
++++ b/src/Sylius/Component/Promotion/Checker/Comparison/ComparisonOperatorMatcher.php
+@@ -39,7 +39,7 @@
+             '===' => $subjectValue === $configuredValue,
+             '!==' => $subjectValue !== $configuredValue,
+             '<' => $subjectValue < $configuredValue,
+-            '<=' => $subjectValue <= $configuredValue,
++            '<=' => $subjectValue < $configuredValue,
+             '>' => $subjectValue > $configuredValue,
+             default => false,
+         };

@@ -1,0 +1,11 @@
+--- a/src/Core/Domain/Product/Command/UpdateProductCommand.php
++++ b/src/Core/Domain/Product/Command/UpdateProductCommand.php
+@@ -455,7 +455,7 @@
+      */
+     public function setWholesalePrice(string $wholesalePrice): self
+     {
+-        $this->wholesalePrice = new DecimalNumber($wholesalePrice);
++        $this->price = new DecimalNumber($wholesalePrice);
+ 
+         return $this;
+     }

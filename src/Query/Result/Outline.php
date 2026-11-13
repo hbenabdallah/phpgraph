@@ -37,6 +37,7 @@ final readonly class Outline
      * @param array<string, list<string>>                                                                      $guesses  with a method, the calls guessed from a unique method name (AMBIGUOUS): caller => callees
      * @param list<string>                                                                                     $guessed  with a method, the methods it reaches only through such guesses
      * @param list<string>                                                                                     $left     the classes that qualified once the core was full (FeatureCluster::MAX), best first
+     * @param array<string, Reason>                                                                            $reasons  class of the core or left out => why it qualified
      */
     public function __construct(
         public string $topic,
@@ -65,6 +66,7 @@ final readonly class Outline
         public array $guesses = [],
         public array $guessed = [],
         public array $left = [],
+        public array $reasons = [],
     ) {
     }
 }

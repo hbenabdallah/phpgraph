@@ -60,6 +60,25 @@ final class UnionsAndClosuresTest extends TestCase
         self::assertTrue($this->hasEdge($result->graph, 'App\Resolver::show', 'App\Denied::render', Relation::Calls, Confidence::Inferred));
     }
 
+    public function testADocumentedUnionNamingTheDeclaredReturnClassRefinesIt(): void
+    {
+        $result = $this->buildProject([
+            'src/Nodes.php' => 'namespace Lib; class NodeDefinition { public function info(): static { return $this; } } class ArrayNodeDefinition extends NodeDefinition { public function children(): void {} }',
+            'src/Responses.php' => 'namespace Lib; interface Reply { public function send(): void; } class Html implements Reply { public function send(): void {} } class Json implements Reply { public function send(): void {} public function pretty(): void {} }',
+            'src/Tree.php' => 'namespace App; use Lib\ArrayNodeDefinition; use Lib\Html; use Lib\Json; use Lib\NodeDefinition; use Lib\Reply; class Tree {'
+                . ' /** @return NodeDefinition|ArrayNodeDefinition */ public function root(): NodeDefinition { return new ArrayNodeDefinition(); }'
+                . ' /** @return Html|Json */ public function reply(): Reply { return new Json(); }'
+                . ' public function build(): void { $this->root()->children(); $this->root()->info(); }'
+                . ' public function answer(): void { $this->reply()->send(); $this->reply()->pretty(); } }',
+        ]);
+        $graph = $result->graph;
+
+        self::assertTrue($this->hasEdge($graph, 'App\Tree::build', 'Lib\ArrayNodeDefinition::children', Relation::Calls, Confidence::Inferred), 'the union names the declared class: it refines it');
+        self::assertTrue($this->hasEdge($graph, 'App\Tree::build', 'Lib\NodeDefinition::info', Relation::Calls, Confidence::Inferred));
+        self::assertTrue($this->hasEdge($graph, 'App\Tree::answer', 'Lib\Reply::send', Relation::Calls, Confidence::Inferred), 'a union without the declared class gives way to it');
+        self::assertFalse($this->hasEdge($graph, 'App\Tree::answer', 'Lib\Json::send', Relation::Calls, Confidence::Inferred));
+    }
+
     public function testAPropertyDocumentedAsAUnionOfAProxyAndWhatItForwardsTo(): void
     {
         $result = $this->buildProject([

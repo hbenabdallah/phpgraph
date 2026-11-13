@@ -1,0 +1,24 @@
+project: sylius
+kind: find
+prompt: |
+  Which class handles the command Sylius\Bundle\CoreBundle\Command\ResendOrderConfirmationEmail on the message bus,
+  and which production class creates this command and sends it to the bus?
+expected:
+  - Sylius\Bundle\CoreBundle\CommandHandler\ResendOrderConfirmationEmailHandler
+  - Sylius\Bundle\CoreBundle\CommandDispatcher\ResendOrderConfirmationEmailDispatcher
+# Close to the answer without being wrong: the command and its API subclass (sent by API Platform's messenger
+# processor), the dispatcher's interface and the admin action calling it.
+allowed:
+  - Sylius\Bundle\CoreBundle\Command\ResendOrderConfirmationEmail
+  - Sylius\Bundle\ApiBundle\Command\ResendOrderConfirmationEmail
+  - Sylius\Bundle\CoreBundle\CommandDispatcher\ResendOrderConfirmationEmailDispatcherInterface
+  - Sylius\Bundle\AdminBundle\Action\ResendOrderConfirmationEmailAction
+min_recall: 1
+min_precision: 0.75
+checked: |
+  grep -rln ResendOrderConfirmationEmail src (outside tests): the handler (__invoke(ResendOrderConfirmationEmail),
+  tagged messenger.message_handler on sylius.command_bus in CoreBundle/Resources/config/services/command_handler.php)
+  and the only `new ResendOrderConfirmationEmail` (CommandDispatcher/ResendOrderConfirmationEmailDispatcher.php:33,
+  messageBus->dispatch). The admin API operation POST /admin/orders/{tokenValue}/resend-confirmation-email
+  (ApiBundle api_platform/resources/admin/Order.xml, messenger="input") sends the ApiBundle subclass; the admin action
+  calls the dispatcher.

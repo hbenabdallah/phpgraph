@@ -3,6 +3,68 @@
 phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md), and changes only in a major version (2.0.0), announced here.
 
+## 2.1.0 (2026-11-13)
+
+### Added
+- `outline` says why each class is in it: a short tag at the end of its line (`[seed]`, `[module]`, `[uses Notification]`,
+  `[used by CourseCreator]`, `[family: 3 members use the core]`, `, what the core calls only` for a class used by
+  many; in a method's outline, `[by Cart::total]`, the method calling it first), and why each class left out of a full
+  core qualified. In JSON, a `reason` object per class of the core (`kind`, `via`, `count`, `reduced`) and
+  `leftReasons`. The classes selected are unchanged (15 reference subjects); the text grows by 2 to 10 %.
+  The classes left out are named in full (`App\Billing\Ledger3`): no namespace line of the outline says where they are.
+- The JSON of `outline` is stable: keys only grow, like `impact`'s. Both follow a JSON schema,
+  [docs/schemas/outline.schema.json](docs/schemas/outline.schema.json) and
+  [docs/schemas/impact.schema.json](docs/schemas/impact.schema.json), checked by the tests and against the 15
+  reference outlines.
+- MCP: with `format` `json`, `outline` and `impact_of` also return their answer as `structuredContent` (protocol
+  2025-06-18). The text block holds the same JSON; a warning about the graph comes in a block of its own instead of
+  before the JSON, which it made unreadable.
+- An agent benchmark, `tools/agent-bench/` and [docs/BENCHMARK.md](docs/BENCHMARK.md): Claude Code with and without
+  phpgraph on 24 tasks of five public projects, a pilot of four harder tasks, and the impact tasks again after the
+  changes below. The README opens with the questions phpgraph answers and what it costs, as measured.
+- PrestaShop's legacy classes: `Context`, `Db`, `Link`… name the `ContextCore`, `DbCore`, `LinkCore` the project
+  declares, which the autoloader of `prestashop/autoload` extends at run time (a class declared in `override/` keeps
+  its name). On PrestaShop, calls resolved from declared types in application code: 58.8 → 75.7 %, unknown
+  receivers 3.5 → 2.0 %; no INFERRED edge lost, 305 guesses (AMBIGUOUS) now resolved.
+- A Symfony container asked for a service by its id, `$container->get('app.mailer')->send()`, gives the class the
+  project's configuration defines for that id (YAML, XML or PHP, aliases and parameters followed). Calls now resolved
+  from declared types: Akeneo +194, PrestaShop +48, Sylius +10, mostly in tests; no INFERRED edge lost. An id that
+  the configuration does not define (framework, bundles, ids built at run time) still says nothing.
+- For contributors: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (layers, pipeline, where to add what) and
+  [docs/PROVIDERS.md](docs/PROVIDERS.md) (how a library provider types a call, how to test and measure it).
+
+### Changed
+- `impact` shows each class's namespace, whole, instead of its first two folders: an agent completed
+  `UpsertCategoryBaseSql (Infrastructure/Storage)` with a wrong namespace. A relation of the class itself (it extends
+  the change, handles the message) is said once: `extends it`, `handles it → __invoke()`, not `extends (extends)`.
+  The JSON is unchanged.
+- In the JSON of `outline`, a map is an object even when empty (`"tests": {}`, not `"tests": []`), and a class without
+  constants or enum cases leaves those keys out, as it did its properties.
+- MCP: the server lists 4 tools by default, `get_node`, `get_neighbors`, `impact_of` and `outline`, with shorter
+  descriptions and instructions: an agent reads them again on every turn, and in the benchmark it never called
+  `overview`, `query_graph`, `shortest_path` or `god_nodes`. `serve --all-tools` lists all 8; a tool not listed can
+  still be called. What the server sends before the first call: 11.2 KB → 4.8 KB.
+- `impact` (text) of a large change, more than 20 dependent classes, routes or tests, is compact: 10 routes, the
+  classes 2 or more relations away by name, grouped by namespace, the tests reaching it through other classes counted
+  by module, lists of names cut at 10. `limit 0` or `section` gives the full lists, as before. BookStack,
+  `ActivityLogger::add()`: 18.5 KB → 6.2 KB. JSON unchanged.
+- `impact_of` no longer invites the full lists: its description says the compact answer is the one to use, the
+  `limit` and `format` parameters say to leave them out, and the text points to `section` for one list uncut (agents
+  asked for `limit 0` and got 19 to 28 KB). The tests heading says that a test without a `←` chain uses the change
+  itself, so its code may need changing too.
+
+### Fixed
+- `impact` of a constructor finds what constructs the class (`new`, also of a subclass inheriting the constructor):
+  it found nothing, as the `instantiates` edges point to the class. Asked for `CourseCreatedDomainEvent::__construct`
+  (php-ddd-example), it now lists `Course`, `DatabaseMutationToCourseCreatedDomainEvent` and the test mother, 0
+  classes before.
+- `symfony/yaml` 7.4.23 (CVE-2026-123792): a crafted YAML file of an analysed project could make the build parse
+  for exponential time. The graphs of the corpus are unchanged.
+- A documented return union that names the declared class keeps refining it: `@return NodeDefinition|ArrayNodeDefinition`
+  on `getRootNode(): NodeDefinition` (Symfony Config's `TreeBuilder`) reaches `children()`, which only
+  `ArrayNodeDefinition` declares. A union without the declared class still gives way to it. Unknown receivers in
+  application code: Sylius −62, Akeneo −148; no INFERRED edge lost.
+
 ## 2.0.0 (2026-10-31)
 
 ### Changed

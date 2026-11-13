@@ -10,6 +10,8 @@ use PhpGraph\Graph\Relation;
 use PhpGraph\Query\GraphQuery;
 use PhpGraph\Query\Layers;
 use PhpGraph\Query\Result\Outline;
+use PhpGraph\Query\Result\Reason;
+use PhpGraph\Query\Result\ReasonKind;
 
 /**
  * An outline as text, compact by default (a section lists all its entries, `full` also lifts the limits of each line),
@@ -90,12 +92,13 @@ final class OutlineReport
         }
 
         // The core is capped: what qualified past it, so the agent narrows the question rather than take it as whole.
+        // Named in full: no namespace line of the outline says where these classes are, agents grepped for them.
         if ($section === null && $outline->left !== []) {
             $shown = \array_slice($outline->left, 0, self::LEFT);
             $lines[] = \sprintf(
                 'The core is full: %d more classes qualified, left out: %s%s. A narrower question, or a class name, outlines them.',
                 \count($outline->left),
-                implode(', ', array_map(fn (string $class): string => $this->className($class), $shown)),
+                implode(', ', array_map(fn (string $class): string => $class . $this->reasonTag($class), $shown)),
                 $more($outline->left, $shown),
             );
         }
@@ -162,9 +165,12 @@ final class OutlineReport
             $lines[] = 'Core, by namespace' . ($common === '' ? '' : ' (under ' . rtrim($common, '\\') . ')') . ':';
             foreach ($byNamespace as $namespace => $classes) {
                 $layer = Layers::of(explode('\\', (string) $namespace));
-                $lines[] = '  ' . self::namespaceLabel((string) $namespace, $common) . ($layer === null ? '' : ' [' . $layer['segment'] . ']');
+                // The classes of a namespace that joined for one reason say it once, on the namespace's line.
+                $tags = array_unique(array_map($this->reasonTag(...), $classes));
+                $shared = \count($classes) > 1 && \count($tags) === 1 ? (string) reset($tags) : null;
+                $lines[] = '  ' . self::namespaceLabel((string) $namespace, $common) . ($layer === null ? '' : ' [' . $layer['segment'] . ']') . ($shared ?? '');
                 foreach ($classes as $class) {
-                    array_push($lines, ...$this->classLines($class, $outline->facts[$class] ?? null, $all));
+                    array_push($lines, ...$this->classLines($class, $outline->facts[$class] ?? null, $all, $shared === null));
                 }
             }
 
@@ -430,19 +436,20 @@ final class OutlineReport
     /**
      * @return list<string>
      */
-    private function classLines(string $class, ?ClassFacts $facts, bool $full): array
+    private function classLines(string $class, ?ClassFacts $facts, bool $full, bool $tagged = true): array
     {
         $node = $this->query->graph()->node($class);
         $label = $this->query->label($class);
+        $tag = $tagged ? $this->reasonTag($class) : '';
         if ($facts === null) {
-            return [\sprintf('    %s (%s%s)', $label, $node->kind->value ?? 'class', $this->isGuessed($class) ? '; guessed' : '')];
+            return [\sprintf('    %s (%s%s)%s', $label, $node->kind->value ?? 'class', $this->isGuessed($class) ? '; guessed' : '', $tag)];
         }
         $kind = trim(implode(' ', $facts->modifiers) . ' ' . $facts->kind);
         $implemented = array_filter($this->query->graph()->incident($class), fn (array $item): bool => $item['forward'] && $item['edge']->relation === Relation::Implements && isset($this->outline->facts[$item['other']]));
         if ($implemented !== []) {
             $kind .= ', implements ' . implode(', ', array_map(fn (array $item): string => $this->query->label($item['other']), $implemented));
         }
-        $lines = [\sprintf('    %s (%s%s)%s', $label, $kind, $this->isGuessed($class) ? '; guessed' : '', $facts->summary === null ? '' : ' — ' . $facts->summary)];
+        $lines = [\sprintf('    %s (%s%s)%s%s', $label, $kind, $this->isGuessed($class) ? '; guessed' : '', $facts->summary === null ? '' : ' — ' . $facts->summary, $tag)];
         $details = [];
         if ($facts->cases !== []) {
             $details[] = 'cases ' . implode(', ', array_map(static fn (string $case, string $value): string => $value === '' ? $case : $case . ' = ' . $value, array_keys($facts->cases), $facts->cases));
@@ -464,6 +471,38 @@ final class OutlineReport
         }
 
         return $lines;
+    }
+
+    /**
+     * Why the class is in the outline, as a short tag at the end of its line: ` [uses Notification]`; in a method's
+     * outline, the method calling it first: ` [by CourseCreator::__invoke]`.
+     */
+    private function reasonTag(string $class): string
+    {
+        $reason = $this->outline->reasons[$class] ?? null;
+        // The header names the method outlined: its class needs no tag.
+        if ($reason === null || $reason->kind === ReasonKind::Start) {
+            return '';
+        }
+        $via = $reason->via === null ? 'the core' : rtrim($this->query->label($reason->via), '()');
+        // A method of the class outlined: its name is enough (` [by __invoke]`).
+        $startClass = $this->outline->method === null ? null : explode('::', $this->outline->method)[0];
+        if ($reason->kind === ReasonKind::Called && $startClass !== null && str_starts_with((string) $reason->via, $startClass . '::')) {
+            $via = substr((string) $reason->via, \strlen($startClass) + 2);
+        }
+        $text = match ($reason->kind) {
+            ReasonKind::Named, ReasonKind::Topic => 'seed',
+            ReasonKind::Route => 'seed: route ' . $via,
+            ReasonKind::Method => 'seed: its ' . substr($via, \strlen($this->query->label($class)) + 2),
+            // The header names the seeds; the JSON says which one's module.
+            ReasonKind::Module => $reason->via === $class ? 'seed' : 'module',
+            ReasonKind::Uses => 'uses ' . $via,
+            ReasonKind::UsedBy => 'used by ' . $via,
+            ReasonKind::Family => \sprintf('family: %d members use the core', $reason->count ?? 0),
+            ReasonKind::Called => 'by ' . $via,
+        };
+
+        return ' [' . $text . ($reason->reduced ? ', what the core calls only' : '') . ']';
     }
 
     /**
@@ -691,43 +730,61 @@ final class OutlineReport
             'seeds' => $outline->seeds,
             'core' => array_map($this->coreClassData(...), $outline->core),
             'sourcesRead' => $outline->sourcesRead,
-            'families' => $outline->families,
+            'families' => array_map(static fn (array $family): array => [...$family, 'directories' => self::map($family['directories'])], $outline->families),
             'routes' => array_map($this->routeData(...), $outline->routes),
-            'operations' => $this->rpcs($outline->core),
-            'entries' => $outline->entries,
-            'fromFamilies' => $outline->fromFamilies,
-            'closures' => $outline->closures,
-            'inside' => $outline->inside,
+            'operations' => self::map($this->rpcs($outline->core)),
+            'entries' => self::map($outline->entries),
+            'fromFamilies' => self::map($outline->fromFamilies),
+            'closures' => self::map($outline->closures),
+            'inside' => self::map($outline->inside),
             'hints' => array_map(static fn (array $hint): array => ['class' => $hint[0], 'method' => $hint[1]->method, 'line' => $hint[1]->line, 'text' => $hint[1]->text], $outline->hints),
             'wiring' => $outline->wiring,
-            'consumers' => $outline->consumers,
+            'consumers' => self::map($outline->consumers),
             'consumerFiles' => $outline->consumerFiles,
-            'tests' => $outline->tests,
+            'tests' => self::map($outline->tests),
             'topTests' => $outline->topTests,
             'uncovered' => $outline->uncovered,
             'unused' => array_keys($outline->unused),
         ];
         if ($outline->method !== null) {
             $data['method'] = $outline->method;
-            $data['depths'] = $outline->depths;
-            $data['hubs'] = $outline->hubs;
-            $data['guesses'] = $outline->guesses;
+            $data['depths'] = self::map($outline->depths);
+            $data['hubs'] = self::map($outline->hubs);
+            $data['guesses'] = self::map($outline->guesses);
             $data['guessed'] = $outline->guessed;
         }
         if ($outline->large !== null) {
-            $data['large'] = $outline->large;
+            $data['large'] = [...$outline->large, 'entries' => self::map($outline->large['entries'])];
         }
         if ($outline->left !== []) {
             $data['left'] = $outline->left;
+            $data['leftReasons'] = self::map(array_map(
+                static fn (Reason $reason): array => $reason->toArray(),
+                array_intersect_key($outline->reasons, array_flip($outline->left)),
+            ));
         }
 
         return (string) json_encode($data, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
     }
 
     /**
+     * A map as a JSON object even when empty: `{}`, not `[]`.
+     *
+     * @template T of array
+     *
+     * @param T $map
+     *
+     * @return T|\stdClass
+     */
+    private static function map(array $map): array|\stdClass
+    {
+        return $map === [] ? new \stdClass() : $map;
+    }
+
+    /**
      * A class of the core with the facts its source gave, those it gave none of left out.
      *
-     * @return array{id: string, kind?: string, modifiers?: list<string>, summary?: string, signatures?: list<string>, constants?: array<string, string>, cases?: array<string, string>, properties?: array<string, string>}
+     * @return array{id: string, reason?: array{kind: string, via?: string, count?: int, reduced?: true}, kind?: string, modifiers?: list<string>, summary?: string, signatures?: list<string>, constants?: array<string, string>, cases?: array<string, string>, properties?: array<string, string>}
      */
     private function coreClassData(string $class): array
     {
@@ -736,12 +793,13 @@ final class OutlineReport
 
         return array_filter([
             'id' => $class,
+            'reason' => ($this->outline->reasons[$class] ?? null)?->toArray(),
             'kind' => $facts?->kind,
             'modifiers' => $facts?->modifiers,
             'summary' => $facts?->summary,
             'signatures' => $facts?->signatures,
-            'constants' => $facts?->constants,
-            'cases' => $facts?->cases,
+            'constants' => $facts === null || $facts->constants === [] ? null : $facts->constants,
+            'cases' => $facts === null || $facts->cases === [] ? null : $facts->cases,
             'properties' => $properties === [] ? null : $properties,
         ], static fn (mixed $value): bool => $value !== null);
     }

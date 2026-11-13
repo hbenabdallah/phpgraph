@@ -1,0 +1,34 @@
+project: sylius
+kind: impact
+prompt: |
+  Sylius\Component\Core\OrderProcessing\OrderPromotionProcessor::process() will become slower. List every
+  production class (not tests, not specs) whose own code calls process() on an order processor service that ends
+  up running OrderPromotionProcessor, so that its callers can be reviewed. A class that calls a processor which
+  never runs OrderPromotionProcessor must not be listed.
+expected:
+  - Sylius\Component\Order\Modifier\OrderModifier
+  - Sylius\Bundle\CoreBundle\Order\Checker\OrderPromotionsIntegrityChecker
+  - Sylius\Bundle\CoreBundle\EventListener\OrderRecalculationListener
+  - Sylius\Bundle\CoreBundle\EventListener\Workflow\OrderCheckout\ProcessCartListener
+  - Sylius\Bundle\ShopBundle\EventListener\UserCartRecalculationListener
+  - Sylius\Bundle\ApiBundle\Assigner\OrderPromotionCodeAssigner
+  - Sylius\Bundle\ApiBundle\CommandHandler\Cart\ChangeItemQuantityInCartHandler
+  - Sylius\Bundle\ApiBundle\CommandHandler\Cart\BlameCartHandler
+allowed:
+  - Sylius\Component\Order\Processor\CompositeOrderProcessor
+min_recall: 1
+min_precision: 0.88
+checked: |
+  grep -rn OrderPromotionProcessor src (outside tests/spec): only its declaration and
+  CoreBundle/Resources/config/services/order_processing.php, where it is tagged sylius.order_processor (priority 20);
+  no class names it, so the obvious grep finds none of the expected classes. RegisterProcessorsPass adds every
+  tagged service to the composite sylius.order_processing.order_processor (CompositeOrderProcessor, which calls
+  process() on each). Services given service('sylius.order_processing.order_processor') in the configuration:
+  OrderPromotionsIntegrityChecker (CoreBundle services.php:426), OrderRecalculationListener (listeners.php:85),
+  ProcessCartListener (workflow/order_checkout.php:29), OrderModifier (OrderBundle services.php:70),
+  UserCartRecalculationListener (ShopBundle listeners.php:124), OrderPromotionCodeAssigner (ApiBundle
+  services.php:125), ChangeItemQuantityInCartHandler and BlameCartHandler (command_handlers.php:175, 196); each
+  calls ->process( on it. Trap: ProcessOrderListener also calls OrderProcessorInterface::process() but receives
+  sylius.order_processing.order_payment_processor.after_checkout (workflow/payment.php:24), which never runs the
+  promotion processor. No decorator of the composite. The winzou callback (sylius_order_checkout.yml:44) is not a
+  class. Callers of OrderModifier are one level further and not asked.

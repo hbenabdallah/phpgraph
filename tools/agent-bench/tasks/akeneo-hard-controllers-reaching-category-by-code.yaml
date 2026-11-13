@@ -1,0 +1,37 @@
+project: akeneo-pim
+kind: impact
+prompt: |
+  In the Category bounded context, Akeneo\Category\Domain\Query\GetCategoryInterface::byCode() will become slower.
+  Which HTTP controllers (production code, not tests) can end up calling it while they handle a request, directly
+  or through any chain of services, command buses, handlers or savers? List the controllers only.
+expected:
+  - Akeneo\Category\Infrastructure\Controller\InternalApi\UpdateCategoryController
+  - Akeneo\Category\Infrastructure\Controller\ExternalApi\ListCategoriesController
+allowed:
+  - Akeneo\Category\Application\UpsertCategoryCommandHandler
+  - Akeneo\Category\Application\Storage\Save\CategorySaverProcessor
+  - Akeneo\Category\Application\Storage\Save\Saver\CategoryBaseSaver
+  - Akeneo\Category\Application\Storage\Save\Saver\CategoryTranslationsSaver
+  - Akeneo\Category\Infrastructure\Storage\Save\Query\UpsertCategoryBaseSql
+  - Akeneo\Category\Infrastructure\Storage\Save\Query\UpsertCategoryTranslationsSql
+  - Akeneo\Category\Infrastructure\Storage\Sql\GetCategoriesParametersBuilderSql
+  - Akeneo\Category\Infrastructure\Handler\SearchFiltersSql
+min_recall: 1
+min_precision: 0.66
+checked: |
+  Direct callers of ->byCode( on GetCategoryInterface in production: UpsertCategoryCommandHandler,
+  CategoryQueryHandler, SearchFiltersSql, UpsertCategoryBaseSql, UpsertCategoryTranslationsSql (see
+  akeneo-impact-category-by-code). Chains up to a controller, read in Category/back:
+  - UpdateCategoryController:66 dispatches UpsertCategoryCommand on CommandMessageBus (message_buses.yml: a
+    tagged_iterator of akeneo.category.command.handler, indexed by command); UpsertCategoryCommandHandler is tagged
+    for that command (handlers.yml:10) and calls byCode, and its CategorySaverProcessor runs CategoryBaseSaver and
+    CategoryTranslationsSaver, which call UpsertCategoryBase/UpsertCategoryTranslations (storage/base.yml,
+    translations.yml: the *Sql classes, both calling byCode).
+  - ListCategoriesController:71 calls GetCategoriesParametersBuilder::build() (queries.yml:52:
+    GetCategoriesParametersBuilderSql), which calls SearchFilters::build() (handlers.yml:23: SearchFiltersSql), which
+    calls byCode at line 38.
+  CategoryQueryHandler (Akeneo\Category\ServiceApi\CategoryQueryInterface) has no production user. Traps:
+  GetCategoryController, CreateTemplateController (and ActivateTemplate) hold GetCategoryInterface but call byId()
+  only; ImagePreviewController calls byCode() on an attribute query; ExternalApi\CategoryController and
+  InternalApi\CategoryController use the legacy Enrichment category repository. UpdateCategoryController is the only
+  production class dispatching UpsertCategoryCommand. Intermediate services are allowed, not required.

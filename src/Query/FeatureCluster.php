@@ -10,6 +10,8 @@ use PhpGraph\Graph\Graph;
 use PhpGraph\Graph\Node;
 use PhpGraph\Graph\NodeKind;
 use PhpGraph\Graph\Relation;
+use PhpGraph\Query\Result\Reason;
+use PhpGraph\Query\Result\ReasonKind;
 
 /**
  * The classes a feature is made of, from the classes a question names: deterministic, from the graph only.
@@ -65,9 +67,10 @@ final class FeatureCluster
      * @param list<string> $stems
      * @param list<string> $asked classes named exactly: in the core even when members of a family
      *
-     * @return array{core: list<string>, families: array<string, list<string>>, hubs: list<string>, left: list<string>} the core
-     *                                                                                                                classes, in the order they joined; the families: class-like => its members; the classes used by many that
-     *                                                                                                                joined the core, not followed; the classes that qualified once the core was full, best first
+     * @return array{core: list<string>, families: array<string, list<string>>, hubs: list<string>, left: list<string>, reasons: array<string, Reason>}
+     *               the core classes, in the order they joined; the families: class-like => its members; the classes used
+     *               by many that joined the core, not followed; the classes that qualified once the core was full, best
+     *               first; why each class of the core (the seeds excepted) and each class left out qualified
      */
     public function grow(array $seeds, array $stems, array $asked = []): array
     {
@@ -75,9 +78,11 @@ final class FeatureCluster
         foreach ($seeds as $seed) {
             $core[$seed] = true;
         }
+        $reasons = [];
         foreach ($seeds as $seed) {
             foreach ($this->module($seed) as $class) {
                 $core[$class] ??= true;
+                $reasons[$class] ??= new Reason(ReasonKind::Module, $seed);
             }
         }
         $core = $this->connected($core, $seeds);
@@ -91,6 +96,8 @@ final class FeatureCluster
             $members = $this->familyMembers(array_keys($core));
             $tally = [];
             $linkedMembers = [];
+            // The first class of the core each candidate is linked to, and whether the candidate uses it.
+            $via = [];
             foreach (array_keys($core) as $class) {
                 if (!$this->followed($followed, (string) $class, $stems)) {
                     continue;
@@ -101,6 +108,7 @@ final class FeatureCluster
                         continue;
                     }
                     $tally[$other]['anchored'] = ($tally[$other]['anchored'] ?? false) || $anchor;
+                    $via[$other] ??= new Reason($usedBy ? ReasonKind::Uses : ReasonKind::UsedBy, (string) $class);
                     // A member of a family stands for its family: the interface of the rules joins, not each rule.
                     $head = $this->headOf($other);
                     if ($head !== null && !isset($core[$head]) && $usedBy) {
@@ -121,6 +129,7 @@ final class FeatureCluster
                     || array_intersect_key($this->linksOf($head), $core) !== []);
                 if ($about && \count($linked) >= max(2, \count($this->membersOf($head)) / 2)) {
                     $accepted[$head] = 2 * \count($linked);
+                    $via[$head] = new Reason(ReasonKind::Family, count: \count($linked));
                     foreach ($this->membersOf($head) as $member) {
                         $joining[$member] = true;
                     }
@@ -155,6 +164,7 @@ final class FeatureCluster
             }
             uksort($accepted, static fn (int|string $a, int|string $b): int => $order[$a] <=> $order[$b]);
             foreach (array_keys($accepted) as $other) {
+                $reasons[(string) $other] ??= $via[$other] ?? new Reason(ReasonKind::Uses);
                 if (\count($core) >= self::MAX) {
                     $left[] = (string) $other;
 
@@ -193,6 +203,7 @@ final class FeatureCluster
             'families' => $families,
             'hubs' => array_values(array_filter($classes, fn (string $class): bool => !$this->followed($followed, $class, $stems))),
             'left' => array_values(array_filter($left, static fn (string $class): bool => !isset($members[$class]))),
+            'reasons' => $reasons,
         ];
     }
 

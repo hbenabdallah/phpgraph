@@ -1,0 +1,54 @@
+project: php-ddd-example
+kind: explain
+prompt: |
+  Explain how a course is created through the mooc backend API (the PUT endpoint for courses): from the HTTP controller
+  to persistence, and what reacts afterwards to the course being created. List the classes of the flow.
+expected:
+  - CodelyTv\Apps\Mooc\Backend\Controller\Courses\CoursesPutController
+  - CodelyTv\Mooc\Courses\Application\Create\CreateCourseCommand
+  - CodelyTv\Mooc\Courses\Application\Create\CreateCourseCommandHandler
+  - CodelyTv\Mooc\Courses\Application\Create\CourseCreator
+  - CodelyTv\Mooc\Courses\Domain\Course
+  - CodelyTv\Mooc\Courses\Domain\CourseRepository
+  - CodelyTv\Mooc\Courses\Domain\CourseCreatedDomainEvent
+  - CodelyTv\Mooc\CoursesCounter\Application\Increment\IncrementCoursesCounterOnCourseCreated
+  - CodelyTv\Backoffice\Courses\Application\Create\CreateBackofficeCourseOnCourseCreated
+# Classes of the flow an explanation may name without being wrong: value objects, implementations of the ports, buses,
+# what the subscribers call next.
+allowed:
+  - CodelyTv\Mooc\Shared\Domain\Courses\CourseId
+  - CodelyTv\Mooc\Courses\Domain\CourseName
+  - CodelyTv\Mooc\Courses\Domain\CourseDuration
+  - CodelyTv\Mooc\Courses\Infrastructure\Persistence\DoctrineCourseRepository
+  - CodelyTv\Mooc\Courses\Infrastructure\Persistence\FileCourseRepository
+  - CodelyTv\Shared\Infrastructure\Symfony\ApiController
+  - CodelyTv\Shared\Domain\Bus\Command\Command
+  - CodelyTv\Shared\Domain\Bus\Command\CommandBus
+  - CodelyTv\Shared\Domain\Bus\Command\CommandHandler
+  - CodelyTv\Shared\Infrastructure\Bus\Command\InMemorySymfonyCommandBus
+  - CodelyTv\Shared\Domain\Aggregate\AggregateRoot
+  - CodelyTv\Shared\Domain\Bus\Event\DomainEvent
+  - CodelyTv\Shared\Domain\Bus\Event\DomainEventSubscriber
+  - CodelyTv\Shared\Domain\Bus\Event\EventBus
+  - CodelyTv\Shared\Infrastructure\Bus\Event\InMemory\InMemorySymfonyEventBus
+  - CodelyTv\Shared\Infrastructure\Bus\Event\MySql\MySqlDoctrineEventBus
+  - CodelyTv\Shared\Infrastructure\Bus\Event\RabbitMq\RabbitMqEventBus
+  - CodelyTv\Shared\Infrastructure\Bus\Event\WithMonitoring\WithPrometheusMonitoringEventBus
+  - CodelyTv\Shared\Infrastructure\Bus\Event\DomainEventSubscriberLocator
+  - CodelyTv\Mooc\CoursesCounter\Application\Increment\CoursesCounterIncrementer
+  - CodelyTv\Mooc\CoursesCounter\Domain\CoursesCounter
+  - CodelyTv\Mooc\CoursesCounter\Domain\CoursesCounterRepository
+  - CodelyTv\Mooc\CoursesCounter\Domain\CoursesCounterIncrementedDomainEvent
+  - CodelyTv\Backoffice\Courses\Application\Create\BackofficeCourseCreator
+  - CodelyTv\Backoffice\Courses\Domain\BackofficeCourse
+  - CodelyTv\Backoffice\Courses\Domain\BackofficeCourseRepository
+min_recall: 0.8
+min_precision: 0.7
+checked: |
+  Read in the code, in order: apps/mooc/backend/config/routes/courses.yaml routes PUT /courses/{id} to
+  CoursesPutController, which dispatches a CreateCourseCommand (ApiController::dispatch, command bus);
+  CreateCourseCommandHandler builds CourseId/CourseName/CourseDuration and calls CourseCreator, which calls
+  Course::create (records CourseCreatedDomainEvent), CourseRepository::save and EventBus::publish. The event's
+  subscribers (subscribedTo() returning CourseCreatedDomainEvent::class, grep): IncrementCoursesCounterOnCourseCreated
+  and CreateBackofficeCourseOnCourseCreated. The allowed list was checked class by class with grep for its
+  declaration (FQCN from its namespace line).

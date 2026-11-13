@@ -1,0 +1,11 @@
+--- a/src/Akeneo/Category/back/Domain/Model/Attribute/Attribute.php
++++ b/src/Akeneo/Category/back/Domain/Model/Attribute/Attribute.php
+@@ -137,7 +137,7 @@
+      */
+     public function getIdentifier(): string
+     {
+-        return $this->getCode().AbstractValue::SEPARATOR.$this->getUuid();
++        return $this->getUuid().AbstractValue::SEPARATOR.$this->getCode();
+     }
+ 
+     public function getAdditionalProperties(): AttributeAdditionalProperties

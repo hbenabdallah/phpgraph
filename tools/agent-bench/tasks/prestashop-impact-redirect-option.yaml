@@ -1,0 +1,19 @@
+project: prestashop
+kind: impact
+prompt: |
+  We are adding a required third constructor parameter to the value object
+  PrestaShop\PrestaShop\Core\Domain\Product\ValueObject\RedirectOption. List every class, production or test, whose
+  code must change: the value object itself and every class constructing it.
+expected:
+  - PrestaShop\PrestaShop\Core\Domain\Product\ValueObject\RedirectOption
+  - PrestaShop\PrestaShop\Core\Domain\Product\Command\UpdateProductCommand
+  - Tests\Unit\Core\Domain\Product\ValueObject\RedirectOptionTest
+allowed: []
+min_recall: 1
+min_precision: 0.75
+checked: |
+  grep -rn "new RedirectOption(" src tests classes controllers: 10 sites in 5 files, but two classes have this short
+  name (Core\Domain\Product\ValueObject and Core\Domain\Category\ValueObject). Read the `use` of each file: only
+  UpdateProductCommand.php:358 and RedirectOptionTest.php (lines 28, 36, 65) import the Product one;
+  RootCategoryFormDataHandler, CategoryFormDataHandler and Tests\Integration\...\CategoryFeatureContext build the
+  Category one, and are false answers. No `new self`/`new static` in the class.

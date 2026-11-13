@@ -2763,6 +2763,24 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     }
 
     /**
+     * The service id a `get('app.mailer')` asks a container for (a class name starts with a capital: `class:`). Kept
+     * for every `get()`, the receiver deciding later whether it is a container.
+     */
+    private function serviceId(Expr\MethodCall|Expr\NullsafeMethodCall $call): ?string
+    {
+        if (!$call->name instanceof Identifier || strtolower($call->name->toString()) !== 'get') {
+            return null;
+        }
+        $first = $call->args[0] ?? null;
+        if (!$first instanceof AstNode\Arg || $first->name !== null || !$first->value instanceof AstNode\Scalar\String_) {
+            return null;
+        }
+        $id = $first->value->value;
+
+        return preg_match('/^[a-z_][A-Za-z0-9_.\-]*$/', $id) === 1 ? $id : null;
+    }
+
+    /**
      * The arguments of a method call, when they may bind the templates of the method: none when nothing is known of
      * them, so that the call keeps the key it has without them.
      *
@@ -2833,6 +2851,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                 return null;
             }
             [$arguments, $types] = $this->bindingArguments($expr->args);
+            $service = $this->serviceId($expr);
+            if ($service !== null) {
+                [$arguments, $types] = $this->callArgumentsOf($expr->args);
+                $arguments[0] = TypeExpr::SERVICE_ID . $service;
+            }
 
             return TypeExpr::returnOf($receiver, $expr->name->toString(), $arguments, $types);
         }
@@ -3119,7 +3142,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /**
      * The GenericType a callable returns: documented, or a union declared in the code. A documented union gives way to
      * a single class declared in the code (`: ResponseInterface` with `@return Response|JsonResponse`): its members
-     * may each declare the method a call needs, the declared class always does.
+     * may each declare the method a call needs, the declared class always does. A union naming the declared class
+     * itself refines it and stays (`: NodeDefinition` with `@return NodeDefinition|ArrayNodeDefinition`, Symfony's
+     * `TreeBuilder::getRootNode()`): `children()`, which only ArrayNodeDefinition declares, is reached.
      */
     private function returnGeneric(Stmt\ClassMethod|Stmt\Function_ $node): ?string
     {
@@ -3127,8 +3152,23 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         if (!\is_string($documented)) {
             return $this->nativeUnion($node->returnType, true);
         }
+        $declared = $this->singleType($node->returnType);
+        if (!GenericType::isUnion($documented) || $declared === null) {
+            return $documented;
+        }
 
-        return GenericType::isUnion($documented) && $this->singleType($node->returnType) !== null ? null : $documented;
+        return $this->namesClass($documented, $declared) ? $documented : null;
+    }
+
+    private function namesClass(string $union, string $class): bool
+    {
+        foreach (GenericType::members($union) as $member) {
+            if (strtolower(GenericType::base($member)) === strtolower($class)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -2,16 +2,16 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.hbenabdallah/phpgraph",
   "title": "phpgraph",
-  "description": "Knowledge graph of a PHP codebase by static analysis: calls, routes, buses, layers, impact",
+  "description": "PHP code graph for AI agents: impact of a change, feature outlines, handlers, routes, layer rules",
   "repository": {
     "url": "https://github.com/hbenabdallah/phpgraph",
     "source": "github"
   },
-  "version": "2.0.0",
+  "version": "2.1.0",
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/hbenabdallah/phpgraph:2.0.0",
+      "identifier": "ghcr.io/hbenabdallah/phpgraph:2.1.0",
       "transport": {
         "type": "stdio"
       },

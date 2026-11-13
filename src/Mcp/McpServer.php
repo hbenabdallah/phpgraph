@@ -25,14 +25,22 @@ class McpServer
 
 
     private const INSTRUCTIONS = 'Knowledge graph of this PHP codebase, built by static analysis: deterministic facts, no guesses beyond '
-        . 'what each confidence level says. Use it before grep, glob or reading files to explore or change the code, then read only the files it points to. '
-        . 'Call overview first: it gives the stack, the structure and what the graph cannot see. '
-        . 'To explain a feature or how something works, call outline first, not query_graph (its classes, families, flow, behaviour, wiring and tests in one answer: '
-        . 'read only the files it points to). Use query_graph to find code by topic when you do not know where it is, get_node or get_neighbors to read one class or method, and shortest_path '
-        . 'to see how two pieces of code are connected, impact_of before changing a class or a method. Relations are EXTRACTED (read in the code), INFERRED (resolved from '
-        . 'declared types) or AMBIGUOUS (guessed from a unique method name). Routes (route:GET /orders), message '
-        . 'channels and API schema operations (OpenAPI, protobuf) are nodes too; in a multi-service repository ids read service@Class and services meet through '
-        . 'contracts (shared message classes, channels, HTTP routes, API schemas). The graph rebuilds itself when the code changes.';
+        . 'what each confidence level says. Use it before grep, glob or reading files to explore or change the code, then read only the files it '
+        . 'points to. To explain a feature or how something works, call outline first. Call impact_of before changing a class or a method, '
+        . 'instead of searching for its usages with grep. Use get_node or get_neighbors to read one class or method. Relations are EXTRACTED (read in the code), INFERRED (resolved from declared '
+        . 'types) or AMBIGUOUS (guessed from a unique method name). Routes (route:GET /orders), message channels and API schema operations are nodes '
+        . 'too; in a multi-service repository ids read service@Class. The graph rebuilds itself when the code changes.';
+
+    /** What the tools left out by default add to the instructions. */
+    private const MORE_INSTRUCTIONS = ' Also: overview for the stack, structure and gaps of the graph, query_graph to find code by topic, '
+        . 'shortest_path to see how two pieces of code connect, god_nodes for the hubs.';
+
+    /**
+     * The tools listed by default. Each listed tool is read again on every turn of the agent: on 10 November 2026 agents
+     * never called the others, which cost them about 1 000 tokens per turn. Those stay callable and are listed with
+     * `serve --all-tools`.
+     */
+    private const DEFAULT_TOOLS = ['get_node', 'get_neighbors', 'impact_of', 'outline'];
 
     /** The executable as it was when the server started: size, date and inode, null when not run from a PHAR. */
     private readonly ?string $stamp;
@@ -44,6 +52,7 @@ class McpServer
         private readonly GraphQueryProvider $provider,
         private readonly string $version = 'dev',
         private readonly string $executable = '',
+        private readonly bool $allTools = false,
     ) {
         $this->stamp = $executable === '' ? null : self::stamp($executable);
     }
@@ -118,7 +127,7 @@ class McpServer
             $result = match ($method) {
                 'initialize' => $this->initialize($params),
                 'ping' => new \stdClass(),
-                'tools/list' => ['tools' => $this->tools()],
+                'tools/list' => ['tools' => $this->listed()],
                 'tools/call' => $this->callTool($params),
                 default => null,
             };
@@ -146,11 +155,25 @@ class McpServer
             'protocolVersion' => \in_array($params['protocolVersion'] ?? null, self::PROTOCOLS, true) ? $params['protocolVersion'] : self::PROTOCOLS[\count(self::PROTOCOLS) - 1],
             'capabilities' => ['tools' => new \stdClass()],
             'serverInfo' => ['name' => self::NAME, 'version' => $this->version],
-            'instructions' => $note === null ? self::INSTRUCTIONS : $note . "\n\n" . self::INSTRUCTIONS,
+            'instructions' => ($note === null ? '' : $note . "\n\n") . self::INSTRUCTIONS . ($this->allTools ? self::MORE_INSTRUCTIONS : ''),
         ];
     }
 
     /**
+     * @return list<array{name: string, description: string, inputSchema: array{type: string, properties: \stdClass|array<string, array{type: string, description: string, enum?: list<string>}>, required?: list<string>}}>
+     */
+    private function listed(): array
+    {
+        if ($this->allTools) {
+            return $this->tools();
+        }
+
+        return array_values(array_filter($this->tools(), static fn (array $tool): bool => \in_array($tool['name'], self::DEFAULT_TOOLS, true)));
+    }
+
+    /**
+     * Every tool, listed or not: a client may still call one it knows.
+     *
      * @return list<array{name: string, description: string, inputSchema: array{type: string, properties: \stdClass|array<string, array{type: string, description: string, enum?: list<string>}>, required?: list<string>}}>
      */
     private function tools(): array
@@ -158,39 +181,23 @@ class McpServer
         $text = static fn (string $description): array => ['type' => 'string', 'description' => $description];
         $integer = static fn (string $description): array => ['type' => 'integer', 'description' => $description];
 
-        $name = $text('Short name (OrderRepository), fully qualified name (App\\Sales\\Domain\\OrderRepository), method '
-            . '(OrderRepository::save), route (POST /orders), channel (ticket.create) or API schema operation (GET /api/hotels/{hotel}, CinemaService.Reserve). In a multi-service repository, '
-            . 'prefix with the service: billing@OrderRepository.');
+        $name = $text('Short or fully qualified name, Class::method, route (POST /orders), channel or API operation; '
+            . 'service@Name in a multi-service repository.');
 
         return [
             [
                 'name' => 'overview',
-                'description' => 'Start here on an unfamiliar PHP project. Returns: the Composer stack per application (framework, '
-                    . 'ORM, message bus, test and analysis tools, with versions); the namespace tree of application code, each '
-                    . 'branch annotated with the layer-like segments found below it (Domain, Application, Infrastructure, Adapter, '
-                    . 'Model, Controller...) so you can tell bounded contexts and layers; counts of class name suffixes (Handler, '
-                    . 'Repository, Controller...); and the gaps of the graph: share of method calls whose receiver type is unknown, '
-                    . 'the method names most often unresolved, missing vendor/, parse failures, duplicate class names, and what is '
-                    . 'not modelled at all; the dependencies breaking the layer rules (domain must not depend on '
-                    . 'infrastructure...) and between bounded contexts; the services of a multi-service repository; HTTP '
-                    . 'routes (entry points): each route with method, path, controller and routing file when there are up to '
-                    . '30, else counts by path prefix; routes whose controller class exists nowhere; HTTP calls; the API schemas (OpenAPI documents, protobuf services) with what implements them, what is documented and not implemented, and the routes no document describes; messages, their handlers and what is left unlinked. Test code is '
-                    . 'counted apart.',
+                'description' => 'Start here on an unfamiliar project: the Composer stack, the namespace tree with its layer-like segments '
+                    . '(Domain, Infrastructure...), class suffix counts, routes, messages and handlers, API schemas, services, breaks of the layer '
+                    . 'rules, and what the graph cannot see (unknown receivers, missing vendor/, parse failures).',
                 'inputSchema' => ['type' => 'object', 'properties' => new \stdClass()],
             ],
             [
                 'name' => 'query_graph',
-                'description' => 'Find the code about a topic when you do not know the class names. To explain how a feature '
-                    . 'works ("explain the notification validation system"), call outline instead: it answers in one call what '
-                    . 'query_graph and several get_node calls would. Matches the words of the '
-                    . 'question against the words of class, method and function names (validated finds Validator, prices finds '
-                    . 'PriceCalculator; rare words weigh more than common ones; not semantic search: use words likely to appear '
-                    . 'in names, such as "stock availability" or "invoice payment"), then returns up to 6 best matches, the other '
-                    . 'classes of their namespace (the module asked about) and the neighbours that are about the question too, as relations (calls, handled_by, receives...) with confidence. '
-                    . 'Test code only when the question mentions tests. A question '
-                    . 'about routes (the words routes, endpoints, HTTP or URL, or a path such as /orders/{id}, with or without a '
-                    . 'method such as GET) returns the matching route nodes and their controllers; its other words narrow them '
-                    . 'by path or routing file: "mooc courses routes", "GET /courses".',
+                'description' => 'Find the code about a topic when you do not know the class names (to explain a feature, call outline). '
+                    . 'Matches the words of the question against class, method and function names, not semantic: use words likely in names '
+                    . '("stock availability"). Returns the best matches, the rest of their namespace and the neighbours on the topic. Test code '
+                    . 'only when the question mentions tests; routes when it mentions routes, endpoints or a path ("GET /courses").',
                 'inputSchema' => [
                     'type' => 'object',
                     'properties' => [
@@ -203,10 +210,8 @@ class McpServer
             ],
             [
                 'name' => 'get_node',
-                'description' => 'Everything about one class, interface, trait, enum, method or function: kind, file and line, '
-                    . 'and every relation in and out. Each relation has a confidence: EXTRACTED (read in the code), INFERRED '
-                    . '(resolved from declared types, across files and through vendor/ signatures) or AMBIGUOUS (guessed: the '
-                    . 'only method of the project with that name). When several nodes match the name, the others are listed.',
+                'description' => 'One class, interface, trait, enum, method or function: kind, file, line and every relation in and out, with '
+                    . 'its confidence. Lists the other nodes matching the name.',
                 'inputSchema' => [
                     'type' => 'object',
                     'properties' => ['name' => $name],
@@ -215,9 +220,8 @@ class McpServer
             ],
             [
                 'name' => 'get_neighbors',
-                'description' => 'Like get_node, in one direction. "in": what uses this node (callers, implementations, '
-                    . 'subclasses, code that instantiates or references it), to judge the impact of a change. "out": what this '
-                    . 'node depends on.',
+                'description' => 'Like get_node in one direction: "in" what uses it (callers, implementations, subclasses, instantiations), '
+                    . '"out" what it depends on.',
                 'inputSchema' => [
                     'type' => 'object',
                     'properties' => [
@@ -232,58 +236,47 @@ class McpServer
                 'description' => 'Call this before changing a class or a method, instead of searching for its usages with grep. What may break when it changes: every class that depends on it, directly or '
                     . 'through others (callers, subclasses, implementations, code that instantiates or references it, senders '
                     . 'and handlers of a message), nearest first, each with the relation that reaches it and the weakest '
-                    . 'confidence on the way, then its methods reaching the change with the source lines of their calls '
-                    . '(3 per class, all with limit 0). Follows methods, not whole classes: a class '
+                    . 'confidence on the way, then its methods reaching the change with the source lines of their calls. Follows methods, not whole classes: a class '
                     . 'is reached only through the methods that use the change. Also reaches the callers of the interface or '
                     . 'parent method a method implements (INFERRED), and, in a separate list, the code possibly affected '
-                    . 'through the state the method writes (direct callers of methods reading the same properties, such as '
-                    . 'all() or hasErrors() for add(), not followed further). Lists the tests to run apart, found through test helpers (fakers) without the depth limit. '
+                    . 'through the state the method writes. Lists the tests to run apart, found through test helpers (fakers). '
                     . 'Stops at a service receiving the change among others (a tagged collection) and at inherited code '
-                    . 'shared with other subclasses, which are listed but not followed. Lists the routes reaching the change '
-                    . 'without the depth limit, each with its chain down to the change, scoped by the injected lists on the way. Lists are cut at 40 entries: '
-                    . 'pass limit 0 for complete lists, or section to get a single one.',
+                    . 'shared with other subclasses, which are listed but not followed. Lists the routes reaching the change, each with its chain down to the change. '
+                    . 'A large impact comes compact (routes cut, farther classes by name, indirect tests counted) and still names every direct dependent: '
+                    . 'the default answer is the one to use, other options are several times larger.',
                 'inputSchema' => [
                     'type' => 'object',
                     'properties' => [
                         'name' => $name,
                         'depth' => $integer('How many relations away to follow (default 3).'),
-                        'limit' => $integer('Entries per list (default 40); 0 for complete lists, instead of reading the cut ones node by node.'),
-                        'section' => ['type' => 'string', 'enum' => TextPresenter::IMPACT_SECTIONS, 'description' => 'Only one list: direct (the call chain), routes, operations (OpenAPI or gRPC operations implemented by what it reaches), state (possibly affected through the state it changes), tests (to run), state-tests (reaching what reads the state), helpers.'],
-                        'format' => ['type' => 'string', 'enum' => TextPresenter::IMPACT_FORMATS, 'description' => 'text (default, compact: one line per class with its call sites), full (every relation spelled out) or json.'],
+                        'limit' => $integer('Entries per list (default 40). Leave it out.'),
+                        'section' => ['type' => 'string', 'enum' => TextPresenter::IMPACT_SECTIONS, 'description' => 'Only one list, uncut.'],
+                        'format' => ['type' => 'string', 'enum' => TextPresenter::IMPACT_FORMATS, 'description' => 'Leave it out: text (default). full spells out every relation, about 5 times larger; json for scripts.'],
                     ],
                     'required' => ['name'],
                 ],
             ],
             [
                 'name' => 'outline',
-                'description' => 'Call this first, instead of query_graph, grep or reading files, whenever you are asked to explain, describe or document '
-                    . 'a feature or how something works ("explain the notification validation system", "how does stock '
-                    . 'reservation work"), before reading any code. Returns its structural outline, enough to '
-                    . 'read only the few files with non-obvious logic. From the classes the topic names, the cluster they '
-                    . 'form, by namespace and layer, each with its kind, the first sentence of its docblock, its public '
-                    . 'signatures, constants and enum cases; the interfaces and base classes around it with their number of '
-                    . 'implementations by folder (0 stated) and the tags injecting them; the flow from the routes into it, '
-                    . 'the closures it runs and the calls inside it; behaviour read in the bodies (guarded throws, early '
-                    . 'returns, branches on constants, loop caps, state compared before and after); the container wiring '
-                    . 'with service ids; its users (tests counted by module), the classes no test touches and those nothing uses. '
-                    . 'A topic naming a method (OrderService::place) outlines what it runs: the methods it calls, 3 calls deep, '
-                    . 'each class with those methods only, the hubs it calls counted, its behaviour nearest first.',
+                'description' => 'Call this first, before grep or reading files, to explain or document a feature or how something works '
+                    . '("how does stock reservation work"). From the classes the topic names: the cluster by namespace and layer (kind, docblock '
+                    . 'summary, public signatures, constants), the interfaces and base classes around it, the flow from the routes, behaviour read '
+                    . 'in the bodies (guarded throws, branches), container wiring, users and untested classes. A topic naming a method '
+                    . '(OrderService::place) outlines what it runs, 3 calls deep.',
                 'inputSchema' => [
                     'type' => 'object',
                     'properties' => [
-                        'topic' => $text('The feature, in words or class names: "notification validation", "stock reservation"; or one method: "ReservationCTRL::saveNewReservation".'),
+                        'topic' => $text('The feature in words or class names ("stock reservation"), or one method ("OrderService::place").'),
                         'section' => ['type' => 'string', 'enum' => OutlineReport::SECTIONS, 'description' => 'Only one section, uncut: what a "+N more: section ..." line names.'],
-                        'format' => ['type' => 'string', 'enum' => TextPresenter::IMPACT_FORMATS, 'description' => 'text (default, compact, about 15 KB), full (every list uncut: often too large to read inline; prefer section) or json.'],
+                        'format' => ['type' => 'string', 'enum' => TextPresenter::IMPACT_FORMATS, 'description' => 'text (default, about 15 KB), full (every list uncut, often too large: prefer section) or json.'],
                     ],
                     'required' => ['topic'],
                 ],
             ],
             [
                 'name' => 'shortest_path',
-                'description' => 'How two pieces of code are connected: the shortest chain of relations from one node to the '
-                    . 'other. Follows dependencies first (calls and references in their direction, from an interface to its '
-                    . 'implementations, never through files or classes outside the project); otherwise ignores the direction. '
-                    . 'The answer says which mode found the path.',
+                'description' => 'How two pieces of code are connected: the shortest chain of relations, following dependencies first, '
+                    . 'else in any direction.',
                 'inputSchema' => [
                     'type' => 'object',
                     'properties' => [
@@ -295,8 +288,7 @@ class McpServer
             ],
             [
                 'name' => 'god_nodes',
-                'description' => 'The most connected classes and methods: the hubs most code depends on, often central domain '
-                    . 'objects, shared services or base classes. Changing them has the widest impact.',
+                'description' => 'The most connected classes and methods: the hubs whose change reaches the most code.',
                 'inputSchema' => [
                     'type' => 'object',
                     'properties' => ['limit' => $integer('Number of nodes (default 15).')],
@@ -308,7 +300,7 @@ class McpServer
     /**
      * @param array<mixed> $params
      *
-     * @return array{content: list<array{type: string, text: string}>, isError: bool}
+     * @return array{content: list<array{type: string, text: string}>, structuredContent?: \stdClass, isError: bool}
      */
     private function callTool(array $params): array
     {
@@ -319,6 +311,7 @@ class McpServer
             throw new \InvalidArgumentException(sprintf('Unknown tool: %s', \is_string($name) ? $name : 'null'));
         }
 
+        $format = \is_string($arguments['format'] ?? null) && \in_array($arguments['format'], TextPresenter::IMPACT_FORMATS, true) ? $arguments['format'] : 'text';
         try {
             $presenter = new TextPresenter($this->provider->get());
 
@@ -337,7 +330,7 @@ class McpServer
                 'overview' => $presenter->overview(),
                 'outline' => $presenter->outline(
                     $this->requireString($arguments, 'topic'),
-                    \is_string($arguments['format'] ?? null) && \in_array($arguments['format'], TextPresenter::IMPACT_FORMATS, true) ? $arguments['format'] : 'text',
+                    $format,
                     \is_string($arguments['section'] ?? null) && \in_array($arguments['section'], OutlineReport::SECTIONS, true) ? $arguments['section'] : null,
                 ),
                 'impact_of' => $presenter->impact(
@@ -345,21 +338,41 @@ class McpServer
                     max(1, Values::number($arguments['depth'] ?? 3)),
                     max(0, Values::number($arguments['limit'] ?? 40)),
                     \is_string($arguments['section'] ?? null) && \in_array($arguments['section'], TextPresenter::IMPACT_SECTIONS, true) ? $arguments['section'] : null,
-                    \is_string($arguments['format'] ?? null) && \in_array($arguments['format'], TextPresenter::IMPACT_FORMATS, true) ? $arguments['format'] : 'text',
+                    $format,
                 ),
                 default => $presenter->godNodes(max(1, Values::number($arguments['limit'] ?? 15))),
             };
+            $structured = $format === 'json' && \in_array($name, ['outline', 'impact_of'], true) ? self::structured($text) : null;
             $warning = $presenter->warning();
-            if ($warning !== null && $name !== 'overview') {
-                $text = $warning . "\n\n" . $text;
-            }
         } catch (\InvalidArgumentException $exception) {
             throw $exception;
         } catch (\Throwable $exception) {
             return ['content' => [['type' => 'text', 'text' => $exception->getMessage()]], 'isError' => true];
         }
 
-        return ['content' => [['type' => 'text', 'text' => $text]], 'isError' => false];
+        if ($structured === null) {
+            $warned = $warning !== null && $name !== 'overview' ? $warning . "\n\n" . $text : $text;
+
+            return ['content' => [['type' => 'text', 'text' => $warned]], 'isError' => false];
+        }
+        // The JSON stays parseable: the warning goes in a block of its own.
+        $content = [['type' => 'text', 'text' => $text]];
+        if ($warning !== null) {
+            $content[] = ['type' => 'text', 'text' => $warning];
+        }
+
+        return ['content' => $content, 'structuredContent' => $structured, 'isError' => false];
+    }
+
+    /**
+     * The JSON of an answer as structured content (protocol 2025-06-18), the shape of docs/schemas/; none for an
+     * error, which the text says.
+     */
+    private static function structured(string $json): ?\stdClass
+    {
+        $value = json_decode($json);
+
+        return $value instanceof \stdClass && !property_exists($value, 'error') ? $value : null;
     }
 
     /**

@@ -24,27 +24,40 @@
 
 ---
 
-## Pourquoi phpgraph ?
+## Ce qu'il répond
 
-Un agent IA lâché dans un projet PHP qu'il ne connaît pas lit les fichiers un par un et cherche des noms. Il passe à côté de l'essentiel d'une vraie base de code : **qui appelle quoi, quel handler reçoit un message, quel contrôleur sert une route, ce qui casse si une méthode change, et quelle couche dépend de quelle autre**.
+Un agent dans un projet PHP qu'il ne connaît pas cherche des noms avec grep et lit des fichiers. Cela marche tant que la réponse ne passe pas par quelque chose qu'une recherche de noms ne montre pas : une interface, la configuration du conteneur, un bus, une route, un autre service. phpgraph analyse tout le projet une fois (avec [`nikic/php-parser`](https://github.com/nikic/PHP-Parser), les docblocks avec [`phpstan/phpdoc-parser`](https://github.com/phpstan/phpdoc-parser)) et répond à partir d'un graphe, en un appel :
 
-phpgraph analyse tout le projet une fois (avec [`nikic/php-parser`](https://github.com/nikic/PHP-Parser), les docblocks avec [`phpstan/phpdoc-parser`](https://github.com/phpstan/phpdoc-parser)) et répond à ces questions à partir d'un graphe :
+- **Qu'est-ce qui casse si je change cette méthode ?** `impact_of` liste chaque dépendant, du plus proche au plus lointain, appelants via l'interface qu'elle implémente compris, les routes qui l'atteignent et les tests à lancer. Sylius, les 17 appelants de `OrderItemQuantityModifierInterface::modify()` : phpgraph en trouve 17, codebase-memory-mcp 11 (dont 2 faux), graphify 0.
+- **Comment marche cette fonctionnalité ?** `outline` donne les classes, les routes qui y mènent, le comportement lu dans leur code, le câblage et les tests en une réponse, pour que l'agent ne lise que les fichiers à la logique non évidente. Claude Code sur 6 tâches d'explication : −12 % de tokens, −26 % de temps, −42 % d'appels d'outils.
+- **Quel handler reçoit ce message, quel contrôleur sert cette route ?** Envois, messages et handlers sont reliés pour Symfony Messenger, Laravel, Ecotone, le CQRS de PrestaShop, les hooks WordPress et vos propres bus ; les routes à leurs contrôleurs, les appels HTTP aux routes qu'ils atteignent. Sylius : 206 handlers Messenger reliés à leur message ; Kimai : 266 routes et 26 événements avec leurs abonnés ; graphify n'en relie aucun. Claude Code a écrit le nom exact de la classe dans 18 exécutions sur 18 avec phpgraph, 15 sur 18 sans (les 3 échecs : des namespaces devinés d'après le chemin).
+- **Le code respecte-t-il ses couches ?** `phpgraph check` fait échouer la CI sur une nouvelle dépendance qui enfreint les règles de couches (domaine, application, infrastructure) ou les règles propres au projet dans `phpgraph.yaml`, avec une baseline pour les violations d'aujourd'hui.
+- **Qu'est-ce qui traverse les frontières des services ?** Classes de messages partagées, clés de routage, routes HTTP, schémas OpenAPI et protobuf relient les services entre eux : les 45 opérations du document OpenAPI de StayHub et les 14 rpcs de ticket-booking sont toutes reliées à leur implémentation ; dans art-gallery, phpgraph a trouvé un `POST` envoyé vers une route `GET` seulement.
+- **Qui appelle ceci, dans une base de code grande ou ancienne ?** Les récepteurs sont typés par les types de retour, les docblocks, les génériques, les branches et les signatures de `vendor/`, et la syntaxe de PHP 4 et 5 est lue : 92,9 à 99,1 % des appels de méthodes typés sur les 7 projets principaux du corpus. Sur Kimai, phpgraph trouve les appelants dans 2 407 des 2 408 fichiers qu'un grep trouve pour les méthodes dont le nom n'est déclaré qu'une fois, graphify dans 902.
+
+Comment il répond :
 
 - **Des faits déterministes, pas des devinettes.** Chaque relation est `EXTRACTED` (lue dans le code), `INFERRED` (résolue à partir des types déclarés) ou `AMBIGUOUS` (une supposition, signalée comme telle).
 - **Il dit ce qu'il ne sait pas.** Appels non résolus, `vendor/` absent, messages sans handler : les trous sont signalés, et l'agent sait quand lire le code lui-même.
 - **Pensé pour le DDD et l'architecture hexagonale**, puis les microservices, puis le PHP en général : Symfony, Laravel, Ecotone, PrestaShop, WordPress, ou PHP sans framework.
 - **Privé par construction.** Votre code ne quitte pas votre machine, et phpgraph ne l'exécute jamais : il l'analyse seulement.
 
-## Fonctionnalités
+## Ce qu'il coûte
 
-- **Graphe d'appels avec inférence de types** : types de retour, appels enchaînés (`$a->b()->c()`), variables locales, docblocks (`@return`, `@var`), et signatures des dépendances de `vendor/`, pour que les chaînes traversent les API de Doctrine, Symfony ou Laravel.
-- **Architecture** : couches DDD et hexagonales, bounded contexts, règles de couches vérifiées en CI (`phpgraph check`) et analyse d'impact (`impact_of`) : ce qui dépend d'une classe ou d'une méthode, et les tests à lancer.
-- **Messages et événements** : envoi → message → handler pour Symfony Messenger, les jobs et événements Laravel, Ecotone, le CQRS de PrestaShop, les hooks WordPress, les événements de domaine et vos propres bus, à partir des attributs, de la configuration des services (YAML, XML, PHP) ou de la forme du code.
-- **HTTP** : routes (attributs Symfony, fichiers de routage YAML et PHP, ressources API Platform, fichiers de routes Laravel, contrôleurs nommés par identifiant de service) reliées à leurs contrôleurs, et appels HTTP reliés aux routes qu'ils atteignent. Une route dont la classe contrôleur n'existe ni dans le projet ni dans `vendor/` est signalée avec son fichier de routage.
-- **Injection de dépendances** : ce que la configuration du conteneur Symfony injecte au-delà des types du constructeur, tous les services d'un tag (`tagged_iterator`, `#[AutowireIterator]`) ou un service nommé par son identifiant, en PHP, YAML ou XML, y compris dans des helpers appelés avec des arguments littéraux (`Wiring::wire($services, 'sales', ...)`, évalués, jamais exécutés) : un validateur est relié aux règles qu'il reçoit. Une règle qui déclare ce qu'elle accepte (`supports(object $input): bool { return $input instanceof CreateEstimateQuery; }`, aussi `canHandle`, `accepts`…) est écartée des cas d'usage qui passent une autre entrée au pipeline partagé, classes contenues dans les propriétés de l'entrée comprises. Une entrée typée par une interface est toute classe du projet qui l'implémente, et les types des paramètres auxquels elle est transmise (`QueryInterface $query` passé à `setUp(CreateEstimateQueryInterface $query)` : une `CreateEstimateQuery`) ; un garde qu'il ne sait pas lire, ou une règle qui ne s'exécute que pour certaines de ces classes, est gardé, marqué `supports() not resolved`.
-- **Microservices** : un espace d'identifiants par service, et des liens entre services par leurs contrats : classes de messages partagées, clés de routage, routes HTTP.
-- **Schémas d'API** : les opérations des documents OpenAPI (Swagger) reliées aux routes qui les implémentent, ou, pour le document d'une autre API, aux appels HTTP de son client ; les rpcs des services protobuf reliés aux classes qui implémentent leur interface générée. Ce qui est documenté et non implémenté, et les routes qu'aucun document ne décrit, sont signalés. `impact` liste les opérations derrière une modification (le contrat sur lequel ses clients comptent), `outline` celles que sert une fonctionnalité.
-- **Serveur MCP sans configuration** : construit au premier usage, reconstruit de façon incrémentale quand le code change (environ 3 s par modification sur un projet de 8 400 fichiers).
+Le même agent avec et sans phpgraph, noté contre des réponses tirées du code ([méthode et chaque exécution](https://github.com/hbenabdallah/phpgraph/blob/main/docs/BENCHMARK.md)) :
+
+| Question | Agent et projets | Avec phpgraph |
+|---|---|---|
+| Impact d'un changement | Sherpa, un projet Symfony/DDD privé de 4 800 fichiers, 3 exécutions | −42 % de tokens, −50 % de temps, −59 % d'appels d'outils |
+| Impact d'un changement | Claude Code, 6 tâches sur 5 projets publics, 3 exécutions | −1,9 % de tokens au total (+18 % avec la 2.0) ; Akeneo −51 % |
+| Expliquer une fonctionnalité | Sherpa, le même projet privé, 3 exécutions | −25 % de tokens, −34 % de temps, −49 % d'appels d'outils |
+| Expliquer une fonctionnalité | Claude Code, 6 tâches sur 5 projets publics, 3 exécutions | −12 % de tokens, −26 % de temps, −42 % d'appels d'outils |
+| Trouver un handler, un contrôleur | Claude Code, 6 tâches sur 5 projets publics, 3 exécutions | −7 % de tokens, −14 % de temps, −27 % d'appels d'outils |
+| Corriger un bogue introduit | Claude Code, 6 tâches sur 4 projets publics, 3 exécutions | non appelé ; +10 % de tokens pour la présence du serveur avec la 2.0, dont la liste d'outils fait maintenant 4,8 Ko au lieu de 11,2 Ko (pas mesuré à nouveau) |
+
+Sur le projet de Sherpa, les plages des exécutions avec et sans phpgraph ne se chevauchent pas ; sur les tâches publiques, la variance d'une exécution à l'autre est d'environ 11 %, donc quelques pour cent sur une tâche relèvent du bruit.
+
+Questions dont la réponse passe par une indirection (un bus de commandes maison, la configuration du conteneur, un chemin HTTP dans un autre service), 4 tâches lancées une fois par bras : Claude Code a atteint la réponse complète sans phpgraph aussi, à chaque fois. La différence s'est vue sur le plus grand projet, dans le chemin pour y arriver : les contrôleurs d'Akeneo qui atteignent `GetCategoryInterface::byCode()` par son bus de commandes ont coûté 182 k tokens et 19 s avec phpgraph, 382 k et 33 s sans. Une exécution chacun donne une direction, pas une mesure ; sur les trois autres tâches, phpgraph a coûté plus de tokens.
 
 ## Démarrage rapide
 
@@ -112,7 +125,7 @@ claude mcp add phpgraph -- /home/vous/.local/bin/phpgraph serve /chemin/du/proje
 | `shortest_path` | Voir comment deux morceaux de code sont reliés. |
 | `god_nodes` | Trouver les nœuds dont dépend le plus de code. |
 
-Le serveur demande à l'agent d'appeler `overview` en premier. Un chemin, tel que l'agent le voit, sur [php-ddd-example](https://github.com/CodelyTV/php-ddd-example) :
+Le serveur liste `outline`, `impact_of`, `get_node` et `get_neighbors` : l'agent relit la liste à chaque tour, et dans le [benchmark](docs/BENCHMARK.md) il n'a jamais appelé les quatre autres. `serve --all-tools` les liste aussi. Un chemin, tel que l'agent le voit, sur [php-ddd-example](https://github.com/CodelyTV/php-ddd-example) :
 
 ```text
 Shortest path (4 hops):
@@ -137,6 +150,17 @@ phpgraph mcp-config claude|codex|cursor|json [--docker image]
 ```
 
 Options de `build` : `-e` pour exclure des chemins (répétable), `--no-vendor` pour ne pas lire les dépendances, `--no-cache` pour tout analyser à nouveau. `vendor`, `node_modules`, `var`, `.git` et les fichiers ignorés par les `.gitignore` du projet lui-même ne sont pas analysés ; un dépôt git au-dessus du projet n'applique jamais ses règles, si bien qu'un projet copié dans un dossier ignoré est quand même lu. Quand le dossier contient des fichiers PHP mais qu'ils sont tous exclus, `build` échoue en le disant, et chaque réponse MCP commence par cet avertissement au lieu de servir un graphe vide. La mémoire n'est pas limitée par défaut ; `PHPGRAPH_MEMORY_LIMIT=2G` fixe une limite. Les fichiers sont analysés par un processus par processeur, avec l'extension `pcntl` de PHP (dans les binaires et l'image Docker ; pas sous Windows, où ils sont analysés l'un après l'autre) : Sylius se construit en 10 s au lieu de 28 s sur un portable à 12 threads. `PHPGRAPH_WORKERS=4` fixe le nombre de processus, `PHPGRAPH_WORKERS=1` analyse dans un seul processus. Avec PHP installé, opcache et son JIT accélèrent les builds d'environ 20 % : `php -d opcache.enable_cli=1 -d opcache.jit=tracing -d opcache.jit_buffer_size=128M vendor/bin/phpgraph build` (l'image Docker et les commandes affichées par `mcp-config` les utilisent déjà).
+
+## Fonctionnalités
+
+- **Graphe d'appels avec inférence de types** : types de retour, appels enchaînés (`$a->b()->c()`), variables locales, docblocks (`@return`, `@var`), et signatures des dépendances de `vendor/`, pour que les chaînes traversent les API de Doctrine, Symfony ou Laravel.
+- **Architecture** : couches DDD et hexagonales, bounded contexts, règles de couches vérifiées en CI (`phpgraph check`) et analyse d'impact (`impact_of`) : ce qui dépend d'une classe ou d'une méthode, et les tests à lancer.
+- **Messages et événements** : envoi → message → handler pour Symfony Messenger, les jobs et événements Laravel, Ecotone, le CQRS de PrestaShop, les hooks WordPress, les événements de domaine et vos propres bus, à partir des attributs, de la configuration des services (YAML, XML, PHP) ou de la forme du code.
+- **HTTP** : routes (attributs Symfony, fichiers de routage YAML et PHP, ressources API Platform, fichiers de routes Laravel, contrôleurs nommés par identifiant de service) reliées à leurs contrôleurs, et appels HTTP reliés aux routes qu'ils atteignent. Une route dont la classe contrôleur n'existe ni dans le projet ni dans `vendor/` est signalée avec son fichier de routage.
+- **Injection de dépendances** : ce que la configuration du conteneur Symfony injecte au-delà des types du constructeur, tous les services d'un tag (`tagged_iterator`, `#[AutowireIterator]`) ou un service nommé par son identifiant, en PHP, YAML ou XML, y compris dans des helpers appelés avec des arguments littéraux (`Wiring::wire($services, 'sales', ...)`, évalués, jamais exécutés) : un validateur est relié aux règles qu'il reçoit. Une règle qui déclare ce qu'elle accepte (`supports(object $input): bool { return $input instanceof CreateEstimateQuery; }`, aussi `canHandle`, `accepts`…) est écartée des cas d'usage qui passent une autre entrée au pipeline partagé, classes contenues dans les propriétés de l'entrée comprises. Une entrée typée par une interface est toute classe du projet qui l'implémente, et les types des paramètres auxquels elle est transmise (`QueryInterface $query` passé à `setUp(CreateEstimateQueryInterface $query)` : une `CreateEstimateQuery`) ; un garde qu'il ne sait pas lire, ou une règle qui ne s'exécute que pour certaines de ces classes, est gardé, marqué `supports() not resolved`.
+- **Microservices** : un espace d'identifiants par service, et des liens entre services par leurs contrats : classes de messages partagées, clés de routage, routes HTTP.
+- **Schémas d'API** : les opérations des documents OpenAPI (Swagger) reliées aux routes qui les implémentent, ou, pour le document d'une autre API, aux appels HTTP de son client ; les rpcs des services protobuf reliés aux classes qui implémentent leur interface générée. Ce qui est documenté et non implémenté, et les routes qu'aucun document ne décrit, sont signalés. `impact` liste les opérations derrière une modification (le contrat sur lequel ses clients comptent), `outline` celles que sert une fonctionnalité.
+- **Serveur MCP sans configuration** : construit au premier usage, reconstruit de façon incrémentale quand le code change (environ 3 s par modification sur un projet de 8 400 fichiers).
 
 ## Ce que contient le graphe
 
@@ -294,6 +318,17 @@ Mesuré sur un projet Symfony/DDD privé de 4 800 fichiers, 3 exécutions par co
 
 Les plages des exécutions avec et sans phpgraph ne se chevauchent pas.
 
+Sur des projets publics (novembre 2026) : Claude Code (`claude -p`, Sonnet) sur 24 tâches réparties entre php-ddd-example, Sylius, PrestaShop, BookStack et Akeneo, 3 exécutions par tâche avec phpgraph 2.0 et sans (grep et lecture de fichiers seulement), notées contre des réponses tirées du code. Méthode, résultats par tâche et variance : [`docs/BENCHMARK.md`](https://github.com/hbenabdallah/phpgraph/blob/main/docs/BENCHMARK.md) ; `tools/agent-bench/bench` le relance.
+
+| Type de tâche | Réussite avec / sans | Avec phpgraph |
+|---|---|---|
+| Trouver un handler, un contrôleur | 18/18 / 15/18 | −7 % de tokens, −14 % de temps, −27 % d'appels d'outils ; les 3 échecs sans lui sont des namespaces devinés |
+| Impact d'un changement de signature | 17/18 / 15/18 | +18 % de tokens (`impact_of` en dit plus que nécessaire sur une méthode aux nombreux appelants) ; chaque échec est un namespace deviné |
+| Expliquer une fonctionnalité | 17/18 / 18/18 | −12 % de tokens, −26 % de temps, −42 % d'appels d'outils |
+| Corriger un bogue introduit | 18/18 / 18/18 | phpgraph non appelé ; +10 % de tokens pour la présence du serveur |
+
+Depuis (2.1), le serveur liste 4 outils au lieu de 8 et `impact_of` donne une réponse compacte au-delà de 20 dépendants : sur les 6 tâches d'impact relancées, phpgraph coûte −1,9 % de tokens au total au lieu de +18 %, de −51 % sur Akeneo à +56 % sur `assertManufacturerExists()` de PrestaShop ([détail](https://github.com/hbenabdallah/phpgraph/blob/main/docs/BENCHMARK.md#impact-without-the-extra-cost-21)).
+
 ### Comparé à d'autres graphes de code
 
 [Kimai](https://github.com/kimai/kimai) 2.70.2 (Symfony, 1 072 fichiers sources et 761 de tests, hors du corpus sur lequel phpgraph est mesuré), octobre 2026, sans LLM : phpgraph 1.5.2 et [graphify](https://github.com/Graphify-Labs/graphify) 0.9.93 (`extract --code-only`), sur la même machine, dans Docker. graphify garde une arête par appelant et appelé : les appels entre méthodes du projet sont donc comparés par paire ; des échantillons des différences ont été vérifiés dans le code. `tools/graphify/benchmark.sh` le relance.
@@ -353,9 +388,9 @@ Sylius (le commit du corpus), octobre 2026, sans LLM : phpgraph 1.0.2, [codebase
 
 ## Contribuer
 
-Les issues et les pull requests sont les bienvenues. Voir [CONTRIBUTING.md](https://github.com/hbenabdallah/phpgraph/blob/main/CONTRIBUTING.md) : `composer check` doit passer (php-cs-fixer, PHPStan niveau max, PHPUnit), et les évolutions de l'analyse se jugent sur le corpus. Sans PHP installé, `bin/dev composer check` lance tout dans Docker.
+Les issues et les pull requests sont les bienvenues. Voir [CONTRIBUTING.md](https://github.com/hbenabdallah/phpgraph/blob/main/CONTRIBUTING.md) : `composer check` doit passer (php-cs-fixer, PHPStan niveau max, PHPUnit), et les évolutions de l'analyse se jugent sur le corpus. Sans PHP installé, `bin/dev composer check` lance tout dans Docker. [docs/ARCHITECTURE.md](https://github.com/hbenabdallah/phpgraph/blob/main/docs/ARCHITECTURE.md) décrit l'organisation du code, [docs/PROVIDERS.md](https://github.com/hbenabdallah/phpgraph/blob/main/docs/PROVIDERS.md) comment ajouter ce que renvoie une bibliothèque (en anglais).
 
-Ce qui reste stable d'une version à l'autre (commandes, outils MCP, format de `graph.json`) est listé dans [docs/STABILITY.md](https://github.com/hbenabdallah/phpgraph/blob/main/docs/STABILITY.md) ; les changements sont dans le [changelog](https://github.com/hbenabdallah/phpgraph/blob/main/CHANGELOG.md).
+Ce qui reste stable d'une version à l'autre (commandes, outils MCP, format de `graph.json`, JSON d'`impact` et d'`outline`, avec [leurs schémas](https://github.com/hbenabdallah/phpgraph/tree/main/docs/schemas)) est listé dans [docs/STABILITY.md](https://github.com/hbenabdallah/phpgraph/blob/main/docs/STABILITY.md) ; les changements sont dans le [changelog](https://github.com/hbenabdallah/phpgraph/blob/main/CHANGELOG.md).
 
 Les versions se publient en poussant un tag : le [workflow de release](https://github.com/hbenabdallah/phpgraph/blob/main/.github/workflows/release.yml) construit le PHAR, les exécutables pour Linux, macOS et Windows (`tools/build-binary.sh`) et l'image Docker `ghcr.io/hbenabdallah/phpgraph`.
 

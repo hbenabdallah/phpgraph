@@ -1,0 +1,21 @@
+project: akeneo-pim
+kind: find
+prompt: |
+  In the Category bounded context, which class handles the command Akeneo\Category\Api\Command\UpsertCategoryCommand,
+  and which controller creates this command and dispatches it?
+expected:
+  - Akeneo\Category\Application\UpsertCategoryCommandHandler
+  - Akeneo\Category\Infrastructure\Controller\InternalApi\UpdateCategoryController
+allowed:
+  - Akeneo\Category\Api\Command\UpsertCategoryCommand
+  - Akeneo\Category\Api\Command\CommandMessageBus
+  - Akeneo\Category\Application\Applier\UserIntentApplierRegistry
+  - Akeneo\Category\Application\Storage\Save\CategorySaverProcessor
+min_recall: 1
+min_precision: 0.75
+checked: |
+  grep -rn "UpsertCategoryCommand::\|new UpsertCategoryCommand" src (outside tests): one creation,
+  UpdateCategoryController.php:62 (UpsertCategoryCommand::create, then $this->categoryCommandBus->dispatch, a
+  CommandMessageBus), routed POST /rest/{id} (routing/internal_api/enriched_category.yml). The handler:
+  UpsertCategoryCommandHandler::__invoke(UpsertCategoryCommand), tagged akeneo.category.command.handler with
+  command: UpsertCategoryCommand in Infrastructure/Symfony/Resources/config/handlers.yml:2-10.

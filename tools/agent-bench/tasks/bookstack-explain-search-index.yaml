@@ -1,0 +1,32 @@
+project: bookstack
+kind: explain
+prompt: |
+  Explain how BookStack keeps its search index up to date when a page is updated: what triggers the indexing, how the
+  terms and their scores are computed, and where they are stored. List the classes of the flow.
+expected:
+  - BookStack\Entities\Repos\PageRepo
+  - BookStack\Entities\Repos\BaseRepo
+  - BookStack\Entities\Models\Entity
+  - BookStack\Search\SearchIndex
+  - BookStack\Search\SearchTerm
+  - BookStack\Search\SearchTextTokenizer
+allowed:
+  - BookStack\Entities\Controllers\PageController
+  - BookStack\Entities\Models\Page
+  - BookStack\Entities\Models\Book
+  - BookStack\Entities\Models\Chapter
+  - BookStack\Entities\Models\Bookshelf
+  - BookStack\Util\HtmlDocument
+  - BookStack\Activity\Models\Tag
+  - BookStack\Activity\TagRepo
+  - BookStack\Entities\EntityProvider
+  - BookStack\References\ReferenceStore
+  - BookStack\Entities\Repos\RevisionRepo
+min_recall: 0.8
+min_precision: 0.7
+checked: |
+  Read in the code: PageRepo::update() → BaseRepo::update() (Entities/Repos/BaseRepo.php) → $entity->indexForSearch()
+  (Entities/Models/Entity.php:402: app()->make(SearchIndex::class)->indexEntity(clone $this)). SearchIndex::indexEntity
+  deletes the entity's terms (searchTerms()), builds term => score maps from the name, the HTML (HtmlDocument) and the
+  tags (entityToTermDataArray, generateTermScoreMapFrom*), splitting text with SearchTextTokenizer, and inserts
+  SearchTerm rows in chunks of 500 (insertTerms).
