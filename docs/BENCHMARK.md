@@ -214,6 +214,37 @@ One fault of phpgraph came out: `impact_of` goes from `OrderProcessorInterface::
 interface, whichever service the container injects into each, so haiku with phpgraph listed the `ProcessOrderListener`
 trap that the baseline avoided by reading the config.
 
+### Impact without the extra cost (2.1)
+
+13 November 2026: on 10 November, impact cost +18 % tokens with phpgraph, and carrying the server cost about 2,000
+tokens on every turn. Since then the server lists 4 tools instead of 8 (11.2 KB → 4.8 KB sent before the first
+call), and `impact_of` answers in a compact form past 20 dependents (BookStack `ActivityLogger::add()`: 18.5 → 6.2
+KB, every expected class still named). The 6 impact tasks again, both arms, 3 runs each, Claude Code 2.1.323
+(batch `20261113-142124`, $5.34). Two tasks were run again with the phpgraph arm only after wording fixes found by
+reading the transcripts (agents were asking for the full lists, `limit: 0`, because the descriptions offered it):
+PrestaShop manufacturer (batch `20261113-162124`) and BookStack (`20261113-172327`, after three more batches); the
+table takes the last batch of each task.
+
+| Task | Success with / without | Tokens, median with / without | |
+|---|---|---|---|
+| akeneo-impact-category-by-code | 3/3 / 3/3 | 86,174 / 174,735 | −51 % |
+| bookstack-impact-activity-add | 3/3 / 3/3 | 189,005 / 173,159 | +9 % |
+| ddd-impact-event-constructor | 3/3 / 3/3 | 126,977 / 122,241 | +4 % |
+| prestashop-impact-manufacturer-exists | 3/3 / 3/3 | 153,993 / 98,547 | +56 % |
+| prestashop-impact-redirect-option | 3/3 / 1/3 | 207,694 / 149,381 | +39 % |
+| sylius-impact-promotions-integrity | 1/3 / 1/3 | 137,316 / 135,457 | +1 % |
+| Total (18 runs per arm) | 16/18 / 14/18 | 2,651,855 / 2,701,972 | −1.9 % |
+
+- Impact no longer costs more in total (+18 % on 10 November, −1.9 % now), but the tasks differ: half on Akeneo, the
+  largest project, where one `impact_of` call replaces the greps; more on PrestaShop manufacturer, where the agent
+  still checks the answer with one grep that alone would have answered.
+- `prestashop-impact-redirect-option` says nothing about phpgraph: its agents never called it (the prompt asks for
+  every class constructing an object; they grep `new RedirectOption`). Its success 3/3 against 1/3 and its +39 %
+  are run-to-run variance.
+- The fix tasks were not measured again cleanly: a first rerun (batch `20261113-132609`) moved by more than the
+  ~1,600 tokens per turn saved (6.4 KB), on fix tasks that never call phpgraph too (a new Claude Code version the
+  same day). The lighter tool list is a size, not a measured saving.
+
 
 ## Method
 
