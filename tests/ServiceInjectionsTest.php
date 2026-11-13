@@ -80,4 +80,46 @@ final class ServiceInjectionsTest extends TestCase
         self::assertTrue($this->hasEdge($graph, 'App\Legacy\Gateway', 'App\Legacy\Client', Relation::Receives), 'XML');
         self::assertTrue($this->hasEdge($graph, 'App\Report\ReportBuilder', 'App\Report\Summary', Relation::Receives), '#[AutowireIterator] and #[AutoconfigureTag]');
     }
+
+    public function testAServiceNamedByIdGivesItsOutermostDecoratorAsWell(): void
+    {
+        $graph = $this->buildProject([
+            'src/Context.php' => 'namespace App; interface Context {}',
+            'src/FixedContext.php' => 'namespace App; class FixedContext implements Context {}',
+            'src/CompositeContext.php' => 'namespace App; class CompositeContext implements Context {}',
+            'src/CachedContext.php' => 'namespace App; class CachedContext implements Context { public function __construct(Context $inner) {} }',
+            'src/Consumer.php' => 'namespace App; class Consumer { public function __construct(Context $context) {} }',
+            'src/Mailer.php' => 'namespace App; class Mailer {}',
+            'src/TracedMailer.php' => 'namespace App; use Symfony\Component\DependencyInjection\Attribute\AsDecorator; use Symfony\Component\DependencyInjection\Attribute\AutowireDecorated;'
+                . ' #[AsDecorator(decorates: "app.mailer")] class TracedMailer { public function __construct(#[AutowireDecorated] Mailer $inner) {} }',
+            'src/Newsletter.php' => 'namespace App; class Newsletter {}',
+            'src/Gateway.php' => 'namespace App; class Gateway {}',
+            'src/RetryingGateway.php' => 'namespace App; class RetryingGateway {}',
+            'src/Shop.php' => 'namespace App; class Shop {}',
+            'src/Clock.php' => 'namespace App; class Clock {}',
+            'src/Scheduler.php' => 'namespace App; class Scheduler {}',
+            'tests/FrozenClock.php' => 'namespace App\Tests; use Symfony\Component\DependencyInjection\Attribute\AsDecorator; #[AsDecorator("app.clock")] class FrozenClock {}',
+            'config/services.php' => 'use function Symfony\Component\DependencyInjection\Loader\Configurator\service; return static function ($container): void { $services = $container->services();'
+                . ' $services->set("app.context", App\FixedContext::class);'
+                . ' $services->set("app.context.composite", App\CompositeContext::class)->decorate("app.context", null, 256);'
+                . ' $services->set("app.context.cached", App\CachedContext::class)->decorate("app.context")->args([service(".inner")]);'
+                . ' $services->set(App\Consumer::class)->args([service("app.context")]);'
+                . ' $services->set("app.mailer", App\Mailer::class); $services->set(App\Newsletter::class)->args([service("app.mailer")]);'
+                . ' $services->set("app.clock", App\Clock::class); $services->set(App\Scheduler::class)->args([service("app.clock")]); };',
+            'config/services.yaml' => "services:\n    app.gateway:\n        class: App\\Gateway\n"
+                . "    app.gateway.retrying:\n        class: App\\RetryingGateway\n        decorates: app.gateway\n        decoration_priority: -5\n",
+            'config/shop.xml' => '<?xml version="1.0" ?><container xmlns="http://symfony.com/schema/dic/services"><services>'
+                . '<service id="App\Shop"><argument type="service" id="app.gateway"/></service></services></container>',
+        ])->graph;
+
+        self::assertTrue($this->hasEdge($graph, 'App\Consumer', 'App\CachedContext', Relation::Receives), 'the decorator of the lowest priority is the outermost: the one injected');
+        self::assertTrue($this->hasEdge($graph, 'App\Consumer', 'App\FixedContext', Relation::Receives), 'the decorated class stays: a decorator may hold it without saying so');
+        self::assertFalse($this->hasEdge($graph, 'App\Consumer', 'App\CompositeContext', Relation::Receives), 'an inner decorator is not injected');
+        self::assertTrue($this->hasEdge($graph, 'App\CachedContext', 'App\CompositeContext', Relation::Receives), '.inner of the outermost decorator is the next one inside');
+        self::assertTrue($this->hasEdge($graph, 'App\Newsletter', 'App\TracedMailer', Relation::Receives), '#[AsDecorator]');
+        self::assertTrue($this->hasEdge($graph, 'App\TracedMailer', 'App\Mailer', Relation::Receives), '#[AutowireDecorated] is the decorated service');
+        self::assertTrue($this->hasEdge($graph, 'App\Shop', 'App\RetryingGateway', Relation::Receives), 'YAML decorates: and an XML consumer');
+        self::assertTrue($this->hasEdge($graph, 'App\Scheduler', 'App\Clock', Relation::Receives));
+        self::assertFalse($this->hasEdge($graph, 'App\Scheduler', 'App\Tests\FrozenClock', Relation::Receives), 'a decorator in test code decorates in the test environment only');
+    }
 }

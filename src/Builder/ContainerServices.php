@@ -31,7 +31,7 @@ final class ContainerServices
     /** @var list<array{service: string, id: string, tag: ?string, target: ?string, locator: bool}> */
     private array $arguments = [];
 
-    /** @var array<string, array{int, int, array{definitions: array<string, string>, parameters: array<string, string>, tags: list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>, arguments: list<array{id: string, tag: ?string, service: ?string, locator?: bool}>}}> file => [modification time, size, what it declares] */
+    /** @var array<string, array{int, int, array{definitions: array<string, string>, parameters: array<string, string>, tags: list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>, arguments: list<array{id: string, tag: ?string, service: ?string, locator?: bool}>, decorations: array<string, array{string, int}>}}> file => [modification time, size, what it declares] */
     private array $cache = [];
 
     /** @var array<string, string> while reading a file: id => class or `@alias` */
@@ -46,17 +46,29 @@ final class ContainerServices
     /** @var list<array{id: string, tag: ?string, service: ?string, locator?: bool}> */
     private array $fileArguments = [];
 
+    /** @var array<string, array{string, int}> while reading a file: decorator id => [decorated id, priority] */
+    private array $fileDecorations = [];
+
+    /** @var array<string, array<string, list<array{string, int}>>> application service => decorated id => [decorator id, priority], in declaration order */
+    private array $decorations = [];
+
     /**
      * @param list<string>                            $files   YAML and XML files of config directories, relative to the root
      * @param array<string, array<string, string>>    $declared definitions collected from PHP, by application service
      * @param array<string, list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>> $declaredTags
      *                                                         tags collected from PHP, by application service
-     * @param array<string, array{int, int, array{definitions: array<string, string>, parameters: array<string, string>, tags: list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>, arguments: list<array{id: string, tag: ?string, service: ?string, locator?: bool}>}}> $cache files read by the last build of this process
+     * @param array<string, array{int, int, array{definitions: array<string, string>, parameters: array<string, string>, tags: list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>, arguments: list<array{id: string, tag: ?string, service: ?string, locator?: bool}>, decorations: array<string, array{string, int}>}}> $cache files read by the last build of this process
      * @param array<string, list<array{id: string, tag: ?string, service: ?string, locator?: bool}>> $declaredArguments
      *                                                         injections collected from PHP, by application service
+     * @param array<string, array<string, array{string, int}>> $declaredDecorations
+     *                                                         decorations collected from PHP, by application service:
+     *                                                         decorator id => [decorated id, priority]
      */
-    public function __construct(string $root, array $files, ServiceMap $services, array $declared = [], array $declaredTags = [], array $cache = [], array $declaredArguments = [])
+    public function __construct(string $root, array $files, ServiceMap $services, array $declared = [], array $declaredTags = [], array $cache = [], array $declaredArguments = [], array $declaredDecorations = [])
     {
+        foreach ($declaredDecorations as $service => $decorations) {
+            $this->addDecorations($decorations, (string) $service);
+        }
         foreach ($declaredArguments as $service => $arguments) {
             foreach ($arguments as $argument) {
                 $this->arguments[] = ['service' => (string) $service, 'id' => $argument['id'], 'tag' => $argument['tag'], 'target' => $argument['service'], 'locator' => $argument['locator'] ?? false];
@@ -89,7 +101,7 @@ final class ContainerServices
     /**
      * What each configuration file declared, for the next build of this process.
      *
-     * @return array<string, array{int, int, array{definitions: array<string, string>, parameters: array<string, string>, tags: list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>, arguments: list<array{id: string, tag: ?string, service: ?string, locator?: bool}>}}>
+     * @return array<string, array{int, int, array{definitions: array<string, string>, parameters: array<string, string>, tags: list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>, arguments: list<array{id: string, tag: ?string, service: ?string, locator?: bool}>, decorations: array<string, array{string, int}>}}>
      */
     public function cache(): array
     {
@@ -105,22 +117,22 @@ final class ContainerServices
     }
 
     /**
-     * @return array{definitions: array<string, string>, parameters: array<string, string>, tags: list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>, arguments: list<array{id: string, tag: ?string, service: ?string, locator?: bool}>}
+     * @return array{definitions: array<string, string>, parameters: array<string, string>, tags: list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>, arguments: list<array{id: string, tag: ?string, service: ?string, locator?: bool}>, decorations: array<string, array{string, int}>}
      */
     private function read(string $file, string $content): array
     {
-        $this->fileDefinitions = $this->fileParameters = $this->fileTags = $this->fileArguments = [];
+        $this->fileDefinitions = $this->fileParameters = $this->fileTags = $this->fileArguments = $this->fileDecorations = [];
         if (SourceFiles::isYaml($file)) {
             $this->readYaml($content);
         } elseif (str_contains(substr($content, 0, 2000), '<container')) {
             $this->readXml($content);
         }
 
-        return ['definitions' => $this->fileDefinitions, 'parameters' => $this->fileParameters, 'tags' => $this->fileTags, 'arguments' => $this->fileArguments];
+        return ['definitions' => $this->fileDefinitions, 'parameters' => $this->fileParameters, 'tags' => $this->fileTags, 'arguments' => $this->fileArguments, 'decorations' => $this->fileDecorations];
     }
 
     /**
-     * @param array{definitions: array<string, string>, parameters: array<string, string>, tags: list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>, arguments: list<array{id: string, tag: ?string, service: ?string, locator?: bool}>} $declared as returned by read()
+     * @param array{definitions: array<string, string>, parameters: array<string, string>, tags: list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>, arguments: list<array{id: string, tag: ?string, service: ?string, locator?: bool}>, decorations: array<string, array{string, int}>} $declared as returned by read()
      */
     private function merge(array $declared, string $service): void
     {
@@ -135,6 +147,17 @@ final class ContainerServices
         }
         foreach ($declared['arguments'] as $argument) {
             $this->arguments[] = ['service' => $service, 'id' => $argument['id'], 'tag' => $argument['tag'], 'target' => $argument['service'], 'locator' => $argument['locator'] ?? false];
+        }
+        $this->addDecorations($declared['decorations'], $service);
+    }
+
+    /**
+     * @param array<string, array{string, int}> $decorations decorator id => [decorated id, priority]
+     */
+    private function addDecorations(array $decorations, string $service): void
+    {
+        foreach ($decorations as $decorator => [$decorated, $priority]) {
+            $this->decorations[$service][$decorated][] = [(string) $decorator, $priority];
         }
     }
 
@@ -194,6 +217,51 @@ final class ContainerServices
     }
 
     /**
+     * The id of the decorator the container injects in place of a service, following aliases: the outermost one,
+     * or for one of its decorators (`$consumer`, receiving `.inner`) the next one inside. Null when nothing decorates
+     * the service there: the service itself is injected.
+     *
+     * Symfony applies the decorators of a service from the highest priority (innermost) to the lowest (outermost);
+     * of equal priorities, the one declared last is outermost.
+     */
+    public function decoratorOf(string $id, string $consumer, string $service = ''): ?string
+    {
+        foreach (array_unique([$service, ServiceMap::ROOT, '']) as $scope) {
+            $target = $id;
+            for ($step = 0; $step <= self::MAX_ALIASES; ++$step) {
+                $target = ltrim($target, '@');
+                $chain = $this->decorations[$scope][$target] ?? [];
+                if ($chain !== []) {
+                    return $this->nextDecorator($chain, $consumer);
+                }
+                $definition = $this->definitions[$scope][$target] ?? null;
+                if ($definition === null || !str_starts_with($definition, '@')) {
+                    break;
+                }
+                $target = $definition;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param non-empty-list<array{string, int}> $chain [decorator id, priority], in declaration order
+     */
+    private function nextDecorator(array $chain, string $consumer): ?string
+    {
+        $order = array_keys($chain);
+        usort($order, static fn (int $a, int $b): int => [$chain[$a][1], $b] <=> [$chain[$b][1], $a]);
+        $decorators = array_map(static fn (int $index): string => $chain[$index][0], $order);
+        $position = array_search($consumer, $decorators, true);
+        if ($position === false) {
+            return $decorators[0];
+        }
+
+        return $decorators[$position + 1] ?? null;
+    }
+
+    /**
      * The tags of the services: `messenger.message_handler`, `kernel.event_listener`... A tag set through
      * `_instanceof` names the type its services implement instead of a service id.
      *
@@ -245,6 +313,10 @@ final class ContainerServices
             if (str_ends_with($id, '\\')) {
                 continue;
             }
+            if (\is_array($definition) && \is_string($definition['decorates'] ?? null)) {
+                $priority = $definition['decoration_priority'] ?? 0;
+                $this->fileDecorations[$id] = [$definition['decorates'], \is_int($priority) ? $priority : 0];
+            }
             // Method names of `calls` are plain strings: only the injected values are read.
             foreach (\is_array($definition) ? [$definition['arguments'] ?? [], $definition['calls'] ?? [], $definition['properties'] ?? []] : [] as $values) {
                 foreach ($this->yamlInjections($values) as $injected) {
@@ -295,6 +367,9 @@ final class ContainerServices
             }
             foreach ($this->xmlTags($definition) as $tag) {
                 $this->fileTags[] = ['id' => $id, 'instanceof' => null] + $tag;
+            }
+            if ($definition->getAttribute('decorates') !== '') {
+                $this->fileDecorations[$id] = [$definition->getAttribute('decorates'), (int) $definition->getAttribute('decoration-priority')];
             }
             foreach ($definition->getElementsByTagName('argument') as $argument) {
                 $type = $argument->getAttribute('type');

@@ -211,6 +211,7 @@ final class GraphBuilder
         $containerDefinitions = [];
         $containerTags = [];
         $containerArguments = [];
+        $containerDecorations = [];
         $routePrefixes = [];
         $parameterTypes = [];
         /** @var array<string, \Closure(string): string> $fileIds file => its names as project ids */
@@ -312,6 +313,9 @@ final class GraphBuilder
             foreach ($extraction->serviceArguments as $argument) {
                 $containerArguments[$service][] = $argument;
             }
+            foreach ($extraction->serviceDecorations as $decorator => $decoration) {
+                $containerDecorations[$service][$decorator] = $decoration;
+            }
             foreach ($extraction->propertyReads as [$reader, $property]) {
                 $propertyReads[] = [$id($reader), $property->map($id, $mapped)];
             }
@@ -388,7 +392,7 @@ final class GraphBuilder
         foreach ($evaluated['arguments'] as $service => $arguments) {
             $containerArguments[$service] = [...$containerArguments[$service] ?? [], ...$arguments];
         }
-        $container = new ContainerServices($root, $configurationFiles, $serviceMap, $containerDefinitions, $containerTags, $previous->configuration ?? [], $containerArguments);
+        $container = new ContainerServices($root, $configurationFiles, $serviceMap, $containerDefinitions, $containerTags, $previous->configuration ?? [], $containerArguments, $containerDecorations);
 
         // The calls of an unchanged file resolve as before when no declaration changed anywhere, the dependencies are
         // the same, and every name and service id resolved to the same id.

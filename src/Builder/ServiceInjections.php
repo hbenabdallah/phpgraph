@@ -63,7 +63,7 @@ final class ServiceInjections
 
             $targets = $argument['tag'] !== null
                 ? $this->tagged->named($argument['tag'])
-                : array_filter([$this->classOf((string) $argument['target'], $argument['service'])]);
+                : $this->givenBy((string) $argument['target'], $argument['id'], $consumer, $argument['service']);
             $via = '';
             if ($argument['tag'] !== null) {
                 $via = ($argument['locator'] ? 'tagged_locator ' : 'tagged_iterator ') . $argument['tag'];
@@ -193,6 +193,37 @@ final class ServiceInjections
         }
 
         return $decisions;
+    }
+
+    /**
+     * The classes a service named by id gives: its own, and the decorator the container injects in its place
+     * (`impact` keeps the decorated class too, the decorator may hold it without saying so: a composite). A decorator
+     * in test code decorates in the test environment only: application code is not given it.
+     *
+     * @return list<string>
+     */
+    private function givenBy(string $target, string $consumerId, string $consumer, string $service): array
+    {
+        $decoratorId = $this->container->decoratorOf($target, $consumerId, $service);
+        $decorator = $decoratorId === null ? null : $this->classOf($decoratorId, $service);
+        if ($decorator !== null && $this->isTest($decorator) && !$this->isTest($consumer)) {
+            $decorator = null;
+        }
+        $classes = [];
+        foreach ([$this->classOf($target, $service), $decorator] as $class) {
+            if ($class !== null && !\in_array($class, $classes, true)) {
+                $classes[] = $class;
+            }
+        }
+
+        return $classes;
+    }
+
+    private function isTest(string $class): bool
+    {
+        $file = $this->graph->node($class)?->file;
+
+        return $file !== null && TestFiles::isTest($file);
     }
 
     private function classOf(string $id, string $service): ?string
