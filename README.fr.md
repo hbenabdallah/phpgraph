@@ -112,7 +112,7 @@ claude mcp add phpgraph -- /home/vous/.local/bin/phpgraph serve /chemin/du/proje
 | `shortest_path` | Voir comment deux morceaux de code sont reliés. |
 | `god_nodes` | Trouver les nœuds dont dépend le plus de code. |
 
-Le serveur demande à l'agent d'appeler `overview` en premier. Un chemin, tel que l'agent le voit, sur [php-ddd-example](https://github.com/CodelyTV/php-ddd-example) :
+Le serveur liste `outline`, `impact_of`, `get_node` et `get_neighbors` : l'agent relit la liste à chaque tour, et dans le [benchmark](docs/BENCHMARK.md) il n'a jamais appelé les quatre autres. `serve --all-tools` les liste aussi. Un chemin, tel que l'agent le voit, sur [php-ddd-example](https://github.com/CodelyTV/php-ddd-example) :
 
 ```text
 Shortest path (4 hops):

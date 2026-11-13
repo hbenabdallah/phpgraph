@@ -28,6 +28,15 @@ final class ImpactReport
 
     private const TESTS = 100;
 
+    /**
+     * Past this many classes, routes or tests, the default answer is compact: an agent read 18 KB for the 23 classes
+     * calling a logger (BookStack), most of it routes and classes it did not have to change.
+     */
+    private const LARGE = 20;
+
+    /** Routes and untested classes shown in a compact answer. */
+    private const FIRST = 10;
+
     /** @var array<string, list<ImpactedClass>> */
     private array $groups = ['direct' => [], 'routes' => [], 'operations' => [], 'state' => [], 'quietState' => [], 'tests' => [], 'stateTests' => [], 'quietStateTests' => [], 'helpers' => []];
 
@@ -84,6 +93,8 @@ final class ImpactReport
     private function text(int $limit, ?string $section): string
     {
         $g = $this->groups;
+        $compact = $limit !== 0 && $section === null
+            && max(\count($g['direct']), \count($g['routes']), \count($g['tests'])) > self::LARGE;
         $lines = [
             \sprintf('Impact of changing %s [%s], %s', $this->changed->label, $this->changed->kind->value, $this->location($this->changed, false)),
             \sprintf(
@@ -103,9 +114,12 @@ final class ImpactReport
             \sprintf(
                 'Paths under %s; a class shows its namespace. INFERRED unless marked. Per class: methods reaching the change, lines, → what they call. %s',
                 $this->prefix === '' ? 'the project root' : $this->prefix,
-                $limit === 0 ? 'Complete.' : \sprintf('%d per list, %d sites per class: limit 0 for all, format json or full.', $limit, self::SITES),
+                $limit === 0 ? 'Complete.' : \sprintf('%d per list, %d sites per class; one list uncut: section (direct, routes, tests).', $limit, self::SITES),
             ),
         ];
+        if ($compact) {
+            $lines[] = \sprintf('Large impact, compact: %d routes, classes 2+ relations away by name, tests reaching it through other classes counted by module; one list uncut: section (direct, routes, tests).', self::FIRST);
+        }
         $wanted = static fn (string $name): bool => $section === null || $section === $name;
         $more = static function (array $all, array $shown) use (&$lines): void {
             if (\count($all) > \count($shown)) {
@@ -116,7 +130,7 @@ final class ImpactReport
         if ($wanted('routes') && $g['routes'] !== []) {
             $lines[] = '';
             $lines[] = 'Routes reaching it, ← from their handler:';
-            $shown = self::sliced($g['routes'], $limit, 0);
+            $shown = self::sliced($g['routes'], $compact ? self::FIRST : $limit, 0);
             foreach ($shown as $route) {
                 $marked = $route->confidence === Confidence::Inferred ? '' : ' [' . $route->confidence->value . ']';
                 $also = \array_slice($route->otherChains, 0, $limit === 0 ? 5 : self::CHAINS);
@@ -174,6 +188,16 @@ final class ImpactReport
                 }
                 $lines[] = '';
                 $lines[] = $level === 1 ? 'Direct dependents:' : \sprintf('%d relations away:', $level);
+                if ($compact && $level > 1) {
+                    $byNamespace = [];
+                    foreach ($atDepth as $class) {
+                        $byNamespace[$this->where($class->class)][] = $this->name($class->class);
+                    }
+                    foreach ($byNamespace as $namespace => $names) {
+                        $lines[] = \sprintf('  %s: %s', $namespace, implode(', ', $names));
+                    }
+                    continue;
+                }
                 $shown = self::sliced($atDepth, $limit, 0);
                 foreach ($shown as $class) {
                     $lines[] = '  ' . $this->classLine($class, $limit);
@@ -183,7 +207,7 @@ final class ImpactReport
             $uncovered = $this->uncovered();
             if ($uncovered !== []) {
                 $lines[] = '';
-                $lines[] = 'No test touches: ' . implode(', ', $uncovered);
+                $lines[] = 'No test touches: ' . self::cut($uncovered, $compact);
             }
         }
 
@@ -201,16 +225,17 @@ final class ImpactReport
             $unused = $this->unused();
             if ($unused !== []) {
                 $lines[] = '';
-                $lines[] = 'Nothing in the application uses: ' . implode(', ', array_map(
+                $names = array_map(
                     static fn (string $name, bool $tested): string => $name . ($tested ? ' (tests only)' : ''),
                     array_keys($unused),
                     $unused,
-                ));
+                );
+                $lines[] = 'Nothing in the application uses: ' . self::cut($names, $compact);
             }
         }
 
         foreach ([
-            'tests' => ['Tests to run, by module (path below it; ← what they reach):', $g['tests'], $wanted('tests')],
+            'tests' => ['Tests to run, by module (path below it; ← what they reach; no ←: the test uses the change itself, its code may need changing too):', $g['tests'], $wanted('tests')],
             'stateTests' => ['Tests possibly affected through the state:', $g['stateTests'], $wanted('tests') || $section === 'state-tests'],
             // Tests reaching only what reads all of the state: counted in the summary, listed on request.
             'quietStateTests' => ['Tests reaching a method that reads all of the state (AMBIGUOUS):', $g['quietStateTests'], $section === 'state-tests'],
@@ -222,19 +247,30 @@ final class ImpactReport
             $lines[] = $title;
             // One test per line, its path below its module: what PHPUnit takes, and unique where names repeat.
             $byModule = [];
+            $indirect = [];
             $shown = self::sliced($tests, $limit, self::TESTS);
             foreach ($shown as $test) {
                 $file = (string) $this->file($test->class);
                 $module = $this->module($file);
+                $reason = $this->reason($test);
+                if ($compact && $reason !== '') {
+                    $indirect[$module] = ($indirect[$module] ?? 0) + 1;
+                    $byModule[$module] ??= [];
+                    continue;
+                }
                 $base = $this->prefix . ($module === '' ? '' : $module . '/');
-                $byModule[$module][] = (str_starts_with($file, $base) ? substr($file, \strlen($base)) : $file) . $this->reason($test);
+                $byModule[$module][] = (str_starts_with($file, $base) ? substr($file, \strlen($base)) : $file) . $reason;
             }
             ksort($byModule);
             foreach ($byModule as $module => $paths) {
                 sort($paths);
-                $lines[] = \sprintf('  %s%s/', $this->prefix, $module);
+                $through = isset($indirect[$module]) ? \sprintf('+%d through other classes', $indirect[$module]) : null;
+                $lines[] = \sprintf('  %s%s/%s', $this->prefix, $module, $paths === [] && $through !== null ? ' ' . $through : '');
                 foreach ($paths as $path) {
                     $lines[] = '    ' . $path;
+                }
+                if ($paths !== [] && $through !== null) {
+                    $lines[] = '    ' . $through;
                 }
             }
             $more($tests, $shown);
@@ -250,6 +286,16 @@ final class ImpactReport
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * @param list<string> $names
+     */
+    private static function cut(array $names, bool $compact): string
+    {
+        $listed = $compact ? \array_slice($names, 0, self::FIRST) : $names;
+
+        return implode(', ', $listed) . (\count($names) > \count($listed) ? \sprintf(' and %d more', \count($names) - \count($listed)) : '');
     }
 
     private function json(?string $section): string

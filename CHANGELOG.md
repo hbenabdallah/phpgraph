@@ -40,6 +40,18 @@ phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stay
   The JSON is unchanged.
 - In the JSON of `outline`, a map is an object even when empty (`"tests": {}`, not `"tests": []`), and a class without
   constants or enum cases leaves those keys out, as it did its properties.
+- MCP: the server lists 4 tools by default, `get_node`, `get_neighbors`, `impact_of` and `outline`, with shorter
+  descriptions and instructions: an agent reads them again on every turn, and in the benchmark it never called
+  `overview`, `query_graph`, `shortest_path` or `god_nodes`. `serve --all-tools` lists all 8; a tool not listed can
+  still be called. What the server sends before the first call: 11.2 KB → 4.8 KB.
+- `impact` (text) of a large change, more than 20 dependent classes, routes or tests, is compact: 10 routes, the
+  classes 2 or more relations away by name, grouped by namespace, the tests reaching it through other classes counted
+  by module, lists of names cut at 10. `limit 0` or `section` gives the full lists, as before. BookStack,
+  `ActivityLogger::add()`: 18.5 KB → 6.2 KB. JSON unchanged.
+- `impact_of` no longer invites the full lists: its description says the compact answer is the one to use, the
+  `limit` and `format` parameters say to leave them out, and the text points to `section` for one list uncut (agents
+  asked for `limit 0` and got 19 to 28 KB). The tests heading says that a test without a `←` chain uses the change
+  itself, so its code may need changing too.
 
 ### Fixed
 - `impact` of a constructor finds what constructs the class (`new`, also of a subclass inheriting the constructor):

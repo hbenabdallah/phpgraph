@@ -39,7 +39,8 @@ final class McpServerTest extends TestCase
             self::assertSame($latest, Dig::at($response, 'result', 'protocolVersion') ?? null, 'a version it does not speak: its latest');
         }
         self::assertSame('phpgraph', Dig::at($response, 'result', 'serverInfo', 'name'));
-        self::assertStringContainsString('Call overview first', Dig::text($response, 'result', 'instructions'));
+        self::assertStringContainsString('Call impact_of before changing', Dig::text($response, 'result', 'instructions'));
+        self::assertStringNotContainsString('overview', Dig::text($response, 'result', 'instructions'), 'a tool not listed is not named either');
         self::assertStringContainsString('before grep', Dig::text($response, 'result', 'instructions'), 'Agents reach for grep first');
     }
 
@@ -48,14 +49,35 @@ final class McpServerTest extends TestCase
         self::assertNull($this->server()->handle(['jsonrpc' => '2.0', 'method' => 'notifications/initialized']));
     }
 
-    public function testListsTheToolsOverviewFirst(): void
+    public function testListsOnlyTheToolsAgentsCallByDefault(): void
     {
         $response = $this->call(['jsonrpc' => '2.0', 'id' => 2, 'method' => 'tools/list']);
 
         self::assertSame(
-            ['overview', 'query_graph', 'get_node', 'get_neighbors', 'impact_of', 'outline', 'shortest_path', 'god_nodes'],
+            ['get_node', 'get_neighbors', 'impact_of', 'outline'],
             array_column(Dig::list($response, 'result', 'tools'), 'name'),
+            'every listed tool is read again on each turn of the agent',
         );
+    }
+
+    public function testListsEveryToolWithAllTools(): void
+    {
+        $server = new McpServer(new GraphQueryProvider($this->graphPath), 'dev', '', true);
+        $tools = $this->call(['jsonrpc' => '2.0', 'id' => 2, 'method' => 'tools/list'], $server);
+        $initialize = $this->call(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'initialize', 'params' => []], $server);
+
+        self::assertSame(
+            ['overview', 'query_graph', 'get_node', 'get_neighbors', 'impact_of', 'outline', 'shortest_path', 'god_nodes'],
+            array_column(Dig::list($tools, 'result', 'tools'), 'name'),
+        );
+        self::assertStringContainsString('query_graph to find code by topic', Dig::text($initialize, 'result', 'instructions'), 'the instructions name the extra tools');
+    }
+
+    public function testCallsAToolThatIsNotListed(): void
+    {
+        $response = $this->call(['jsonrpc' => '2.0', 'id' => 3, 'method' => 'tools/call', 'params' => ['name' => 'god_nodes']]);
+
+        self::assertFalse(Dig::at($response, 'result', 'isError'), 'a client that knew the tool before keeps working');
     }
 
     public function testCallsShortestPathTool(): void

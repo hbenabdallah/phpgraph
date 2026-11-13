@@ -249,6 +249,35 @@ final class ImpactTest extends TestCase
         self::assertContains('Untested', Dig::list($json, 'uncovered'));
     }
 
+    public function testALargeImpactIsCompactUnlessTheFullListsAreAskedFor(): void
+    {
+        $files = [
+            'src/Logger.php' => 'namespace App; final class Logger { public function add(string $type): void {} }',
+            'src/Http/Controller.php' => 'namespace App\Http; use App\Service0; final class Controller { public function store(Service0 $s): void { $s->run(); } }',
+            'tests/LoggerTest.php' => 'namespace App\Tests; use App\Logger; final class LoggerTest { public function testIt(): void { (new Logger())->add("a"); } }',
+            'tests/ServiceTest.php' => 'namespace App\Tests; use App\Service0; use App\Logger; final class ServiceTest { public function testIt(): void { (new Service0(new Logger()))->run(); } }',
+        ];
+        for ($i = 0; $i <= 20; ++$i) {
+            $files["src/Service{$i}.php"] = "namespace App; final class Service{$i} { public function __construct(private Logger \$logger) {} public function run(): void { \$this->logger->add('x'); } }";
+        }
+        $presenter = new TextPresenter(new GraphQuery($this->buildProject($files)->graph));
+
+        $compact = $presenter->impact('App\Logger::add');
+        self::assertStringContainsString('Large impact, compact', $compact, '21 direct dependents');
+        self::assertStringContainsString('Service20 (App): run L2', $compact, 'the classes calling the change keep their call sites');
+        self::assertStringContainsString("  App\\Http: Controller\n", $compact, 'a class farther away: its name only');
+        self::assertStringContainsString('LoggerTest.php', $compact, 'a test calling the change is listed');
+        self::assertStringContainsString('no ←: the test uses the change itself', $compact, 'a listed test without a chain may need changing, not only running');
+        self::assertStringNotContainsString('ServiceTest.php', $compact, 'a test reaching it through another class is counted');
+        self::assertStringContainsString('+1 through other classes', $compact);
+        self::assertStringContainsString('Service18 and 11 more', $compact, 'the lists of names are cut too');
+
+        $full = $presenter->impact('App\Logger::add', 3, 0);
+        self::assertStringNotContainsString('Large impact', $full, 'limit 0: the full lists');
+        self::assertStringContainsString('ServiceTest.php', $full);
+        self::assertStringContainsString('Controller (App\\Http): store', $full);
+    }
+
     public function testADependentShowsItsNamespaceAndTheRelationThatReachedIt(): void
     {
         $presenter = new TextPresenter(new GraphQuery($this->buildProject([

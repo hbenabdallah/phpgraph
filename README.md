@@ -112,7 +112,7 @@ claude mcp add phpgraph -- /home/you/.local/bin/phpgraph serve /path/to/project
 | `shortest_path` | See how two pieces of code are connected. |
 | `god_nodes` | Find the hubs most of the code depends on. |
 
-The server tells the agent to call `overview` first. A path, as an agent sees it, on [php-ddd-example](https://github.com/CodelyTV/php-ddd-example):
+The server lists `outline`, `impact_of`, `get_node` and `get_neighbors`: an agent reads the list again on every turn, and in the [benchmark](docs/BENCHMARK.md) it never called the other four. `serve --all-tools` lists them too. A path, as an agent sees it, on [php-ddd-example](https://github.com/CodelyTV/php-ddd-example):
 
 ```text
 Shortest path (4 hops):

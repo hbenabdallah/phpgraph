@@ -10,7 +10,7 @@ rely on what this page lists: it changes only in a major version (2.0.0), announ
 | Command | Arguments and options |
 |---|---|
 | `build [path]` | `-o, --output`, `-e, --exclude` (repeatable), `--depth`, `--no-vendor`, `--no-cache` |
-| `serve [path]` | `-o, --output`, `-g, --graph`, `-e, --exclude`, `--no-vendor` |
+| `serve [path]` | `-o, --output`, `-g, --graph`, `-e, --exclude`, `--no-vendor`, `--all-tools` |
 | `overview` | `-g, --graph` |
 | `query <question>` | `--depth`, `-l, --limit`, `-g, --graph` |
 | `explain <name>` | `-d, --direction` (`in`, `out`, `both`), `-g, --graph` |
@@ -35,6 +35,9 @@ files, a new layer violation for `check`); `2` for invalid input (an unknown dir
 | `outline` | `topic` (required), `section`, `format` (`text`, `full`, `json`) |
 | `shortest_path` | `from`, `to` (required) |
 | `god_nodes` | `limit` |
+
+The server lists `get_node`, `get_neighbors`, `impact_of` and `outline` (since 2.1.0); `serve --all-tools` lists the
+eight. Every tool stays callable, listed or not.
 
 With `format` `json`, `impact_of` and `outline` also return the answer as `structuredContent` (since 2.1.0), the
 shape of their JSON schema below; the text block holds the same JSON, for clients reading only the text.
