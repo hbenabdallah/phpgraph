@@ -21,6 +21,11 @@ phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stay
   autowired from a resource) resolves to that class: PrestaShop links 17 more injections.
 - Relation `autowires`: a class taking more constructor parameters of a type than the configuration gives it services
   of; the container autowires the others, and `impact` keeps the class as a caller of that type.
+- A property tested by `instanceof` is narrowed like a variable (`if ($this->reader instanceof TrackableItemReaderInterface)
+  { $this->reader->totalItems(); }`, also `$x->prop`, early exits, `&&`, ternaries), until the property or its object
+  is assigned or a method is called on the object. The corpus gains 16 call edges (Akeneo 7, PrestaShop 4, Sylius 2,
+  WordPress 2, BookStack 1) and loses none: below the 50 call sites a new type inference must gain, accepted because
+  it is the one case where PHPStan links a call phpgraph missed.
 
 ## 2.1.0 (2026-11-13)
 

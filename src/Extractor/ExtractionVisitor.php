@@ -51,11 +51,14 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /**
      * The types of the variables at the point being read: branches each get their own copy, merged where they meet.
      * A variable assigned an expression of unknown type holds TypeExpr::unknown(); one holding no object (`null`, a
-     * scalar) or never assigned is absent.
+     * scalar) or never assigned is absent. A property narrowed by a test is kept here too, under `object->property`.
      *
      * @var array<string, TypeExpr>
      */
     private array $localTypes = [];
+
+    /** whether a test narrowed a property yet: until then, no variable has properties to forget */
+    private bool $narrowsProperties = false;
 
     /** @var list<list<array<string, TypeExpr>>> the variables at each `break` and `continue` of the loops and switches being read, innermost last */
     private array $jumps = [];
@@ -474,6 +477,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->assignObject($node->var->name, $this->objectUnion([$this->objectType($node->var), $this->objectType($node->expr)]));
         } elseif ($node instanceof Expr\AssignOp) {
             $this->forgetAssigned($node->var);
+        }
+        // A method of the object may change its properties.
+        if (($node instanceof Expr\MethodCall || $node instanceof Expr\NullsafeMethodCall) && !$node->isFirstClassCallable()
+            && $node->var instanceof Expr\Variable && \is_string($node->var->name)) {
+            $this->forgetProperties($node->var->name);
         }
 
         if ($node instanceof Expr\FuncCall && $node->name instanceof Name && strtolower($node->name->getLast()) === 'assert'
@@ -1042,6 +1050,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
      */
     private function assignLocal(string $name, ?TypeExpr $type): void
     {
+        $this->forgetProperties($name);
         if (isset($this->pinned[$name])) {
             return;
         }
@@ -1057,13 +1066,59 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         if ($type !== null) {
             $this->assignLocal($name, $type->isUnknown() ? null : $type);
         } elseif (!isset($this->pinned[$name])) {
+            $this->forgetProperties($name);
             unset($this->localTypes[$name]);
         }
     }
 
+    /**
+     * The properties of an object narrowed by a test (`$this->shape instanceof Circle`) are kept with the variables,
+     * under `object->property`: an assignment to the object, or a call on it that may change them, drops them.
+     */
+    private function forgetProperties(string $object): void
+    {
+        if (!$this->narrowsProperties) {
+            return;
+        }
+        $prefix = $object . '->';
+        foreach (array_keys($this->localTypes) as $key) {
+            if (str_starts_with((string) $key, $prefix)) {
+                unset($this->localTypes[$key]);
+            }
+        }
+    }
+
+    private static function propertyKey(Expr $expr): ?string
+    {
+        return ($expr instanceof Expr\PropertyFetch || $expr instanceof Expr\NullsafePropertyFetch)
+            && $expr->var instanceof Expr\Variable && \is_string($expr->var->name) && $expr->name instanceof Identifier
+            ? $expr->var->name . '->' . $expr->name->toString()
+            : null;
+    }
+
+    /**
+     * The type a property holds before any test narrows it: the one its class or its object's type declares.
+     */
+    private function declaredProperty(string $key): ?TypeExpr
+    {
+        if (!str_contains($key, '->')) {
+            return null;
+        }
+        [$object, $property] = explode('->', $key, 2);
+
+        return $this->typeOfUncached(new Expr\PropertyFetch(new Expr\Variable($object), new Identifier($property)));
+    }
+
     private function forgetAssigned(?AstNode $target): void
     {
-        if ($target instanceof Expr\Variable && \is_string($target->name)) {
+        $property = $target instanceof Expr ? self::propertyKey($target) : null;
+        if ($property !== null) {
+            unset($this->localTypes[$property]);
+        } elseif (($target instanceof Expr\PropertyFetch || $target instanceof Expr\NullsafePropertyFetch)
+            && $target->var instanceof Expr\Variable && \is_string($target->var->name)) {
+            // `$holder->$name = …` may write any of its properties.
+            $this->forgetProperties($target->var->name);
+        } elseif ($target instanceof Expr\Variable && \is_string($target->name)) {
             $this->reassigned[$target->name] = true;
             $this->assignLocal($target->name, null);
         } elseif ($target instanceof Expr\List_ || $target instanceof Expr\Array_) {
@@ -1394,6 +1449,9 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             foreach ($states as $state) {
                 if (isset($state[$name])) {
                     $types[$state[$name]->key()] = $state[$name];
+                } elseif (str_contains((string) $name, '->')) {
+                    // A property no test narrowed on this path holds its declared type there, not nothing.
+                    continue 2;
                 }
             }
             $merged[$name] = \count($types) === 1 ? reset($types) : self::bounded(TypeExpr::union(array_values($types)));
@@ -1490,9 +1548,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                 $subject = $subject->var;
             }
 
-            return $class !== null && $subject instanceof Expr\Variable && \is_string($subject->name) && $subject->name !== 'this'
-                ? [$subject->name => [[$class], !$holds]]
-                : [];
+            $tested = $subject instanceof Expr\Variable && \is_string($subject->name) && $subject->name !== 'this'
+                ? $subject->name
+                : self::propertyKey($subject);
+
+            return $class !== null && $tested !== null ? [$tested => [[$class], !$holds]] : [];
         }
 
         if ($condition instanceof Expr\FuncCall || $condition instanceof Expr\StaticCall || $condition instanceof Expr\MethodCall || $condition instanceof Expr\NullsafeMethodCall) {
@@ -1505,7 +1565,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             return [];
         }
         \assert($condition instanceof Expr\BinaryOp);
-        $left = $this->assertions($condition->left, $holds);
+        $left = self::withoutChanged($this->assertions($condition->left, $holds), $condition->right);
         $right = $this->assertions($condition->right, $holds);
         if ($and === $holds) {
             // Both sides hold (or both fail): a variable excluded from classes on both sides is none of them.
@@ -1519,6 +1579,91 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         return self::either($left, $right);
+    }
+
+    /**
+     * A test on a property no longer holds once a later operand calls a method on its object or assigns it
+     * (`$this->shape instanceof Circle && $this->replaceShape()`).
+     *
+     * @param array<string, array{list<string>, bool, 2?: array{TypeExpr, int, bool}}> $assertions
+     *
+     * @return array<string, array{list<string>, bool, 2?: array{TypeExpr, int, bool}}>
+     */
+    private static function withoutChanged(array $assertions, Expr $later): array
+    {
+        $properties = array_filter(array_keys($assertions), static fn (string $key): bool => str_contains($key, '->'));
+        if ($properties === []) {
+            return $assertions;
+        }
+        $changed = [];
+        self::collectChanges($later, $changed);
+        foreach ($properties as $key) {
+            if (isset($changed[$key]) || isset($changed[explode('->', $key, 2)[0] . '->'])) {
+                unset($assertions[$key]);
+            }
+        }
+
+        return $assertions;
+    }
+
+    /**
+     * What an expression changes when it runs: `object->property` for a property it assigns, `object->` for an object
+     * it calls a method on, replaces or writes a property of by dynamic name. A closure's body does not run where it is
+     * written, unless it is called right there; creating a first-class callable (`$this->reset(...)`) calls nothing.
+     *
+     * @param array<string, true> $changed
+     */
+    private static function collectChanges(AstNode $node, array &$changed): void
+    {
+        if ($node instanceof Expr\Closure || $node instanceof Expr\ArrowFunction || $node instanceof Stmt\ClassLike) {
+            return;
+        }
+        if (($node instanceof Expr\MethodCall || $node instanceof Expr\NullsafeMethodCall) && !$node->isFirstClassCallable()) {
+            if ($node->var instanceof Expr\Variable && \is_string($node->var->name)) {
+                $changed[$node->var->name . '->'] = true;
+            }
+        } elseif ($node instanceof Expr\Assign || $node instanceof Expr\AssignOp || $node instanceof Expr\AssignRef) {
+            self::collectWrite($node->var, $changed);
+        } elseif ($node instanceof Expr\FuncCall && ($node->name instanceof Expr\Closure || $node->name instanceof Expr\ArrowFunction)) {
+            // `(fn () => $this->replace())()` runs its body here.
+            self::collectChildren($node->name, $changed);
+        }
+        self::collectChildren($node, $changed);
+    }
+
+    /**
+     * @param array<string, true> $changed
+     */
+    private static function collectChildren(AstNode $node, array &$changed): void
+    {
+        foreach ($node->getSubNodeNames() as $name) {
+            $children = $node->{$name};
+            foreach (\is_array($children) ? $children : [$children] as $child) {
+                if ($child instanceof AstNode) {
+                    self::collectChanges($child, $changed);
+                }
+            }
+        }
+    }
+
+    /**
+     * @param array<string, true> $changed
+     */
+    private static function collectWrite(?Expr $target, array &$changed): void
+    {
+        $property = $target === null ? null : self::propertyKey($target);
+        if ($property !== null) {
+            $changed[$property] = true;
+        } elseif (($target instanceof Expr\PropertyFetch || $target instanceof Expr\NullsafePropertyFetch)
+            && $target->var instanceof Expr\Variable && \is_string($target->var->name)) {
+            $changed[$target->var->name . '->'] = true;
+        } elseif ($target instanceof Expr\Variable && \is_string($target->name)) {
+            $changed[$target->name . '->'] = true;
+        } elseif ($target instanceof Expr\List_ || $target instanceof Expr\Array_) {
+            foreach ($target->items as $item) {
+                self::collectWrite($item?->value, $changed);
+            }
+        }
     }
 
     /**
@@ -1590,7 +1735,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     {
         foreach ($assertions as $variable => $assertion) {
             [$classes, $excluding] = $assertion;
-            $current = $this->localTypes[$variable] ?? null;
+            $this->narrowsProperties = $this->narrowsProperties || str_contains($variable, '->');
+            $current = $this->localTypes[$variable] ?? $this->declaredProperty($variable);
             $known = $current !== null && !$current->isUnknown();
             if (isset($assertion[2])) {
                 [$call, $position, $statement] = $assertion[2];
@@ -2901,6 +3047,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         if (($expr instanceof Expr\PropertyFetch || $expr instanceof Expr\NullsafePropertyFetch) && $expr->name instanceof Identifier) {
+            $key = self::propertyKey($expr);
+            $narrowed = $key === null ? null : $this->localTypes[$key] ?? null;
+            if ($narrowed !== null && !$narrowed->isUnknown()) {
+                return $narrowed;
+            }
             $property = $expr->name->toString();
             if ($expr->var instanceof Expr\Variable && $expr->var->name === 'this' && $this->usableGeneric($this->propertyGenerics[$property] ?? null) !== null) {
                 return TypeExpr::generic($this->propertyGenerics[$property]);
