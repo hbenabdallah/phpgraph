@@ -31,7 +31,7 @@ final class ConfigurationEvaluator
     /** @var list<array{call: PendingHelperCall, file: string, service: string}> */
     private array $calls = [];
 
-    /** @var array{definitions: array<string, array<string, string>>, tags: array<string, list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>>, arguments: array<string, list<array{id: string, tag: ?string, service: ?string, locator?: bool}>>} */
+    /** @var array{definitions: array<string, array<string, string>>, tags: array<string, list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>>, arguments: array<string, list<array{id: string, tag: ?string, service: ?string, locator?: bool, setter?: bool}>>} */
     private array $result = ['definitions' => [], 'tags' => [], 'arguments' => []];
 
     /**
@@ -52,7 +52,7 @@ final class ConfigurationEvaluator
     }
 
     /**
-     * @return array{definitions: array<string, array<string, string>>, tags: array<string, list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>>, arguments: array<string, list<array{id: string, tag: ?string, service: ?string, locator?: bool}>>}
+     * @return array{definitions: array<string, array<string, string>>, tags: array<string, list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}>>, arguments: array<string, list<array{id: string, tag: ?string, service: ?string, locator?: bool, setter?: bool}>>}
      */
     public function evaluate(): array
     {

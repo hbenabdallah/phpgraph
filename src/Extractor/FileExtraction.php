@@ -25,7 +25,7 @@ final readonly class FileExtraction
      * @param list<array{id: ?string, instanceof: ?string, name: string, attributes: array<string, string>}> $serviceTags
      *                                             container tags declared in PHP: `->tag('messenger.message_handler')`
      * @param array<string, string> $parameterTypes method id => class of its first parameter
-     * @param list<array{id: string, tag: ?string, service: ?string, locator?: bool}> $serviceArguments
+     * @param list<array{id: string, tag: ?string, service: ?string, locator?: bool, setter?: bool}> $serviceArguments
      *                                             what a service receives from the container: the services of a tag
      *                                             (`tagged_iterator('app.rule')`) or one service (`service('app.mailer')`)
      * @param array<string, list<string>> $routePrefixes route loader (`api_platform`) => prefixes its import adds
@@ -73,6 +73,8 @@ final readonly class FileExtraction
      *                                             computed: `return Http::baseUrl($this->apiUrl);`
      * @param array<string, list<array{string, int, string}>> $assertions callable id => what a call tells of its
      *                                             arguments (DocTypeResolver::ASSERTIONS)
+     * @param array<string, array{string, int}> $serviceDecorations container service id => [the id it decorates,
+     *                                             its decoration priority]: `->decorate('app.mailer', null, 10)`
      * @param ?TypeExpr $returned what the file returns to the script requiring it, `return $app;`: null when it
      *                            returns nothing
      */
@@ -116,6 +118,7 @@ final readonly class FileExtraction
         public array $baseUrls = [],
         public array $assertions = [],
         public ?TypeExpr $returned = null,
+        public array $serviceDecorations = [],
     ) {
     }
 }

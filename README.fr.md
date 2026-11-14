@@ -176,6 +176,7 @@ Options de `build` : `-e` pour exclure des chemins (répétable), `--no-vendor` 
 | `requests` | appel HTTP → la route qu'il atteint, du même service ou d'un autre, ou l'opération du document OpenAPI d'une autre API |
 | `implemented_by` | opération d'un schéma d'API (`operation:`) → la route avec sa méthode et son chemin (OpenAPI), ou la méthode d'une classe qui implémente le service généré (protobuf) |
 | `receives` | service → chaque service que la configuration du conteneur lui injecte (un tag, un identifiant, le service décoré) ; `via` dit lequel : `service sales.pipeline` pour l'un des services d'une même classe |
+| `autowires` | service → une interface ou une classe qu'il prend dans plus de paramètres de constructeur que la configuration ne lui donne de services de ce type : le conteneur injecte les autres par autowiring, donc `impact` le garde comme appelant quoi qu'on lui donne, INFERRED |
 | `reads_state_of` | méthode → une méthode de la même classe qui modifie, hors constructeur, une propriété qu'elle lit (`hasErrors()` → `add()`), INFERRED |
 
 Chaque relation porte un niveau de confiance :

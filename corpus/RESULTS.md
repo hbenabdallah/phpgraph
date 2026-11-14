@@ -6,17 +6,17 @@ phpgraph could not type, the main target of type inference work. Arrows compare 
 
 | Project | Files | Failed | Duplicates | Classes | Methods | Edges | Vendor files read | Seconds | Memory MB |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4182 | 111 | 0.58 | 34 |
-| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140722 | 681 | 12.48 | 610 |
-| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 218635 | 767 | 18.22 | 896 |
-| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 192733 | 647 | 17.13 | 774 |
-| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6823 | 76 | 0.73 | 44 |
-| bookstack | 1513 | 0 | 0 | 698 | 4076 | 22834 | 393 | 3.56 | 170 |
-| wordpress | 1899 | 0 | 50 | 840 | 7580 | 43373 | 0 | 4.60 | 191 |
-| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 124 | 0.79 | 40 |
-| art-gallery | 266 | 0 | 0 | 140 | 148 | 1693 | 122 | 1.05 | 48 |
-| ticket-booking | 366 | 0 | 0 | 291 | 737 | 5040 | 223 | 0.77 | 38 |
-| stayhub | 260 | 0 | 0 | 112 | 323 | 2035 | 156 | 1.71 | 54 |
+| php-ddd-example | 304 | 0 | 0 | 295 | 770 | 4182 | 111 | 0.52 | 34 |
+| sylius | 4946 | 0 | 1 | 4449 | 23781 | 140917 (+195 ▲) | 681 | 6.21 (-6.27 ▲) | 610 |
+| akeneo-pim | 8416 | 0 | 1 | 8447 | 38595 | 218696 (+61 ▲) | 767 | 12.81 (-5.41 ▲) | 896 |
+| prestashop | 7850 | 0 | 5 | 7291 | 32895 | 192743 (+10 ▲) | 647 | 8.78 (-8.35 ▲) | 774 |
+| ecotone-quickstart | 583 | 0 | 5 | 443 | 901 | 6823 | 76 | 0.75 | 44 |
+| bookstack | 1513 | 0 | 0 | 698 | 4076 | 22834 | 393 | 2.79 (-0.77 ▲) | 170 |
+| wordpress | 1899 | 0 | 50 | 840 | 7580 | 43373 | 0 | 3.60 (-1 ▲) | 191 |
+| laravel-rabbitmq-microservices | 127 | 0 | 0 | 71 | 74 | 762 | 124 | 0.60 (-0.19 ▲) | 40 |
+| art-gallery | 266 | 0 | 0 | 140 | 148 | 1693 | 122 | 0.86 | 48 |
+| ticket-booking | 366 | 0 | 0 | 291 | 737 | 5040 | 223 | 0.83 | 38 |
+| stayhub | 260 | 0 | 0 | 112 | 323 | 2035 | 156 | 1.47 | 54 |
 
 ## Method calls in application code
 
@@ -134,9 +134,9 @@ What the container configuration injects by tag or by id (`receives`), and what 
 | Project | Injections | Linked | Receives edges | Not linked |
 |---|---:|---:|---:|---:|
 | php-ddd-example | 13 | 12 | 30 | 1 |
-| sylius | 1737 | 675 | 1360 | 1062 |
-| akeneo-pim | 6534 | 4949 | 5531 | 1585 |
-| prestashop | 2607 | 2187 | 2074 | 420 |
+| sylius | 1737 | 805 (+130 ▲) | 1555 | 932 |
+| akeneo-pim | 6534 | 5004 (+55 ▲) | 5592 | 1530 |
+| prestashop | 2608 | 2193 (+6 ▲) | 2080 | 415 |
 | ecotone-quickstart | 0 | 0 | 0 | 0 |
 | bookstack | 0 | 0 | 0 | 0 |
 | wordpress | 0 | 0 | 0 | 0 |

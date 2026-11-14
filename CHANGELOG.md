@@ -3,6 +3,23 @@
 phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md), and changes only in a major version (2.0.0), announced here.
 
+## Unreleased
+
+### Changed
+- `impact` leaves out callers the container configuration gives another implementation: a class wired to
+  `service('app.payment')` is not reached when `PromotionProcessor::process()` changes, unless the service it is given
+  runs it (itself, a decorator or a composite holding it, or a composite filled by a compiler pass). Callers the
+  configuration says nothing about (autowired) are kept.
+
+### Added
+- Decorators of container services: `->decorate()`, YAML `decorates:`, XML `decorates`, `#[AsDecorator]` (with their
+  priority, `#[AutowireDecorated]`). A class given a decorated service also `receives` its outermost decorator; each
+  decorator's `.inner` is the next one inside, and a decorator of a decorator wraps it. A decorator in test code is
+  given to test code only (application code gets the next one inside). `#[AutowireDecorated]` also reads a decoration
+  declared in YAML or XML.
+- Relation `autowires`: a class taking more constructor parameters of a type than the configuration gives it services
+  of; the container autowires the others, and `impact` keeps the class as a caller of that type.
+
 ## 2.1.0 (2026-11-13)
 
 ### Added

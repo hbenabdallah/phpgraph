@@ -116,8 +116,11 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /** @var array<string, string> property of the current class => the string it holds by default */
     private array $stringProperties = [];
 
-    /** @var list<array{id: string, tag: ?string, service: ?string, locator?: bool}> */
+    /** @var list<array{id: string, tag: ?string, service: ?string, locator?: bool, setter?: bool}> */
     private array $serviceArguments = [];
+
+    /** @var array<string, array{string, int}> container service id => [the id it decorates, its priority] */
+    private array $serviceDecorations = [];
 
     /** @var array<string, array{reads: array<string, true>, writes: array<string, true>, constants?: array<string, true>}> method id => properties of $this, and the class constants it uses */
     private array $stateAccess = [];
@@ -332,6 +335,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->baseUrls,
             $this->assertions,
             $this->returned === [] ? null : TypeExpr::union($this->returned),
+            $this->serviceDecorations,
         );
     }
 
@@ -597,8 +601,16 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         foreach ($node->attrGroups as $group) {
             foreach ($group->attrs as $attribute) {
                 $tag = $this->argumentNode($attribute->args, 0)?->value;
-                if (str_ends_with((string) $this->resolveName($attribute->name), 'AutoconfigureTag') && $tag instanceof AstNode\Scalar\String_) {
+                $attributeName = (string) $this->resolveName($attribute->name);
+                if (str_ends_with($attributeName, 'AutoconfigureTag') && $tag instanceof AstNode\Scalar\String_) {
                     $this->serviceTags[] = ['id' => null, 'instanceof' => $fqcn, 'name' => $tag->value, 'attributes' => []];
+                }
+                // #[AsDecorator(decorates: Mailer::class, priority: 10)]: the class decorates that service.
+                $decorates = $this->namedOrPositional($attribute->args, 'decorates', 0);
+                $decorated = $decorates === null ? null : $this->literalOrClass($decorates);
+                if (str_ends_with($attributeName, '\AsDecorator') && $decorated !== null) {
+                    $priority = $this->namedOrPositional($attribute->args, 'priority', 1);
+                    $this->serviceDecorations[$fqcn] = [$decorated, $priority === null ? 0 : $this->integer($priority) ?? 0];
                 }
             }
         }
@@ -1843,6 +1855,18 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             return;
         }
 
+        // ->set('app.cached', Cached::class)->decorate('app.repository', null, 10): the container injects the decorator.
+        if ($name === 'decorate' && $first !== null) {
+            [$id] = $this->definedService($node->var);
+            $decorated = $this->literalOrClass($first->value);
+            if ($id !== null && $decorated !== null) {
+                $priority = $this->namedOrPositional($node->args, 'priority', 2);
+                $this->serviceDecorations[$id] = [$decorated, $priority === null ? 0 : $this->integer($priority) ?? 0];
+            }
+
+            return;
+        }
+
         // ->args([tagged_iterator('app.rule')]), ->arg('$mailer', service('app.mailer')), ->call('setLogger', [service('logger')]).
         if (\in_array($name, ['args', 'arg', 'call'], true)) {
             [$id] = $this->definedService($node->var);
@@ -1855,7 +1879,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                     if ($decorated !== null && ($target === '.inner' || $target === $id . '.inner')) {
                         $target = $decorated;
                     }
-                    $this->serviceArguments[] = ['id' => (string) $id, 'tag' => $injected['tag'], 'service' => $target, 'locator' => $injected['locator'] ?? false];
+                    $this->serviceArguments[] = ['id' => (string) $id, 'tag' => $injected['tag'], 'service' => $target, 'locator' => $injected['locator'] ?? false, 'setter' => $name === 'call'];
                 }
             }
 
@@ -1883,7 +1907,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
      * What a configuration value injects: `tagged_iterator('t')`, `tagged_locator('t')` (or `['tag' => 't']`),
      * `service('id')`, and those inside arrays (`iterator([...])`, `->args([...])`).
      *
-     * @return list<array{tag: ?string, service: ?string, locator?: bool}>
+     * @return list<array{tag: ?string, service: ?string, locator?: bool, setter?: bool}>
      */
     private function injectedValues(Expr $value): array
     {
@@ -1937,6 +1961,12 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                 foreach ($group->attrs as $attribute) {
                     $name = (string) $this->resolveName($attribute->name);
                     $short = substr($name, (int) strrpos('\\' . $name, '\\'));
+                    // #[AutowireDecorated] (or #[Autowire(service: '.inner')]) on a decorator: the service it decorates,
+                    // or `.inner` when the configuration declares the decoration (resolved by ContainerServices).
+                    $decorated = $this->serviceDecorations[$class][0] ?? null;
+                    if ($short === 'AutowireDecorated') {
+                        $this->serviceArguments[] = ['id' => $class, 'tag' => null, 'service' => $decorated ?? '.inner'];
+                    }
                     foreach ($attribute->args as $position => $argument) {
                         $key = $argument->name?->toString();
                         $value = $this->literalOrClass($argument->value);
@@ -1946,7 +1976,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
                         if (\in_array($short, ['AutowireIterator', 'TaggedIterator', 'AutowireLocator', 'TaggedLocator'], true) && ($key === 'tag' || ($key === null && $position === 0))) {
                             $this->serviceArguments[] = ['id' => $class, 'tag' => $value, 'service' => null, 'locator' => str_ends_with($short, 'Locator')];
                         } elseif ($short === 'Autowire' && $key === 'service') {
-                            $this->serviceArguments[] = ['id' => $class, 'tag' => null, 'service' => $value];
+                            $inner = $decorated !== null && ($value === '.inner' || $value === $class . '.inner');
+                            $this->serviceArguments[] = ['id' => $class, 'tag' => null, 'service' => $inner ? $decorated : $value];
                         }
                     }
                 }
@@ -2560,6 +2591,43 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         $argument = $args[$position] ?? null;
 
         return $argument instanceof AstNode\Arg && !$argument->unpack ? $argument : null;
+    }
+
+    /**
+     * The value of an argument given by name, or else at its position.
+     *
+     * @param array<AstNode\Arg|AstNode\ArgPlaceholder|AstNode\VariadicPlaceholder> $args
+     */
+    private function namedOrPositional(array $args, string $name, int $position): ?Expr
+    {
+        foreach ($args as $index => $argument) {
+            if (!$argument instanceof AstNode\Arg) {
+                continue;
+            }
+            if ($argument->name?->toString() === $name) {
+                return $argument->value;
+            }
+            if ($argument->name === null && $index === $position) {
+                return $argument->value;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * An integer literal, negative ones included: `-10`.
+     */
+    private function integer(Expr $expr): ?int
+    {
+        if ($expr instanceof AstNode\Scalar\Int_) {
+            return $expr->value;
+        }
+        if ($expr instanceof Expr\UnaryMinus && $expr->expr instanceof AstNode\Scalar\Int_) {
+            return -$expr->expr->value;
+        }
+
+        return null;
     }
 
     /**

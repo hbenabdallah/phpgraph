@@ -211,6 +211,9 @@ final class GraphBuilder
         $containerDefinitions = [];
         $containerTags = [];
         $containerArguments = [];
+        $containerDecorations = [];
+        /** @var array<string, list<?string>> $constructorTypes class => the class of each constructor parameter */
+        $constructorTypes = [];
         $routePrefixes = [];
         $parameterTypes = [];
         /** @var array<string, \Closure(string): string> $fileIds file => its names as project ids */
@@ -312,6 +315,19 @@ final class GraphBuilder
             foreach ($extraction->serviceArguments as $argument) {
                 $containerArguments[$service][] = $argument;
             }
+            foreach ($extraction->methodParameters as $method => $signature) {
+                $method = (string) $method;
+                if (strcasecmp(substr($method, -13), '::__construct') === 0) {
+                    $constructorTypes[$id(substr($method, 0, -13))] = array_map(static function (string $parameter) use ($id): ?string {
+                        $type = explode(':', $parameter, 2)[1] ?? '';
+
+                        return $type === '' ? null : $id($type);
+                    }, explode(',', $signature));
+                }
+            }
+            foreach ($extraction->serviceDecorations as $decorator => $decoration) {
+                $containerDecorations[$service][$decorator] = $decoration;
+            }
             foreach ($extraction->propertyReads as [$reader, $property]) {
                 $propertyReads[] = [$id($reader), $property->map($id, $mapped)];
             }
@@ -388,7 +404,7 @@ final class GraphBuilder
         foreach ($evaluated['arguments'] as $service => $arguments) {
             $containerArguments[$service] = [...$containerArguments[$service] ?? [], ...$arguments];
         }
-        $container = new ContainerServices($root, $configurationFiles, $serviceMap, $containerDefinitions, $containerTags, $previous->configuration ?? [], $containerArguments);
+        $container = new ContainerServices($root, $configurationFiles, $serviceMap, $containerDefinitions, $containerTags, $previous->configuration ?? [], $containerArguments, $containerDecorations);
 
         // The calls of an unchanged file resolve as before when no declaration changed anywhere, the dependencies are
         // the same, and every name and service id resolved to the same id.
@@ -477,7 +493,7 @@ final class GraphBuilder
             }
         }
         $inputGuards = new InputGuards($graph, $types, $guards, $callArguments, $propertyHolds, $parameterTypes, $methodParameters, $parameterPasses);
-        $injections = (new ServiceInjections($graph, $names, $container, new TaggedClasses($graph, $names, $types, $container), $inputGuards))->resolve();
+        $injections = (new ServiceInjections($graph, $names, $container, new TaggedClasses($graph, $names, $types, $container), $inputGuards, $constructorTypes))->resolve();
         $bus = (new BusResolver($graph, $names, $types, $constants))->resolve($handlers, $dispatches);
         // Paths held in class constants, now that every file is read.
         $routes = array_map(fn (array $route): array => [

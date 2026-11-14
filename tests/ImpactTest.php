@@ -181,6 +181,86 @@ final class ImpactTest extends TestCase
         self::assertTrue($this->hasEdge($graph, 'file:config/services.php', 'App\Wiring::wire', Relation::Calls), 'a static call outside any method: the file calls it');
     }
 
+    public function testACallerTheContainerGivesAnotherImplementationIsNotReachedThroughTheInterface(): void
+    {
+        $graph = $this->buildProject([
+            'src/Processor.php' => 'namespace App; interface Processor { public function process(): void; }',
+            'src/PromotionProcessor.php' => 'namespace App; final class PromotionProcessor implements Processor { public function process(): void {} }',
+            'src/PaymentProcessor.php' => 'namespace App; final class PaymentProcessor implements Processor { public function process(): void {} }',
+            'src/LoggingProcessor.php' => 'namespace App; final class LoggingProcessor implements Processor { public function __construct(private Processor $inner) {} public function process(): void { $this->inner->process(); } }',
+            'src/Autowired.php' => 'namespace App; final class Autowired { public function __construct(private Processor $processor) {} public function run(): void { $this->processor->process(); } }',
+            'src/PaymentListener.php' => 'namespace App; final class PaymentListener { public function __construct(private Processor $processor) {} public function run(): void { $this->processor->process(); } }',
+            'src/PromotionListener.php' => 'namespace App; final class PromotionListener { public function __construct(private Processor $processor) {} public function run(): void { $this->processor->process(); } }',
+            'src/LoggedListener.php' => 'namespace App; final class LoggedListener { public function __construct(private Processor $processor) {} public function run(): void { $this->processor->process(); } }',
+            'src/ChainProcessor.php' => 'namespace App; final class ChainProcessor implements Processor { /** @var list<Processor> */ private array $processors = []; public function add(Processor $p): void { $this->processors[] = $p; } public function process(): void { foreach ($this->processors as $p) { $p->process(); } } }',
+            'src/ChainListener.php' => 'namespace App; final class ChainListener { public function __construct(private Processor $processor) {} public function run(): void { $this->processor->process(); } }',
+            'config/services.php' => 'use function Symfony\Component\DependencyInjection\Loader\Configurator\service; return static function ($container): void { $services = $container->services();'
+                . ' $services->set("app.promotion", App\PromotionProcessor::class); $services->set("app.payment", App\PaymentProcessor::class);'
+                . ' $services->set("app.logged", App\LoggingProcessor::class)->args([service("app.promotion")]);'
+                . ' $services->set(App\PaymentListener::class)->args([service("app.payment")]);'
+                . ' $services->set(App\PromotionListener::class)->args([service("app.promotion")]);'
+                . ' $services->set(App\LoggedListener::class)->args([service("app.logged")]);'
+                . ' $services->set("app.chain", App\ChainProcessor::class); $services->set(App\ChainListener::class)->args([service("app.chain")]); };',
+        ])->graph;
+        $impact = $this->impact($graph, 'App\PromotionProcessor::process');
+
+        self::assertArrayHasKey('App\Autowired', $impact, 'nothing in the configuration says which processor it holds');
+        self::assertArrayHasKey('App\PromotionListener', $impact, 'the configuration gives it the changed processor');
+        self::assertArrayHasKey('App\LoggedListener', $impact, 'the processor it is given wraps the changed one');
+        self::assertArrayHasKey('App\ChainListener', $impact, 'its chain calls processors the configuration does not name (a compiler pass adds them)');
+        self::assertArrayNotHasKey('App\PaymentListener', $impact, 'the configuration gives it another processor, which never runs the changed one');
+    }
+
+    public function testACallerAlsoAutowiredWithTheInterfaceIsReachedThroughIt(): void
+    {
+        $graph = $this->buildProject([
+            'src/Processor.php' => 'namespace App; interface Processor { public function process(): void; }',
+            'src/PromotionProcessor.php' => 'namespace App; final class PromotionProcessor implements Processor { public function process(): void {} }',
+            'src/PaymentProcessor.php' => 'namespace App; final class PaymentProcessor implements Processor { public function process(): void {} }',
+            'src/Listener.php' => 'namespace App; final class Listener { public function __construct(private Processor $audit, private Processor $processor) {} public function run(): void { $this->processor->process(); } }',
+            'config/services.php' => 'use function Symfony\Component\DependencyInjection\Loader\Configurator\service; return static function ($container): void { $services = $container->services();'
+                . ' $services->set("app.payment", App\PaymentProcessor::class);'
+                . ' $services->set(App\Listener::class)->arg("$audit", service("app.payment")); };',
+        ])->graph;
+
+        self::assertTrue($this->hasEdge($graph, 'App\Listener', 'App\Processor', Relation::Autowires), 'one of its two processors is not named by the configuration');
+        self::assertArrayHasKey('App\Listener', $this->impact($graph, 'App\PromotionProcessor::process'), 'the autowired processor may be the changed one');
+    }
+
+    public function testACallerGivenAServiceThatAutowiresTheInterfaceIsReachedThroughIt(): void
+    {
+        $graph = $this->buildProject([
+            'src/Processor.php' => 'namespace App; interface Processor { public function process(): void; }',
+            'src/PromotionProcessor.php' => 'namespace App; final class PromotionProcessor implements Processor { public function process(): void {} }',
+            'src/PaymentProcessor.php' => 'namespace App; final class PaymentProcessor implements Processor { public function process(): void {} }',
+            'src/Wrapper.php' => 'namespace App; final class Wrapper implements Processor { public function __construct(private Processor $payment, private Processor $other) {} public function process(): void { $this->payment->process(); $this->other->process(); } }',
+            'src/Listener.php' => 'namespace App; final class Listener { public function __construct(private Processor $processor) {} public function run(): void { $this->processor->process(); } }',
+            'config/services.php' => 'use function Symfony\Component\DependencyInjection\Loader\Configurator\service; return static function ($container): void { $services = $container->services();'
+                . ' $services->set("app.payment", App\PaymentProcessor::class);'
+                . ' $services->set("app.wrapper", App\Wrapper::class)->arg("$payment", service("app.payment"));'
+                . ' $services->set(App\Listener::class)->args([service("app.wrapper")]); };',
+        ])->graph;
+
+        self::assertArrayHasKey('App\Listener', $this->impact($graph, 'App\PromotionProcessor::process'), 'the wrapper it is given autowires a processor that may be the changed one');
+    }
+
+    public function testACallerGivenADecoratedServiceIsReachedThroughTheCompositeDecoratingIt(): void
+    {
+        $graph = $this->buildProject([
+            'src/LocaleContext.php' => 'namespace App; interface LocaleContext { public function locale(): string; }',
+            'src/FixedLocaleContext.php' => 'namespace App; final class FixedLocaleContext implements LocaleContext { public function locale(): string { return "en"; } }',
+            'src/RequestLocaleContext.php' => 'namespace App; final class RequestLocaleContext implements LocaleContext { public function locale(): string { return "fr"; } }',
+            'src/CompositeLocaleContext.php' => 'namespace App; final class CompositeLocaleContext implements LocaleContext { /** @var list<LocaleContext> */ private array $contexts = []; public function add(LocaleContext $c): void { $this->contexts[] = $c; } public function locale(): string { foreach ($this->contexts as $c) { return $c->locale(); } return ""; } }',
+            'src/LocaleExtension.php' => 'namespace App; final class LocaleExtension { public function __construct(private LocaleContext $context) {} public function run(): string { return $this->context->locale(); } }',
+            'config/services.php' => 'use function Symfony\Component\DependencyInjection\Loader\Configurator\service; return static function ($container): void { $services = $container->services();'
+                . ' $services->set("app.locale", App\FixedLocaleContext::class);'
+                . ' $services->set("app.locale.composite", App\CompositeLocaleContext::class)->decorate("app.locale", null, 256);'
+                . ' $services->set(App\LocaleExtension::class)->args([service("app.locale")]); };',
+        ])->graph;
+
+        self::assertArrayHasKey('App\LocaleExtension', $this->impact($graph, 'App\RequestLocaleContext::locale'), 'it is given the composite decorating the service, which a compiler pass fills with any context');
+    }
+
     public function testAChangedConstructorReachesWhatInstantiatesItsClassAndTheSubclassesInheritingIt(): void
     {
         $graph = $this->buildProject([

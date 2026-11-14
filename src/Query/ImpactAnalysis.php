@@ -54,6 +54,11 @@ final class ImpactAnalysis
 
     private const MAX_TESTS = 300;
 
+    /**
+     * Services looked at down the injections of a caller before assuming they may run the change.
+     */
+    private const MAX_RECEIVED = 200;
+
     public function __construct(private readonly Graph $graph)
     {
     }
@@ -889,12 +894,93 @@ final class ImpactAnalysis
                     if ($caller !== $this->root && $caller !== $parentClass && \in_array($parentClass, $this->ancestorsOf($caller), true) && !\in_array($this->root, $this->ancestorsOf($caller), true)) {
                         continue;
                     }
+                    if ($this->isGivenAnother($caller, $parent, $this->classOf($id))) {
+                        continue;
+                    }
                     $dependents[] = [$item['other'], $item['edge'], Confidence::Inferred, true, $parent];
                 }
             }
         }
 
         return $dependents;
+    }
+
+    /**
+     * The container configuration gives the caller other implementations of the interface, none of which runs the
+     * changed one (`ProcessOrderListener` given the payment processor, not the composite running the promotion
+     * processor). A caller the configuration says nothing about (autowired), or not about every parameter of the
+     * interface (`autowires`), may hold any of them.
+     */
+    private function isGivenAnother(string $caller, string $method, string $implementation): bool
+    {
+        $interface = $this->classOf($method);
+        $given = [];
+        foreach ($this->graph->incident($caller) as $item) {
+            if (!$item['forward'] || !\in_array($interface, $this->ancestorsOf($item['other']), true)) {
+                continue;
+            }
+            // The container also autowires one of them: the class may hold any implementation.
+            if ($item['edge']->relation === Relation::Autowires) {
+                return false;
+            }
+            if ($item['edge']->relation === Relation::Receives) {
+                $given[] = $item['other'];
+            }
+        }
+        if ($given === []) {
+            return false;
+        }
+
+        return !$this->runs($given, $implementation, $method);
+    }
+
+    /**
+     * One of the services runs the implementation: it is the implementation or a subclass of it, or receives it, also
+     * through services it receives in turn (a decorator, a composite of tagged services). A service calling the
+     * method itself without receiving any implementation of it holds what the configuration does not say (a
+     * composite filled by a compiler pass): it may run the implementation.
+     *
+     * @param list<string> $services
+     */
+    private function runs(array $services, string $implementation, string $method): bool
+    {
+        $interface = $this->classOf($method);
+        $relays = [];
+        foreach ($this->graph->incident($method) as $item) {
+            if (!$item['forward'] && $item['edge']->relation === Relation::Calls) {
+                $relays[$this->classOf($item['other'])] = true;
+            }
+        }
+        $seen = [];
+        for ($index = 0; $index < \count($services) && $index < self::MAX_RECEIVED; ++$index) {
+            $service = $services[$index];
+            if (\in_array($implementation, $this->ancestorsOf($service), true)) {
+                return true;
+            }
+            $holdsOne = false;
+            foreach ($this->graph->incident($service) as $item) {
+                if (!$item['forward']) {
+                    continue;
+                }
+                // The container autowires one of them into the service: it may hold the implementation.
+                if ($item['edge']->relation === Relation::Autowires && \in_array($interface, $this->ancestorsOf($item['other']), true)) {
+                    return true;
+                }
+                if ($item['edge']->relation !== Relation::Receives) {
+                    continue;
+                }
+                $holdsOne = $holdsOne || \in_array($interface, $this->ancestorsOf($item['other']), true);
+                if (!isset($seen[$item['other']])) {
+                    $seen[$item['other']] = true;
+                    $services[] = $item['other'];
+                }
+            }
+            if (isset($relays[$service]) && !$holdsOne) {
+                return true;
+            }
+        }
+
+        return $index >= self::MAX_RECEIVED;
     }
 
     /**

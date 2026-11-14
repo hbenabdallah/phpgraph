@@ -192,6 +192,7 @@ the class or method named in the prompt finds none of the expected classes. Clau
 | sylius-hard-promotion-processor-triggers | sonnet | phpgraph | 0.89 | 1.00 | 264,956 | 30 |
 | sylius-hard-promotion-processor-triggers | sonnet | baseline | 0.89 | 1.00 | 243,380 | 28 |
 | sylius-hard-promotion-processor-triggers | haiku | phpgraph | 1.00 | 0.90 | 451,550 | 34 |
+| sylius-hard-promotion-processor-triggers | haiku | phpgraph, `e103e69`, 3 runs | 1.00 | 1.00 | 437,863 ± 69,915 | 29 |
 | sylius-hard-promotion-processor-triggers | haiku | baseline | 1.00 | 1.00 | 288,506 | 29 |
 | stayhub-hard-inventory-release-callers | sonnet | phpgraph | 1.00 | 1.00 | 224,120 | 11 |
 | stayhub-hard-inventory-release-callers | sonnet | baseline | 1.00 | 1.00 | 124,127 | 10 |
@@ -212,7 +213,10 @@ corpus, so the full set planned after it was not written.
 
 One fault of phpgraph came out: `impact_of` goes from `OrderProcessorInterface::process()` to every caller of the
 interface, whichever service the container injects into each, so haiku with phpgraph listed the `ProcessOrderListener`
-trap that the baseline avoided by reading the config.
+trap that the baseline avoided by reading the config. Fixed at commit `e103e69`: `impact` leaves out a caller the
+configuration gives another implementation, and reads the decorators of a service (the composite the container
+injects in its place). The haiku phpgraph arm again, 3 runs (Claude Code 2.1.325, batch `20261113-205206`, $0.06):
+precision 1.00 on every run, tokens unchanged within variance (366,237 to 505,932).
 
 ### Impact without the extra cost (2.1)
 
