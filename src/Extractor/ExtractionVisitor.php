@@ -1113,6 +1113,10 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         $property = $target instanceof Expr ? self::propertyKey($target) : null;
         if ($property !== null) {
             unset($this->localTypes[$property]);
+        } elseif (($target instanceof Expr\PropertyFetch || $target instanceof Expr\NullsafePropertyFetch)
+            && $target->var instanceof Expr\Variable && \is_string($target->var->name)) {
+            // `$holder->$name = …` may write any of its properties.
+            $this->forgetProperties($target->var->name);
         } elseif ($target instanceof Expr\Variable && \is_string($target->name)) {
             $this->reassigned[$target->name] = true;
             $this->assignLocal($target->name, null);
@@ -1560,7 +1564,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             return [];
         }
         \assert($condition instanceof Expr\BinaryOp);
-        $left = $this->assertions($condition->left, $holds);
+        $left = self::withoutChanged($this->assertions($condition->left, $holds), $condition->right);
         $right = $this->assertions($condition->right, $holds);
         if ($and === $holds) {
             // Both sides hold (or both fail): a variable excluded from classes on both sides is none of them.
@@ -1574,6 +1578,44 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         }
 
         return self::either($left, $right);
+    }
+
+    /**
+     * A test on a property no longer holds once a later operand calls a method on its object or assigns it
+     * (`$this->shape instanceof Circle && $this->replaceShape()`).
+     *
+     * @param array<string, array{list<string>, bool, 2?: array{TypeExpr, int, bool}}> $assertions
+     *
+     * @return array<string, array{list<string>, bool, 2?: array{TypeExpr, int, bool}}>
+     */
+    private static function withoutChanged(array $assertions, Expr $later): array
+    {
+        $properties = array_filter(array_keys($assertions), static fn (string $key): bool => str_contains($key, '->'));
+        if ($properties === []) {
+            return $assertions;
+        }
+        $changed = [];
+        foreach ((new NodeFinder())->find($later, static fn (AstNode $node): bool => $node instanceof Expr\MethodCall
+            || $node instanceof Expr\NullsafeMethodCall || $node instanceof Expr\Assign || $node instanceof Expr\AssignOp
+            || $node instanceof Expr\AssignRef) as $node) {
+            \assert($node instanceof Expr\MethodCall || $node instanceof Expr\NullsafeMethodCall || $node instanceof Expr\Assign
+                || $node instanceof Expr\AssignOp || $node instanceof Expr\AssignRef);
+            $object = $node->var;
+            if (($node instanceof Expr\Assign || $node instanceof Expr\AssignOp || $node instanceof Expr\AssignRef)
+                && ($object instanceof Expr\PropertyFetch || $object instanceof Expr\NullsafePropertyFetch)) {
+                $object = $object->var;
+            }
+            if ($object instanceof Expr\Variable && \is_string($object->name)) {
+                $changed[$object->name] = true;
+            }
+        }
+        foreach ($properties as $key) {
+            if (isset($changed[explode('->', $key, 2)[0]])) {
+                unset($assertions[$key]);
+            }
+        }
+
+        return $assertions;
     }
 
     /**

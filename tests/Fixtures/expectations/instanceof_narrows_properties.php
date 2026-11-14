@@ -99,7 +99,32 @@ class Drawing
         return 0.0;
     }
 
+    public function changedByALaterOperand(): float
+    {
+        if ($this->shape instanceof Circle && $this->replaced()) { // @phpgraph-expect calls App\Drawing::replaced INFERRED
+            return $this->shape->area(); // @phpgraph-expect calls App\Shape::area INFERRED
+        }
+
+        return 0.0;
+    }
+
+    public function writtenByName(Holder $holder, Shape $other, string $name): float
+    {
+        if ($holder->shape instanceof Square) {
+            $holder->$name = $other;
+
+            return $holder->shape->area(); // @phpgraph-expect calls App\Shape::area INFERRED
+        }
+
+        return 0.0;
+    }
+
     private function reset(): void
     {
+    }
+
+    private function replaced(): bool
+    {
+        return true;
     }
 }
