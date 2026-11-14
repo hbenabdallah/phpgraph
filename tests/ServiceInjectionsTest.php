@@ -211,4 +211,16 @@ final class ServiceInjectionsTest extends TestCase
 
         self::assertTrue($this->hasEdge($graph, 'App\TracedMailer', 'App\Mailer', Relation::Receives), 'the attribute names the class, the configuration its id');
     }
+
+    public function testAnAliasToAClassTheConfigurationDoesNotDefineGivesThatClass(): void
+    {
+        $graph = $this->buildProject([
+            'src/Provider.php' => 'namespace App; class Provider {}',
+            'src/Form.php' => 'namespace App; class Form {}',
+            'config/services.yaml' => "services:\n    app.provider:\n        alias: 'App\\Provider'\n"
+                . "    App\\Form:\n        arguments: ['@app.provider']\n",
+        ])->graph;
+
+        self::assertTrue($this->hasEdge($graph, 'App\\Form', 'App\\Provider', Relation::Receives), 'the class is autowired from a resource: its id is its name');
+    }
 }

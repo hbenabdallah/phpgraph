@@ -17,6 +17,8 @@ phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stay
   decorator's `.inner` is the next one inside, and a decorator of a decorator wraps it. A decorator in test code is
   given to test code only (application code gets the next one inside). `#[AutowireDecorated]` also reads a decoration
   declared in YAML or XML.
+- A container alias to a class the configuration does not define itself (`alias: 'App\Provider'`, the class
+  autowired from a resource) resolves to that class: PrestaShop links 17 more injections.
 - Relation `autowires`: a class taking more constructor parameters of a type than the configuration gives it services
   of; the container autowires the others, and `impact` keeps the class as a caller of that type.
 

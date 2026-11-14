@@ -223,23 +223,45 @@ final class ContainerServices
      */
     public function classOf(string $id, string $service = ''): ?string
     {
+        $aliased = null;
         foreach (array_unique([$service, ServiceMap::ROOT, '']) as $scope) {
-            $target = $id;
-            for ($step = 0; $step <= self::MAX_ALIASES; ++$step) {
-                $definition = $this->definitions[$scope][ltrim($target, '@')] ?? null;
-                if ($definition === null) {
-                    break;
-                }
-                if (!str_starts_with($definition, '@')) {
-                    $class = $this->parameter($definition, $scope);
-
-                    return str_contains($class, '\\') || preg_match('/^[A-Z]\w*$/', $class) === 1 ? ltrim($class, '\\') : null;
-                }
-                $target = $definition;
+            [$defined, $class] = $this->classIn($id, $scope);
+            if ($defined) {
+                return $class;
             }
+            $aliased ??= $class;
         }
 
-        return null;
+        return $aliased;
+    }
+
+    /**
+     * The class of a service in one scope: [true, class] when the scope defines it (null if not by a class), or
+     * [false, class] for an alias to a class the scope does not define (autowired from a resource), which another
+     * scope may define.
+     *
+     * @return array{bool, ?string}
+     */
+    private function classIn(string $id, string $scope): array
+    {
+        $target = $id;
+        for ($step = 0; $step <= self::MAX_ALIASES; ++$step) {
+            $definition = $this->definitions[$scope][ltrim($target, '@')] ?? null;
+            if ($definition === null) {
+                $isAliasedClass = $step > 0 && str_contains($target, '\\');
+
+                return [false, $isAliasedClass ? ltrim($target, '@\\') : null];
+            }
+            if (!str_starts_with($definition, '@')) {
+                $class = $this->parameter($definition, $scope);
+                $isClass = str_contains($class, '\\') || preg_match('/^[A-Z]\w*$/', $class) === 1;
+
+                return [true, $isClass ? ltrim($class, '\\') : null];
+            }
+            $target = $definition;
+        }
+
+        return [false, null];
     }
 
     /**
