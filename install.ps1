@@ -1,15 +1,15 @@
 # Installs the phpgraph executable on Windows, which needs no PHP: the binary checked against its SHA-256, in
 # %LOCALAPPDATA%\Programs\phpgraph, added to the user's PATH.
 #
-#   irm https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.ps1 | iex                    latest release
-#   $env:PHPGRAPH_VERSION = "0.2.0"; irm https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/alpine-ronin/phpgraph/main/install.ps1 | iex                    latest release
+#   $env:PHPGRAPH_VERSION = "0.2.0"; irm https://raw.githubusercontent.com/alpine-ronin/phpgraph/main/install.ps1 | iex
 #   $env:PHPGRAPH_VERSION = "dev-main"; irm ... | iex                                                       the main branch
 #
 # PHPGRAPH_INSTALL_DIR installs elsewhere. Running the script again updates phpgraph.
 
 $ErrorActionPreference = 'Stop'
 
-$repository = 'hbenabdallah/phpgraph'
+$repository = 'alpine-ronin/phpgraph'
 $asset = 'phpgraph-windows-x86_64.exe'
 $version = if ($env:PHPGRAPH_VERSION) { $env:PHPGRAPH_VERSION } else { 'latest' }
 $directory = if ($env:PHPGRAPH_INSTALL_DIR) { $env:PHPGRAPH_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA 'Programs\phpgraph' }

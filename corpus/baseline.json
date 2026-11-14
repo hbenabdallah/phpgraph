@@ -108,7 +108,7 @@
             "contextPairs": 14,
             "layerFirst": false
         },
-        "seconds": 0.58,
+        "seconds": 0.63,
         "peakMemoryMb": 34
     },
     {
@@ -121,28 +121,28 @@
         "classLike": 4449,
         "methods": 23781,
         "external": 904,
-        "edges": 140722,
+        "edges": 140919,
         "vendorFilesRead": 681,
         "edgesByConfidence": {
-            "EXTRACTED": 107737,
-            "INFERRED": 32647,
+            "EXTRACTED": 107932,
+            "INFERRED": 32649,
             "AMBIGUOUS": 338
         },
         "calls": {
             "total": 109979,
-            "inferred": 23375,
+            "inferred": 23377,
             "ambiguous": 26,
             "outsideProject": 65572,
-            "unknownReceiver": 21006,
-            "chainOutsideProject": 20622
+            "unknownReceiver": 21004,
+            "chainOutsideProject": 20620
         },
         "applicationCalls": {
             "total": 24523,
-            "inferred": 4840,
+            "inferred": 4842,
             "ambiguous": 4,
             "outsideProject": 19389,
-            "unknownReceiver": 290,
-            "chainOutsideProject": 122
+            "unknownReceiver": 288,
+            "chainOutsideProject": 120
         },
         "testCalls": {
             "total": 85456,
@@ -205,9 +205,9 @@
         },
         "injections": {
             "injections": 1737,
-            "linked": 675,
-            "edges": 1360,
-            "unlinkedCount": 1062,
+            "linked": 805,
+            "edges": 1555,
+            "unlinkedCount": 932,
             "unlinked": [
                 "service sylius.factory.zone into sylius.custom_factory.zone",
                 "service sylius.factory.zone_member into sylius.custom_factory.zone",
@@ -239,7 +239,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 12.48,
+        "seconds": 6.03,
         "peakMemoryMb": 610
     },
     {
@@ -252,26 +252,26 @@
         "classLike": 8447,
         "methods": 38595,
         "external": 888,
-        "edges": 218635,
+        "edges": 218703,
         "vendorFilesRead": 767,
         "edgesByConfidence": {
-            "EXTRACTED": 155411,
-            "INFERRED": 61655,
+            "EXTRACTED": 155472,
+            "INFERRED": 61662,
             "AMBIGUOUS": 1569
         },
         "calls": {
             "total": 159059,
-            "inferred": 62838,
+            "inferred": 62845,
             "ambiguous": 1603,
-            "outsideProject": 60852,
+            "outsideProject": 60845,
             "unknownReceiver": 33766,
             "chainOutsideProject": 10498
         },
         "applicationCalls": {
             "total": 33868,
-            "inferred": 18551,
+            "inferred": 18558,
             "ambiguous": 154,
-            "outsideProject": 12935,
+            "outsideProject": 12928,
             "unknownReceiver": 2228,
             "chainOutsideProject": 521
         },
@@ -335,9 +335,9 @@
         },
         "injections": {
             "injections": 6534,
-            "linked": 4949,
-            "edges": 5531,
-            "unlinkedCount": 1585,
+            "linked": 5004,
+            "edges": 5592,
+            "unlinkedCount": 1530,
             "unlinked": [
                 "service akeneo_elasticsearch.client.product_and_product_model into Akeneo\\Catalogs\\Infrastructure\\TemporaryEnrichmentBridge\\SearchAfterSizeUuidResultCursorFactory",
                 "service doctrine.orm.entity_manager into acme_app.saver.color",
@@ -369,7 +369,7 @@
             "contextPairs": 13,
             "layerFirst": false
         },
-        "seconds": 18.22,
+        "seconds": 9.78,
         "peakMemoryMb": 896
     },
     {
@@ -382,26 +382,26 @@
         "classLike": 7291,
         "methods": 32895,
         "external": 880,
-        "edges": 192733,
-        "vendorFilesRead": 647,
+        "edges": 192761,
+        "vendorFilesRead": 648,
         "edgesByConfidence": {
-            "EXTRACTED": 122386,
-            "INFERRED": 69473,
+            "EXTRACTED": 122409,
+            "INFERRED": 69478,
             "AMBIGUOUS": 874
         },
         "calls": {
             "total": 117210,
-            "inferred": 79144,
+            "inferred": 79148,
             "ambiguous": 465,
             "outsideProject": 35070,
-            "unknownReceiver": 2531,
-            "chainOutsideProject": 684
+            "unknownReceiver": 2527,
+            "chainOutsideProject": 680
         },
         "applicationCalls": {
             "total": 76228,
-            "inferred": 57701,
+            "inferred": 57705,
             "ambiguous": 366,
-            "outsideProject": 16650,
+            "outsideProject": 16646,
             "unknownReceiver": 1511,
             "chainOutsideProject": 409
         },
@@ -409,9 +409,9 @@
             "total": 40982,
             "inferred": 21443,
             "ambiguous": 99,
-            "outsideProject": 18420,
-            "unknownReceiver": 1020,
-            "chainOutsideProject": 275
+            "outsideProject": 18424,
+            "unknownReceiver": 1016,
+            "chainOutsideProject": 271
         },
         "bus": {
             "handlers": {
@@ -458,10 +458,10 @@
             "missingControllers": []
         },
         "injections": {
-            "injections": 2607,
-            "linked": 2187,
-            "edges": 2074,
-            "unlinkedCount": 420,
+            "injections": 2608,
+            "linked": 2210,
+            "edges": 2097,
+            "unlinkedCount": 398,
             "unlinked": [
                 "service security.access_map into PrestaShopBundle\\EventListener\\Admin\\TokenizedUrlsListener",
                 "service doctrine.orm.default_entity_manager into PrestaShopBundle\\EventListener\\Admin\\EmployeeSessionSubscriber",
@@ -493,7 +493,7 @@
             "contextPairs": 293,
             "layerFirst": true
         },
-        "seconds": 17.13,
+        "seconds": 9.59,
         "peakMemoryMb": 774
     },
     {
@@ -604,7 +604,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.73,
+        "seconds": 0.89,
         "peakMemoryMb": 44
     },
     {
@@ -617,28 +617,28 @@
         "classLike": 698,
         "methods": 4076,
         "external": 324,
-        "edges": 22834,
-        "vendorFilesRead": 393,
+        "edges": 22835,
+        "vendorFilesRead": 395,
         "edgesByConfidence": {
             "EXTRACTED": 13967,
-            "INFERRED": 8669,
+            "INFERRED": 8670,
             "AMBIGUOUS": 198
         },
         "calls": {
             "total": 25531,
-            "inferred": 9466,
+            "inferred": 9467,
             "ambiguous": 275,
             "outsideProject": 13879,
-            "unknownReceiver": 1911,
-            "chainOutsideProject": 623
+            "unknownReceiver": 1910,
+            "chainOutsideProject": 622
         },
         "applicationCalls": {
             "total": 7498,
-            "inferred": 3500,
+            "inferred": 3501,
             "ambiguous": 87,
             "outsideProject": 3719,
-            "unknownReceiver": 192,
-            "chainOutsideProject": 81
+            "unknownReceiver": 191,
+            "chainOutsideProject": 80
         },
         "testCalls": {
             "total": 18033,
@@ -701,7 +701,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 3.56,
+        "seconds": 3.26,
         "peakMemoryMb": 170
     },
     {
@@ -714,28 +714,28 @@
         "classLike": 840,
         "methods": 7580,
         "external": 117,
-        "edges": 43373,
+        "edges": 43375,
         "vendorFilesRead": 0,
         "edgesByConfidence": {
             "EXTRACTED": 19124,
-            "INFERRED": 23741,
+            "INFERRED": 23743,
             "AMBIGUOUS": 508
         },
         "calls": {
             "total": 27019,
-            "inferred": 24911,
+            "inferred": 24913,
             "ambiguous": 740,
-            "outsideProject": 754,
-            "unknownReceiver": 614,
-            "chainOutsideProject": 63
+            "outsideProject": 753,
+            "unknownReceiver": 613,
+            "chainOutsideProject": 62
         },
         "applicationCalls": {
             "total": 27019,
-            "inferred": 24911,
+            "inferred": 24913,
             "ambiguous": 740,
-            "outsideProject": 754,
-            "unknownReceiver": 614,
-            "chainOutsideProject": 63
+            "outsideProject": 753,
+            "unknownReceiver": 613,
+            "chainOutsideProject": 62
         },
         "testCalls": {
             "total": 0,
@@ -821,7 +821,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 4.6,
+        "seconds": 3.95,
         "peakMemoryMb": 191
     },
     {
@@ -920,7 +920,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.79,
+        "seconds": 0.67,
         "peakMemoryMb": 40
     },
     {
@@ -1015,7 +1015,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 1.05,
+        "seconds": 0.97,
         "peakMemoryMb": 48
     },
     {
@@ -1119,7 +1119,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 0.77,
+        "seconds": 1.01,
         "peakMemoryMb": 38
     },
     {
@@ -1220,7 +1220,7 @@
             "contextPairs": 0,
             "layerFirst": false
         },
-        "seconds": 1.71,
+        "seconds": 2.11,
         "peakMemoryMb": 54
     }
 ]

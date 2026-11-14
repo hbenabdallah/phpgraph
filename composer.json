@@ -1,5 +1,5 @@
 {
-    "name": "hbenabdallah/phpgraph",
+    "name": "alpine-ronin/phpgraph",
     "description": "Knowledge graph builder and query tool for PHP projects, exposed to AI assistants via CLI and MCP",
     "type": "library",
     "keywords": [
@@ -17,7 +17,7 @@
         "codex",
         "cursor"
     ],
-    "homepage": "https://github.com/hbenabdallah/phpgraph",
+    "homepage": "https://github.com/alpine-ronin/phpgraph",
     "license": "MIT",
     "authors": [
         {
@@ -26,8 +26,8 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/hbenabdallah/phpgraph/issues",
-        "source": "https://github.com/hbenabdallah/phpgraph"
+        "issues": "https://github.com/alpine-ronin/phpgraph/issues",
+        "source": "https://github.com/alpine-ronin/phpgraph"
     },
     "require": {
         "php": ">=8.5",

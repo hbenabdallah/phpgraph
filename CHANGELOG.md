@@ -3,9 +3,12 @@
 phpgraph follows [semantic versioning](https://semver.org) from 1.0.0; what stays stable is listed in
 [docs/STABILITY.md](docs/STABILITY.md), and changes only in a major version (2.0.0), announced here.
 
-## Unreleased
+## 2.2.0 (2026-11-14)
 
 ### Changed
+- phpgraph moved to the Alpine Ronin organization: the repository is `alpine-ronin/phpgraph`, the Composer package
+  `alpine-ronin/phpgraph` (was `hbenabdallah/phpgraph`), the image `ghcr.io/alpine-ronin/phpgraph` and the MCP
+  registry entry `io.github.alpine-ronin/phpgraph`. Releases up to 2.1.0 stay at the former names.
 - `impact` leaves out callers the container configuration gives another implementation: a class wired to
   `service('app.payment')` is not reached when `PromotionProcessor::process()` changes, unless the service it is given
   runs it (itself, a decorator or a composite holding it, or a composite filled by a compiler pass). Callers the

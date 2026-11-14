@@ -1,6 +1,6 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "$id": "https://github.com/hbenabdallah/phpgraph/blob/main/docs/schemas/outline.schema.json",
+    "$id": "https://github.com/alpine-ronin/phpgraph/blob/main/docs/schemas/outline.schema.json",
     "title": "phpgraph outline --format json",
     "description": "The structural outline of a feature, or of what one method runs. Stable from 2.1.0: keys are only added, in a minor version; read it ignoring the keys you do not know. Ids are graph.json node ids. A map is always a JSON object, {} when empty.",
     "type": "object",

@@ -1,7 +1,7 @@
 # phpgraph's logo
 
 The mark is a small graph whose answer stands out, in indigo: the node your question leads to. It is drawn like
-[Airlock](https://github.com/hbenabdallah/airlock)'s and [Sherpa](https://github.com/hbenabdallah/sherpa)'s: the
+[Airlock](https://github.com/alpine-ronin/airlock)'s and [Sherpa](https://github.com/hbenabdallah/sherpa)'s: the
 same tile, stroke and round caps, ink and paper, one accent. The nodes are dots wider than the stroke, so they don't
 read as the edges' ends.
 

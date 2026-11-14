@@ -24,7 +24,7 @@ Dependencies are installed without scripts nor plugins: no code of these project
 
 ## Releasing
 
-Push a version tag: `git tag v0.2.0 && git push origin v0.2.0`. The release workflow runs `composer check`, builds the PHAR with that version, attaches it to a GitHub release with its SHA-256 checksum, and publishes the image `ghcr.io/hbenabdallah/phpgraph` (amd64 and arm64, tags `0.2.0`, `0.2` and `latest`). Packagist follows the tags by itself.
+Push a version tag: `git tag v0.2.0 && git push origin v0.2.0`. The release workflow runs `composer check`, builds the PHAR with that version, attaches it to a GitHub release with its SHA-256 checksum, and publishes the image `ghcr.io/alpine-ronin/phpgraph` (amd64 and arm64, tags `0.2.0`, `0.2` and `latest`). Packagist follows the tags by itself.
 
 Downloads are counted on the Packagist package page (Composer installs), on the GitHub release page (PHAR) and on the GitHub Container Registry package page (Docker image).
 

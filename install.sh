@@ -3,16 +3,16 @@
 # Installs the phpgraph executable, which needs no PHP: the binary for this system, checked against its SHA-256,
 # in ~/.local/bin.
 #
-#   curl -fsSL https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.sh | sh                  latest release
-#   curl -fsSL https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.sh | sh -s -- 0.2.0     a given release
-#   curl -fsSL https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.sh | sh -s -- dev-main  the main branch
+#   curl -fsSL https://raw.githubusercontent.com/alpine-ronin/phpgraph/main/install.sh | sh                  latest release
+#   curl -fsSL https://raw.githubusercontent.com/alpine-ronin/phpgraph/main/install.sh | sh -s -- 0.2.0     a given release
+#   curl -fsSL https://raw.githubusercontent.com/alpine-ronin/phpgraph/main/install.sh | sh -s -- dev-main  the main branch
 #
 # The version can also come from PHPGRAPH_VERSION; PHPGRAPH_INSTALL_DIR=/usr/local/bin installs elsewhere. Running
 # the script again updates phpgraph.
 
 set -eu
 
-repository=hbenabdallah/phpgraph
+repository=alpine-ronin/phpgraph
 directory=${PHPGRAPH_INSTALL_DIR:-"$HOME/.local/bin"}
 version=${1:-${PHPGRAPH_VERSION:-latest}}
 

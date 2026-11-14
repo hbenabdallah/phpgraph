@@ -1,7 +1,7 @@
 <h1 align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/docs/brand/logo-dark.svg">
-    <img src="https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/docs/brand/logo.svg" alt="phpgraph" width="484">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/alpine-ronin/phpgraph/main/docs/brand/logo-dark.svg">
+    <img src="https://raw.githubusercontent.com/alpine-ronin/phpgraph/main/docs/brand/logo.svg" alt="phpgraph" width="484">
   </picture>
 </h1>
 
@@ -12,15 +12,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/hbenabdallah/phpgraph/actions/workflows/ci.yml"><img src="https://github.com/hbenabdallah/phpgraph/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://packagist.org/packages/hbenabdallah/phpgraph"><img src="https://img.shields.io/packagist/v/hbenabdallah/phpgraph" alt="Version Packagist"></a>
-  <a href="https://packagist.org/packages/hbenabdallah/phpgraph"><img src="https://img.shields.io/packagist/dt/hbenabdallah/phpgraph" alt="Téléchargements"></a>
+  <a href="https://github.com/alpine-ronin/phpgraph/actions/workflows/ci.yml"><img src="https://github.com/alpine-ronin/phpgraph/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://packagist.org/packages/alpine-ronin/phpgraph"><img src="https://img.shields.io/packagist/v/alpine-ronin/phpgraph" alt="Version Packagist"></a>
+  <a href="https://packagist.org/packages/alpine-ronin/phpgraph"><img src="https://img.shields.io/packagist/dt/alpine-ronin/phpgraph" alt="Téléchargements"></a>
   <img src="https://img.shields.io/badge/php-%3E%3D8.5-777bb4" alt="PHP 8.5+">
-  <a href="https://github.com/hbenabdallah/phpgraph/blob/main/LICENSE"><img src="https://img.shields.io/badge/licence-MIT-blue" alt="Licence : MIT"></a>
+  <a href="https://github.com/alpine-ronin/phpgraph/blob/main/LICENSE"><img src="https://img.shields.io/badge/licence-MIT-blue" alt="Licence : MIT"></a>
   <a href="https://mcpservers.org/servers/hbenabdallah/phpgraph"><img src="https://mcpservers.org/badge.svg" alt="Listed on mcpservers.org"></a>
 </p>
 
-<p align="center"><a href="https://github.com/hbenabdallah/phpgraph/blob/main/README.md">English</a> · <b>Français</b></p>
+<p align="center"><a href="https://github.com/alpine-ronin/phpgraph/blob/main/README.md">English</a> · <b>Français</b></p>
 
 ---
 
@@ -44,7 +44,7 @@ Comment il répond :
 
 ## Ce qu'il coûte
 
-Le même agent avec et sans phpgraph, noté contre des réponses tirées du code ([méthode et chaque exécution](https://github.com/hbenabdallah/phpgraph/blob/main/docs/BENCHMARK.md)) :
+Le même agent avec et sans phpgraph, noté contre des réponses tirées du code ([méthode et chaque exécution](https://github.com/alpine-ronin/phpgraph/blob/main/docs/BENCHMARK.md)) :
 
 | Question | Agent et projets | Avec phpgraph |
 |---|---|---|
@@ -64,14 +64,14 @@ Questions dont la réponse passe par une indirection (un bus de commandes maison
 **1. Installer.** Un seul exécutable, sans PHP (Linux et macOS en x86_64 et ARM, Windows en x86_64) :
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.sh | sh                  # dernière version
-curl -fsSL https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.sh | sh -s -- 0.2.0     # une version donnée
-curl -fsSL https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.sh | sh -s -- dev-main  # la branche main
+curl -fsSL https://raw.githubusercontent.com/alpine-ronin/phpgraph/main/install.sh | sh                  # dernière version
+curl -fsSL https://raw.githubusercontent.com/alpine-ronin/phpgraph/main/install.sh | sh -s -- 0.2.0     # une version donnée
+curl -fsSL https://raw.githubusercontent.com/alpine-ronin/phpgraph/main/install.sh | sh -s -- dev-main  # la branche main
 ```
 
 ```powershell
-irm https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.ps1 | iex                       # Windows
-$env:PHPGRAPH_VERSION = "dev-main"; irm https://raw.githubusercontent.com/hbenabdallah/phpgraph/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/alpine-ronin/phpgraph/main/install.ps1 | iex                       # Windows
+$env:PHPGRAPH_VERSION = "dev-main"; irm https://raw.githubusercontent.com/alpine-ronin/phpgraph/main/install.ps1 | iex
 ```
 
 Le script télécharge le binaire, vérifie son SHA-256 et le place dans `~/.local/bin` (Windows : `%LOCALAPPDATA%\Programs\phpgraph`, ajouté au PATH) ; `PHPGRAPH_INSTALL_DIR` change le dossier. Le relancer met à jour. `dev-main` est reconstruit à chaque push sur `main` (la pré-version `edge`). Le binaire est un runtime PHP statique qui contient phpgraph, construit avec [static-php-cli](https://github.com/crazywhalecc/static-php-cli).
@@ -79,9 +79,9 @@ Le script télécharge le binaire, vérifie son SHA-256 et le place dans `~/.loc
 Avec PHP 8.5 ou plus, ou avec Docker :
 
 ```bash
-composer require --dev hbenabdallah/phpgraph       # ou : composer global require hbenabdallah/phpgraph
-curl -LO https://github.com/hbenabdallah/phpgraph/releases/latest/download/phpgraph.phar
-docker pull ghcr.io/hbenabdallah/phpgraph          # rien d'autre à installer
+composer require --dev alpine-ronin/phpgraph       # ou : composer global require alpine-ronin/phpgraph
+curl -LO https://github.com/alpine-ronin/phpgraph/releases/latest/download/phpgraph.phar
+docker pull ghcr.io/alpine-ronin/phpgraph          # rien d'autre à installer
 ```
 
 **2. Brancher votre agent.** `mcp-config` affiche une configuration prête à coller, avec les chemins remplis (`vendor/bin/phpgraph` après une installation par Composer) :
@@ -306,7 +306,7 @@ phpgraph est développé sur un corpus de projets open source figés à un commi
 | [BookStack](https://github.com/BookStackApp/BookStack) | Laravel | 1 513 | 6,6 s | 97,4 % |
 | [WordPress](https://github.com/WordPress/WordPress) | sans framework, hooks | 1 899 | 9,7 s | 97,7 % |
 
-Quatre projets microservices complètent le corpus : [deux services Laravel reliés par RabbitMQ](https://github.com/mostafaaminflakes/Using-RabbitMQ-in-Microservices), avec 4 contrats de messages ; [quatre services Laravel reliés par HTTP](https://github.com/omarihab99/Art-Gallery), où phpgraph a trouvé un `POST` envoyé vers une route `GET` seulement ; le [ticket booking de Spiral](https://github.com/spiral/ticket-booking), des services qui s'appellent par des services gRPC déclarés dans des fichiers `.proto` ; et [StayHub](https://github.com/ahmedibrahimyassindev/StayHub), sept services Laravel derrière une API gateway décrite par un fichier OpenAPI. Les deux derniers mesurent les schémas d'API comme contrats : les 45 opérations du document de StayHub et les 14 rpcs de ticket-booking sont toutes reliées à ce qui les implémente. Aucun échec d'analyse sur environ 26 500 fichiers. Le détail par projet, messages, routes et services compris, est dans [`corpus/RESULTS.md`](https://github.com/hbenabdallah/phpgraph/blob/main/corpus/RESULTS.md).
+Quatre projets microservices complètent le corpus : [deux services Laravel reliés par RabbitMQ](https://github.com/mostafaaminflakes/Using-RabbitMQ-in-Microservices), avec 4 contrats de messages ; [quatre services Laravel reliés par HTTP](https://github.com/omarihab99/Art-Gallery), où phpgraph a trouvé un `POST` envoyé vers une route `GET` seulement ; le [ticket booking de Spiral](https://github.com/spiral/ticket-booking), des services qui s'appellent par des services gRPC déclarés dans des fichiers `.proto` ; et [StayHub](https://github.com/ahmedibrahimyassindev/StayHub), sept services Laravel derrière une API gateway décrite par un fichier OpenAPI. Les deux derniers mesurent les schémas d'API comme contrats : les 45 opérations du document de StayHub et les 14 rpcs de ticket-booking sont toutes reliées à ce qui les implémente. Aucun échec d'analyse sur environ 26 500 fichiers. Le détail par projet, messages, routes et services compris, est dans [`corpus/RESULTS.md`](https://github.com/alpine-ronin/phpgraph/blob/main/corpus/RESULTS.md).
 
 ### Avec un agent
 
@@ -319,7 +319,7 @@ Mesuré sur un projet Symfony/DDD privé de 4 800 fichiers, 3 exécutions par co
 
 Les plages des exécutions avec et sans phpgraph ne se chevauchent pas.
 
-Sur des projets publics (novembre 2026) : Claude Code (`claude -p`, Sonnet) sur 24 tâches réparties entre php-ddd-example, Sylius, PrestaShop, BookStack et Akeneo, 3 exécutions par tâche avec phpgraph 2.0 et sans (grep et lecture de fichiers seulement), notées contre des réponses tirées du code. Méthode, résultats par tâche et variance : [`docs/BENCHMARK.md`](https://github.com/hbenabdallah/phpgraph/blob/main/docs/BENCHMARK.md) ; `tools/agent-bench/bench` le relance.
+Sur des projets publics (novembre 2026) : Claude Code (`claude -p`, Sonnet) sur 24 tâches réparties entre php-ddd-example, Sylius, PrestaShop, BookStack et Akeneo, 3 exécutions par tâche avec phpgraph 2.0 et sans (grep et lecture de fichiers seulement), notées contre des réponses tirées du code. Méthode, résultats par tâche et variance : [`docs/BENCHMARK.md`](https://github.com/alpine-ronin/phpgraph/blob/main/docs/BENCHMARK.md) ; `tools/agent-bench/bench` le relance.
 
 | Type de tâche | Réussite avec / sans | Avec phpgraph |
 |---|---|---|
@@ -328,7 +328,7 @@ Sur des projets publics (novembre 2026) : Claude Code (`claude -p`, Sonnet) sur 
 | Expliquer une fonctionnalité | 17/18 / 18/18 | −12 % de tokens, −26 % de temps, −42 % d'appels d'outils |
 | Corriger un bogue introduit | 18/18 / 18/18 | phpgraph non appelé ; +10 % de tokens pour la présence du serveur |
 
-Depuis (2.1), le serveur liste 4 outils au lieu de 8 et `impact_of` donne une réponse compacte au-delà de 20 dépendants : sur les 6 tâches d'impact relancées, phpgraph coûte −1,9 % de tokens au total au lieu de +18 %, de −51 % sur Akeneo à +56 % sur `assertManufacturerExists()` de PrestaShop ([détail](https://github.com/hbenabdallah/phpgraph/blob/main/docs/BENCHMARK.md#impact-without-the-extra-cost-21)).
+Depuis (2.1), le serveur liste 4 outils au lieu de 8 et `impact_of` donne une réponse compacte au-delà de 20 dépendants : sur les 6 tâches d'impact relancées, phpgraph coûte −1,9 % de tokens au total au lieu de +18 %, de −51 % sur Akeneo à +56 % sur `assertManufacturerExists()` de PrestaShop ([détail](https://github.com/alpine-ronin/phpgraph/blob/main/docs/BENCHMARK.md#impact-without-the-extra-cost-21)).
 
 ### Comparé à d'autres graphes de code
 
@@ -389,12 +389,12 @@ Sylius (le commit du corpus), octobre 2026, sans LLM : phpgraph 1.0.2, [codebase
 
 ## Contribuer
 
-Les issues et les pull requests sont les bienvenues. Voir [CONTRIBUTING.md](https://github.com/hbenabdallah/phpgraph/blob/main/CONTRIBUTING.md) : `composer check` doit passer (php-cs-fixer, PHPStan niveau max, PHPUnit), et les évolutions de l'analyse se jugent sur le corpus. Sans PHP installé, `bin/dev composer check` lance tout dans Docker. [docs/ARCHITECTURE.md](https://github.com/hbenabdallah/phpgraph/blob/main/docs/ARCHITECTURE.md) décrit l'organisation du code, [docs/PROVIDERS.md](https://github.com/hbenabdallah/phpgraph/blob/main/docs/PROVIDERS.md) comment ajouter ce que renvoie une bibliothèque (en anglais).
+Les issues et les pull requests sont les bienvenues. Voir [CONTRIBUTING.md](https://github.com/alpine-ronin/phpgraph/blob/main/CONTRIBUTING.md) : `composer check` doit passer (php-cs-fixer, PHPStan niveau max, PHPUnit), et les évolutions de l'analyse se jugent sur le corpus. Sans PHP installé, `bin/dev composer check` lance tout dans Docker. [docs/ARCHITECTURE.md](https://github.com/alpine-ronin/phpgraph/blob/main/docs/ARCHITECTURE.md) décrit l'organisation du code, [docs/PROVIDERS.md](https://github.com/alpine-ronin/phpgraph/blob/main/docs/PROVIDERS.md) comment ajouter ce que renvoie une bibliothèque (en anglais).
 
-Ce qui reste stable d'une version à l'autre (commandes, outils MCP, format de `graph.json`, JSON d'`impact` et d'`outline`, avec [leurs schémas](https://github.com/hbenabdallah/phpgraph/tree/main/docs/schemas)) est listé dans [docs/STABILITY.md](https://github.com/hbenabdallah/phpgraph/blob/main/docs/STABILITY.md) ; les changements sont dans le [changelog](https://github.com/hbenabdallah/phpgraph/blob/main/CHANGELOG.md).
+Ce qui reste stable d'une version à l'autre (commandes, outils MCP, format de `graph.json`, JSON d'`impact` et d'`outline`, avec [leurs schémas](https://github.com/alpine-ronin/phpgraph/tree/main/docs/schemas)) est listé dans [docs/STABILITY.md](https://github.com/alpine-ronin/phpgraph/blob/main/docs/STABILITY.md) ; les changements sont dans le [changelog](https://github.com/alpine-ronin/phpgraph/blob/main/CHANGELOG.md).
 
-Les versions se publient en poussant un tag : le [workflow de release](https://github.com/hbenabdallah/phpgraph/blob/main/.github/workflows/release.yml) construit le PHAR, les exécutables pour Linux, macOS et Windows (`tools/build-binary.sh`) et l'image Docker `ghcr.io/hbenabdallah/phpgraph`.
+Les versions se publient en poussant un tag : le [workflow de release](https://github.com/alpine-ronin/phpgraph/blob/main/.github/workflows/release.yml) construit le PHAR, les exécutables pour Linux, macOS et Windows (`tools/build-binary.sh`) et l'image Docker `ghcr.io/alpine-ronin/phpgraph`.
 
 ## Licence
 
-phpgraph est un logiciel open source distribué sous la [licence MIT](https://github.com/hbenabdallah/phpgraph/blob/main/LICENSE) : vous pouvez l'utiliser, le copier, le modifier, le fusionner, le publier, le distribuer, le sous-licencier et le vendre, pour tout usage, à condition de conserver avec lui la mention de copyright et le texte de la licence.
+phpgraph est un logiciel open source distribué sous la [licence MIT](https://github.com/alpine-ronin/phpgraph/blob/main/LICENSE) : vous pouvez l'utiliser, le copier, le modifier, le fusionner, le publier, le distribuer, le sous-licencier et le vendre, pour tout usage, à condition de conserver avec lui la mention de copyright et le texte de la licence.

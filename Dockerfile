@@ -1,6 +1,6 @@
 # phpgraph as a Docker image: no PHP needed on the machine.
 #
-#   docker run --rm -i -u "$(id -u):$(id -g)" -v "$PWD":/project ghcr.io/hbenabdallah/phpgraph serve /project
+#   docker run --rm -i -u "$(id -u):$(id -g)" -v "$PWD":/project ghcr.io/alpine-ronin/phpgraph serve /project
 #
 # Built and published by .github/workflows/release.yml for each release tag; locally: docker build -t phpgraph .
 
@@ -22,10 +22,10 @@ RUN apk add --no-cache --virtual .build-deps $PHPIZE_DEPS && docker-php-ext-inst
 RUN printf 'opcache.enable_cli=1\nopcache.jit=tracing\nopcache.jit_buffer_size=128M\n' > /usr/local/etc/php/conf.d/phpgraph-opcache.ini
 LABEL org.opencontainers.image.title="phpgraph" \
       org.opencontainers.image.description="Knowledge graph of a PHP project, for AI agents over MCP" \
-      org.opencontainers.image.source="https://github.com/hbenabdallah/phpgraph" \
+      org.opencontainers.image.source="https://github.com/alpine-ronin/phpgraph" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="$PHPGRAPH_VERSION" \
-      io.modelcontextprotocol.server.name="io.github.hbenabdallah/phpgraph"
+      io.modelcontextprotocol.server.name="io.github.alpine-ronin/phpgraph"
 COPY --from=build /src/build/phpgraph.phar /usr/local/bin/phpgraph
 WORKDIR /project
 ENTRYPOINT ["phpgraph"]
