@@ -412,7 +412,7 @@ final class ContainerServices
             }
             foreach ($definition->getElementsByTagName('argument') as $argument) {
                 $type = $argument->getAttribute('type');
-                $setter = $argument->parentNode instanceof \DOMElement && $argument->parentNode->localName === 'call';
+                $setter = $this->insideCall($argument);
                 if (\in_array($type, ['tagged_iterator', 'tagged_locator', 'tagged'], true) && $argument->getAttribute('tag') !== '') {
                     $this->fileArguments[] = ['id' => $id, 'tag' => $argument->getAttribute('tag'), 'service' => null, 'locator' => $type === 'tagged_locator', 'setter' => $setter];
                 } elseif ($type === 'service' && $argument->getAttribute('id') !== '') {
@@ -428,6 +428,20 @@ final class ContainerServices
             };
             $this->fileDefinitions[$id] ??= $target;
         }
+    }
+
+    /**
+     * An argument of a setter, `<call>`, also inside a collection argument of it: it fills no constructor parameter.
+     */
+    private function insideCall(\DOMElement $argument): bool
+    {
+        for ($node = $argument->parentNode; $node instanceof \DOMElement && $node->localName !== 'service'; $node = $node->parentNode) {
+            if ($node->localName === 'call') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

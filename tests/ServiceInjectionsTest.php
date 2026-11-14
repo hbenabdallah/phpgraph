@@ -182,14 +182,21 @@ final class ServiceInjectionsTest extends TestCase
             'src/BaseListener.php' => 'namespace App; abstract class BaseListener { public function __construct(Processor $audit, Processor $processor) {} }',
             'src/Listener.php' => 'namespace App; class Listener extends BaseListener {}',
             'src/Worker.php' => 'namespace App; class Worker { public function __construct(Processor $audit, Processor $processor) {} public function setFallback(Processor $fallback): void {} }',
+            'src/Notifier.php' => 'namespace App; class Notifier { public function __construct(Processor $processor) {} public function setFallback(Processor $fallback): void {} }',
+            'src/Batch.php' => 'namespace App; class Batch { public function __construct(Processor $audit, Processor $processor) {} public function setAll(array $processors): void {} }',
+            'config/batch.xml' => '<?xml version="1.0" ?><container xmlns="http://symfony.com/schema/dic/services"><services>'
+                . '<service id="App\Batch"><argument type="service" id="app.payment"/><call method="setAll"><argument type="collection"><argument type="service" id="app.payment"/></argument></call></service></services></container>',
             'config/services.php' => 'use function Symfony\Component\DependencyInjection\Loader\Configurator\service; return static function ($container): void { $services = $container->services();'
                 . ' $services->set("app.payment", App\PaymentProcessor::class);'
                 . ' $services->set(App\Listener::class)->arg("$audit", service("app.payment"));'
-                . ' $services->set(App\Worker::class)->arg("$audit", service("app.payment"))->call("setFallback", [service("app.payment")]); };',
+                . ' $services->set(App\Worker::class)->arg("$audit", service("app.payment"))->call("setFallback", [service("app.payment")]);'
+                . ' $services->set(App\\Notifier::class)->call("setFallback", [service("app.payment")]); };',
         ])->graph;
 
         self::assertTrue($this->hasEdge($graph, 'App\Listener', 'App\Processor', Relation::Autowires), 'the constructor it inherits takes two processors, one is configured');
         self::assertTrue($this->hasEdge($graph, 'App\Worker', 'App\Processor', Relation::Autowires), 'the service given to a setter fills no constructor parameter');
+        self::assertTrue($this->hasEdge($graph, 'App\Notifier', 'App\Processor', Relation::Autowires), 'only its setter is configured: the constructor one is autowired');
+        self::assertTrue($this->hasEdge($graph, 'App\Batch', 'App\Processor', Relation::Autowires), 'a service in a collection given to a setter fills no constructor parameter either');
     }
 
     public function testAutowireDecoratedReadsADecoratorRegisteredUnderAnId(): void

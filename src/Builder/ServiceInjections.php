@@ -233,24 +233,30 @@ final class ServiceInjections
      */
     private function autowired(): void
     {
-        /** @var array<string, list<string>> $given consumer class => the class of each service named for it */
-        $given = [];
+        /** @var array<string, list<string>> $received consumer class => the class of each service named for it */
+        $received = [];
+        /** @var array<string, list<string>> $bound consumer class => those filling a constructor parameter */
+        $bound = [];
         foreach ($this->container->arguments() as $argument) {
-            if ($argument['setter']) {
-                continue;
-            }
             $consumer = $argument['target'] === null ? null : $this->classOf($argument['id'], $argument['service']);
             $class = $consumer === null ? null : $this->classOf((string) $argument['target'], $argument['service']);
-            if ($consumer !== null && $class !== null) {
-                $given[$consumer][] = $class;
+            if ($consumer === null || $class === null) {
+                continue;
+            }
+            $received[$consumer][] = $class;
+            if (!$argument['setter']) {
+                $bound[$consumer][] = $class;
             }
         }
-        foreach ($given as $consumer => $classes) {
+        foreach ($received as $consumer => $classes) {
             $parameters = array_count_values(array_filter($this->constructorOf($consumer), 'is_string'));
             foreach ($parameters as $type => $count) {
                 $type = (string) $type;
-                $configured = \count(array_filter($classes, fn (string $class): bool => $this->isA($class, $type)));
-                if ($configured > 0 && $count > $configured && $this->graph->hasNode($type)) {
+                $isOfType = fn (string $class): bool => $this->isA($class, $type);
+                $configured = \count(array_filter($bound[$consumer] ?? [], $isOfType));
+                // Without a service of the type given to it, the class holds none `impact` could take for all.
+                $receivesOne = array_filter($classes, $isOfType) !== [];
+                if ($receivesOne && $count > $configured && $this->graph->hasNode($type)) {
                     $this->graph->addEdge(new Edge($consumer, $type, Relation::Autowires, Confidence::Inferred));
                 }
             }
