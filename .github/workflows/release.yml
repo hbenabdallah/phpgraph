@@ -5,7 +5,7 @@ name: Release
 # - executables needing no PHP, for Linux and macOS (x86_64, aarch64) and Windows (x86_64), with their checksums,
 #   attached to the same release (built by binaries.yml);
 # - the Docker image ghcr.io/<owner>/phpgraph, for amd64 and arm64 (pull counts on the package page);
-# - the entry io.github.hbenabdallah/phpgraph of the official MCP registry (server.json, pointing at that image), for a
+# - the entry io.github.alpine-ronin/phpgraph of the official MCP registry (server.json, pointing at that image), for a
 #   version that is not a pre-release (also when published again from the Actions tab).
 # Packagist follows the tags by itself once the package is submitted there.
 #
@@ -102,7 +102,7 @@ jobs:
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           version="${TAG#v}"
-          jq --arg v "$version" '.version = $v | .packages[0].identifier = "ghcr.io/hbenabdallah/phpgraph:" + $v' server.json > server.tmp
+          jq --arg v "$version" '.version = $v | .packages[0].identifier = "ghcr.io/alpine-ronin/phpgraph:" + $v' server.json > server.tmp
           mv server.tmp server.json
       - run: ./mcp-publisher login github-oidc
       - run: ./mcp-publisher publish

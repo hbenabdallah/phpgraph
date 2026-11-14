@@ -12,7 +12,7 @@ use Composer\InstalledVersions;
  */
 final class Version
 {
-    public const PACKAGE = 'hbenabdallah/phpgraph';
+    public const PACKAGE = 'alpine-ronin/phpgraph';
 
     /**
      * Replaced by tools/build-phar.php. A property, not a constant: the check below must stay a runtime one.

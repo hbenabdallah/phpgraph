@@ -1,6 +1,6 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "$id": "https://github.com/hbenabdallah/phpgraph/blob/main/docs/schemas/impact.schema.json",
+    "$id": "https://github.com/alpine-ronin/phpgraph/blob/main/docs/schemas/impact.schema.json",
     "title": "phpgraph impact --format json",
     "description": "What may break when a class or a method changes. Stable from 1.0.0: keys are only added, in a minor version; read it ignoring the keys you do not know. With a section, only changed and that section's key. Ids are graph.json node ids.",
     "type": "object",
