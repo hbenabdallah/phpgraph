@@ -1595,27 +1595,52 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             return $assertions;
         }
         $changed = [];
-        foreach ((new NodeFinder())->find($later, static fn (AstNode $node): bool => $node instanceof Expr\MethodCall
-            || $node instanceof Expr\NullsafeMethodCall || $node instanceof Expr\Assign || $node instanceof Expr\AssignOp
-            || $node instanceof Expr\AssignRef) as $node) {
-            \assert($node instanceof Expr\MethodCall || $node instanceof Expr\NullsafeMethodCall || $node instanceof Expr\Assign
-                || $node instanceof Expr\AssignOp || $node instanceof Expr\AssignRef);
-            $object = $node->var;
-            if (($node instanceof Expr\Assign || $node instanceof Expr\AssignOp || $node instanceof Expr\AssignRef)
-                && ($object instanceof Expr\PropertyFetch || $object instanceof Expr\NullsafePropertyFetch)) {
-                $object = $object->var;
-            }
-            if ($object instanceof Expr\Variable && \is_string($object->name)) {
-                $changed[$object->name] = true;
-            }
-        }
+        self::collectChanges($later, $changed);
         foreach ($properties as $key) {
-            if (isset($changed[explode('->', $key, 2)[0]])) {
+            if (isset($changed[$key]) || isset($changed[explode('->', $key, 2)[0] . '->'])) {
                 unset($assertions[$key]);
             }
         }
 
         return $assertions;
+    }
+
+    /**
+     * What an expression changes when it runs: `object->property` for a property it assigns, `object->` for an object
+     * it calls a method on, replaces or writes a property of by dynamic name. A closure's body does not run where it is
+     * written.
+     *
+     * @param array<string, true> $changed
+     */
+    private static function collectChanges(AstNode $node, array &$changed): void
+    {
+        if ($node instanceof Expr\Closure || $node instanceof Expr\ArrowFunction || $node instanceof Stmt\ClassLike) {
+            return;
+        }
+        if ($node instanceof Expr\MethodCall || $node instanceof Expr\NullsafeMethodCall) {
+            if ($node->var instanceof Expr\Variable && \is_string($node->var->name)) {
+                $changed[$node->var->name . '->'] = true;
+            }
+        } elseif ($node instanceof Expr\Assign || $node instanceof Expr\AssignOp || $node instanceof Expr\AssignRef) {
+            $target = $node->var;
+            $property = self::propertyKey($target);
+            if ($property !== null) {
+                $changed[$property] = true;
+            } elseif (($target instanceof Expr\PropertyFetch || $target instanceof Expr\NullsafePropertyFetch)
+                && $target->var instanceof Expr\Variable && \is_string($target->var->name)) {
+                $changed[$target->var->name . '->'] = true;
+            } elseif ($target instanceof Expr\Variable && \is_string($target->name)) {
+                $changed[$target->name . '->'] = true;
+            }
+        }
+        foreach ($node->getSubNodeNames() as $name) {
+            $children = $node->{$name};
+            foreach (\is_array($children) ? $children : [$children] as $child) {
+                if ($child instanceof AstNode) {
+                    self::collectChanges($child, $changed);
+                }
+            }
+        }
     }
 
     /**

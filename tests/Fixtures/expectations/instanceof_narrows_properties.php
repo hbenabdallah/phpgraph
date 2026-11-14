@@ -108,6 +108,24 @@ class Drawing
         return 0.0;
     }
 
+    public function closureOfALaterOperand(): float
+    {
+        if ($this->shape instanceof Circle && ($callback = fn () => $this->reset())) { // @phpgraph-expect calls App\Drawing::reset INFERRED
+            return $this->shape->radius(); // @phpgraph-expect calls App\Circle::radius INFERRED
+        }
+
+        return 0.0;
+    }
+
+    public function anotherPropertyAssigned(Shape $other): float
+    {
+        if ($this->shape instanceof Circle && ($this->untyped = $other)) {
+            return $this->shape->radius(); // @phpgraph-expect calls App\Circle::radius INFERRED
+        }
+
+        return 0.0;
+    }
+
     public function writtenByName(Holder $holder, Shape $other, string $name): float
     {
         if ($holder->shape instanceof Square) {
