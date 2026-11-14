@@ -126,6 +126,44 @@ class Drawing
         return 0.0;
     }
 
+    public function invokedInALaterOperand(): float
+    {
+        if ($this->shape instanceof Circle && (fn () => $this->replaced())()) { // @phpgraph-expect calls App\Drawing::replaced INFERRED
+            return $this->shape->area(); // @phpgraph-expect calls App\Shape::area INFERRED
+        }
+
+        return 0.0;
+    }
+
+    public function callableOfALaterOperand(): float
+    {
+        if ($this->shape instanceof Circle && ($callback = $this->reset(...))) { // @phpgraph-expect calls App\Drawing::reset INFERRED
+            return $this->shape->radius(); // @phpgraph-expect calls App\Circle::radius INFERRED
+        }
+
+        return 0.0;
+    }
+
+    public function callableInTheBranch(): float
+    {
+        if ($this->shape instanceof Circle) {
+            $callback = $this->reset(...); // @phpgraph-expect calls App\Drawing::reset INFERRED
+
+            return $this->shape->radius(); // @phpgraph-expect calls App\Circle::radius INFERRED
+        }
+
+        return 0.0;
+    }
+
+    public function destructuredInALaterOperand(Shape $other): float
+    {
+        if ($this->shape instanceof Circle && ([$this->shape] = [$other])) {
+            return $this->shape->area(); // @phpgraph-expect calls App\Shape::area INFERRED
+        }
+
+        return 0.0;
+    }
+
     public function writtenByName(Holder $holder, Shape $other, string $name): float
     {
         if ($holder->shape instanceof Square) {

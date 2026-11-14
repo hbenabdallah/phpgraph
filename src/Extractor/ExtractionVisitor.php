@@ -479,7 +479,8 @@ final class ExtractionVisitor extends NodeVisitorAbstract
             $this->forgetAssigned($node->var);
         }
         // A method of the object may change its properties.
-        if (($node instanceof Expr\MethodCall || $node instanceof Expr\NullsafeMethodCall) && $node->var instanceof Expr\Variable && \is_string($node->var->name)) {
+        if (($node instanceof Expr\MethodCall || $node instanceof Expr\NullsafeMethodCall) && !$node->isFirstClassCallable()
+            && $node->var instanceof Expr\Variable && \is_string($node->var->name)) {
             $this->forgetProperties($node->var->name);
         }
 
@@ -1608,7 +1609,7 @@ final class ExtractionVisitor extends NodeVisitorAbstract
     /**
      * What an expression changes when it runs: `object->property` for a property it assigns, `object->` for an object
      * it calls a method on, replaces or writes a property of by dynamic name. A closure's body does not run where it is
-     * written.
+     * written, unless it is called right there; creating a first-class callable (`$this->reset(...)`) calls nothing.
      *
      * @param array<string, true> $changed
      */
@@ -1617,28 +1618,50 @@ final class ExtractionVisitor extends NodeVisitorAbstract
         if ($node instanceof Expr\Closure || $node instanceof Expr\ArrowFunction || $node instanceof Stmt\ClassLike) {
             return;
         }
-        if ($node instanceof Expr\MethodCall || $node instanceof Expr\NullsafeMethodCall) {
+        if (($node instanceof Expr\MethodCall || $node instanceof Expr\NullsafeMethodCall) && !$node->isFirstClassCallable()) {
             if ($node->var instanceof Expr\Variable && \is_string($node->var->name)) {
                 $changed[$node->var->name . '->'] = true;
             }
         } elseif ($node instanceof Expr\Assign || $node instanceof Expr\AssignOp || $node instanceof Expr\AssignRef) {
-            $target = $node->var;
-            $property = self::propertyKey($target);
-            if ($property !== null) {
-                $changed[$property] = true;
-            } elseif (($target instanceof Expr\PropertyFetch || $target instanceof Expr\NullsafePropertyFetch)
-                && $target->var instanceof Expr\Variable && \is_string($target->var->name)) {
-                $changed[$target->var->name . '->'] = true;
-            } elseif ($target instanceof Expr\Variable && \is_string($target->name)) {
-                $changed[$target->name . '->'] = true;
-            }
+            self::collectWrite($node->var, $changed);
+        } elseif ($node instanceof Expr\FuncCall && ($node->name instanceof Expr\Closure || $node->name instanceof Expr\ArrowFunction)) {
+            // `(fn () => $this->replace())()` runs its body here.
+            self::collectChildren($node->name, $changed);
         }
+        self::collectChildren($node, $changed);
+    }
+
+    /**
+     * @param array<string, true> $changed
+     */
+    private static function collectChildren(AstNode $node, array &$changed): void
+    {
         foreach ($node->getSubNodeNames() as $name) {
             $children = $node->{$name};
             foreach (\is_array($children) ? $children : [$children] as $child) {
                 if ($child instanceof AstNode) {
                     self::collectChanges($child, $changed);
                 }
+            }
+        }
+    }
+
+    /**
+     * @param array<string, true> $changed
+     */
+    private static function collectWrite(?Expr $target, array &$changed): void
+    {
+        $property = $target === null ? null : self::propertyKey($target);
+        if ($property !== null) {
+            $changed[$property] = true;
+        } elseif (($target instanceof Expr\PropertyFetch || $target instanceof Expr\NullsafePropertyFetch)
+            && $target->var instanceof Expr\Variable && \is_string($target->var->name)) {
+            $changed[$target->var->name . '->'] = true;
+        } elseif ($target instanceof Expr\Variable && \is_string($target->name)) {
+            $changed[$target->name . '->'] = true;
+        } elseif ($target instanceof Expr\List_ || $target instanceof Expr\Array_) {
+            foreach ($target->items as $item) {
+                self::collectWrite($item?->value, $changed);
             }
         }
     }
