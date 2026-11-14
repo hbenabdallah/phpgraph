@@ -228,6 +228,11 @@ final class ContainerServices
             for ($step = 0; $step <= self::MAX_ALIASES; ++$step) {
                 $definition = $this->definitions[$scope][ltrim($target, '@')] ?? null;
                 if ($definition === null) {
+                    // An alias to a class the configuration does not define itself (autowired from a resource): the
+                    // class is the service.
+                    if ($step > 0 && str_contains($target, '\\')) {
+                        return ltrim($target, '@\\');
+                    }
                     break;
                 }
                 if (!str_starts_with($definition, '@')) {
